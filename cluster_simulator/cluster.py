@@ -34,7 +34,7 @@ class Cluster:
 
 
 def speed_share_model(n_threads):
-    return np.sqrt(1 + n_threads)
+    return np.sqrt(1 + n_threads)/np.sqrt(2)
 
 
 def compute_share_model(n_cores):
@@ -97,13 +97,13 @@ class IO_Compute:
         # core = cluster.compute_cores.request()
         # yield core
         logger.info(f"Start computing phase at {env.now}")
-        logger.info(f"{cluster.compute_cores.count} are currently using HPC cores")
+        logger.info(f"{cluster.compute_cores.count} cores are currently used.")
         yield env.timeout(self.duration/compute_share_model(cluster.compute_cores.count))
 
         # cluster.compute_cores.release(core)
         for core in used_cores:
             cluster.compute_cores.release(core)
-        logger.info(f"{cluster.compute_cores.count} are currently using HPC cores")
+        logger.info(f"{cluster.compute_cores.count} cores are currently used.")
         logger.info(f"End computing phase at {env.now}")
 
 
@@ -144,7 +144,9 @@ class Job:
     def run(self, cluster):
         while True:
             item = yield store.get()
-            self.env.process(item.play(cluster, self.env))
+            yield self.env.process(item.play(cluster, self.env))
+        # for item in store.items:
+            #     yield self.env.process(item.play(cluster, self.env))
 
 
 if __name__ == '__main__':
@@ -153,8 +155,9 @@ if __name__ == '__main__':
     store = simpy.Store(env, capacity=1000)
     #env.process(run_compute_phase(cluster, env, duration=10, cores=3))
     job = Job(env, store)
-    job.put_compute(duration=10, cores=3)
-    job.put_io(volume=1e9)
+    job.put_compute(duration=10, cores=2)
+    job.put_io(volume=2e9)
+    job.put_compute(duration=10, cores=2)
     # env.process(run_io_phase(cluster, env, 10e9))
     env.process(job.run(cluster))
     env.run(until=20)
