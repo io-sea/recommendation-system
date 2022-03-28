@@ -1,4 +1,5 @@
 import simpy
+from cluster import Cluster
 
 
 class Application:
@@ -6,7 +7,5 @@ class Application:
         self.compute = compute
         self.read = read
         self.write = write
-        
+
     def run(self, env, cluster):
-        
-        
