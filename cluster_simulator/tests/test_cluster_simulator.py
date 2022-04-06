@@ -3,8 +3,8 @@ import time
 import numpy as np
 import simpy
 
-from cluster_simulator.application import Cluster, Application, Tier
-from cluster_simulator.application import IO_Phase, IO_Compute
+from cluster_simulator.cluster import Cluster, Tier, bandwidth_share_model, compute_share_model, get_tier, convert_size
+from cluster_simulator.application import Application, IO_Phase, IO_Compute
 
 
 class TestCluster(unittest.TestCase):

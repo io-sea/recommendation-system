@@ -3,86 +3,7 @@ from loguru import logger
 import numpy as np
 import pandas as pd
 import math
-
-
-def convert_size(size_bytes):
-    if size_bytes == 0:
-        return "0B"
-    size_name = ("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
-    i = int(math.floor(math.log(size_bytes, 1024)))
-    p = math.pow(1024, i)
-    s = round(size_bytes / p, 2)
-    return "%s %s" % (s, size_name[i])
-
-
-def get_tier(tier, cluster):
-    if isinstance(tier, int):
-        tier = cluster.tiers[tier]
-    if isinstance(tier, str):
-        for cluster_tier in cluster.tiers:
-            if tier == cluster_tier.name:
-                tier = cluster_tier
-    return tier
-
-
-class Cluster:
-    def __init__(self, env, compute_nodes=1, cores_per_node=2, tiers=[]):
-        self.compute_nodes = simpy.Resource(env, capacity=compute_nodes)
-        self.compute_cores = simpy.Resource(env, capacity=cores_per_node*compute_nodes)
-        self.tiers = []
-        for tier in tiers:
-            if isinstance(tier, Tier):
-                self.tiers.append(tier)
-        # logger.info(self.__str__())
-
-    def __str__(self):
-        description = "====================\n"
-        description += (f"Cluster with {self.compute_nodes.capacity} compute nodes \n")
-        description += f"Each having {self.compute_cores.capacity} cores in total \n"
-        if self.tiers:
-            for tier in self.tiers:
-                description += tier.__str__()
-        return description
-        # self.storage_capacity = simpy.Container(env, init=0, capacity=storage_capacity)
-        # self.storage_speed = simpy.Container(env, init=storage_speed, capacity=storage_speed)
-
-
-class Tier:
-    """
-    In this model we expect a bandwidth value at its asymptotic state.
-    Only the maximum is considered.
-    Other considered variables are :
-        read/write variables
-        sequential/random variables
-    Output is a scalar value in MB/s.
-    Typically we access the bandwidth value as in dictionary: b['read']['seq'] = 200MB/s.
-    TODO : extend this to a NN as function approximator to allow:
-        averaging over variables
-        interpolation when data entry is absent, i.e. b['seq'] gives a value
-    """
-
-    def __init__(self, env, name, bandwidth, capacity):
-        self.name = name
-        self.capacity = simpy.Container(env, init=0, capacity=capacity)
-        self.bandwidth = bandwidth
-        # logger.info(self.__str__())
-
-    def __str__(self):
-        description = "-------------------\n"
-        description += (f"Tier: {self.name} with capacity = {convert_size(self.capacity.capacity)}\n")
-        description += ("{:<12} {:<12} {:<12}".format('Operation', 'Pattern', 'Bandwidth MB/s')+"\n")
-        for op, inner_dict in self.bandwidth.items():
-            for pattern, value in inner_dict.items():
-                description += ("{:<12} {:<12} {:<12}".format(op, pattern, value)+"\n")
-        return description
-
-
-def speed_share_model(n_threads):
-    return np.sqrt(1 + n_threads)/np.sqrt(2)
-
-
-def compute_share_model(n_cores):
-    return np.sqrt(1 + n_cores)/np.sqrt(2)
+from cluster import Cluster, Tier, bandwidth_share_model, compute_share_model, get_tier, convert_size
 
 
 class IO_Compute:
@@ -92,6 +13,7 @@ class IO_Compute:
 
     def run(self, env, cluster):
         used_cores = []
+        # use self.cores
         for i in range(self.cores):
             core = cluster.compute_cores.request()
             used_cores.append(core)
@@ -134,7 +56,8 @@ class IO_Phase:
             yield core
         logger.info(f"Start {self.operation.capitalize()} I/O Phase with volume = {convert_size(self.volume)} at {env.now}")
         logger.info(f"{self.operation.capitalize()}(ing) I/O with bandwidth = {bandwidth} MB/s")
-        yield env.timeout((self.volume/1e6)/bandwidth)
+        speed_factor = bandwidth_share_model(cluster.compute_cores.count)
+        yield env.timeout((self.volume/1e6)/(bandwidth*speed_factor))
         for core in used_cores:
             cluster.compute_cores.release(core)
         logger.info(f"End {self.operation.capitalize()} I/O Phase at {env.now}")
@@ -190,7 +113,7 @@ class Application:
             # then compute duration = diff between two events
             if i < len(self.compute) - 1:
                 duration = self.compute[i+1] - self.compute[i]
-                self.put_compute(duration)
+                self.put_compute(duration, cores=4)
 
     def run(self, cluster):
         item_number = 0
@@ -211,8 +134,7 @@ class Application:
     # def run(self, env, cluster):
 if __name__ == '__main__':
     env = simpy.Environment()
-
-    store = simpy.Store(env, capacity=1000)
+    store = simpy.Store(env)
     # env.process(run_compute_phase(cluster, env, duration=10, cores=3))
     compute = [0, 10]
     read = [1e9, 0]
@@ -225,14 +147,16 @@ if __name__ == '__main__':
 
     ssd_tier = Tier(env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
     nvram_tier = Tier(env, 'NVRAM', bandwidth=nvram_bandwidth, capacity=80e9)
-    cluster = Cluster(env, tiers=[ssd_tier, nvram_tier])
+    cluster = Cluster(env,  compute_nodes=1, cores_per_node=4, tiers=[ssd_tier, nvram_tier])
     app = Application(env, store,
                       compute=compute,
                       read=read,
                       write=write,
                       tiers=tiers)
     env.process(app.run(cluster))
-    app.env.run()
+    app.env.run(until=50)
+    print(cluster.compute_nodes.data)
+    print(cluster.compute_cores.data)
     # app.put_compute(duration=10, cores=2)
     # app.put_io(volume=2e9)
     # job.put_compute(duration=10, cores=2)
