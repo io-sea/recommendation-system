@@ -101,7 +101,7 @@ class Application:
             # then compute duration = diff between two events
             if i < len(self.compute) - 1:
                 duration = self.compute[i+1] - self.compute[i]
-                self.put_compute(duration, cores=4)
+                self.put_compute(duration, cores=3)
 
     def run(self, cluster):
         item_number = 0
@@ -143,6 +143,8 @@ if __name__ == '__main__':
                       tiers=tiers)
     env.process(app.run(cluster))
     app.env.run()
+    print(cluster.compute_cores.capacity)
+    print(cluster.compute_cores.data)
     # app.put_compute(duration=10, cores=2)
     # app.put_io(volume=2e9)
     # job.put_compute(duration=10, cores=2)

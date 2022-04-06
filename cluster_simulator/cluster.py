@@ -27,8 +27,10 @@ def get_tier(tier, cluster):
 
 class Cluster:
     def __init__(self, env, compute_nodes=1, cores_per_node=2, tiers=[]):
-        self.compute_nodes = simpy.Container(env, capacity=compute_nodes)
-        self.compute_cores = simpy.Container(env, capacity=cores_per_node*compute_nodes)
+        # self.compute_nodes = simpy.Container(env, capacity=compute_nodes)
+        # self.compute_cores = simpy.Container(env, capacity=cores_per_node*compute_nodes)
+        self.compute_nodes = MonitorResource(env, capacity=compute_nodes)
+        self.compute_cores = MonitorResource(env, capacity=cores_per_node*compute_nodes)
         self.tiers = []
         for tier in tiers:
             if isinstance(tier, Tier):
