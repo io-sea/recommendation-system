@@ -33,7 +33,7 @@ class Cluster:
         for tier in tiers:
             if isinstance(tier, Tier):
                 self.tiers.append(tier)
-        logger.info(self.__str__())
+        # logger.info(self.__str__())
 
     def __str__(self):
         description = "====================\n"
@@ -65,7 +65,7 @@ class Tier:
         self.name = name
         self.capacity = simpy.Container(env, init=0, capacity=capacity)
         self.bandwidth = bandwidth
-        logger.info(self.__str__())
+        # logger.info(self.__str__())
 
     def __str__(self):
         description = "-------------------\n"
@@ -114,12 +114,12 @@ class IO_Phase:
         assert self.operation in ['read', 'write']
         self.volume = volume
         self.pattern = pattern
-        logger.info(self.__str__())
+        # logger.info(self.__str__())
 
     def __str__(self):
         io_pattern = f"{self.pattern*100}% sequential | {(1-self.pattern)*100} % random"
         description = "-------------------\n"
-        description += (f"{self.operation.upper()} I/O Phase of volume {convert_size(self.volume)} with pattern: {io_pattern}\n")
+        description += (f"{self.operation.capitalize()} I/O Phase of volume {convert_size(self.volume)} with pattern: {io_pattern}\n")
         return description
 
     def run(self, env, cluster, cores=1, tier=None):
@@ -132,12 +132,12 @@ class IO_Phase:
             core = cluster.compute_cores.request()
             used_cores.append(core)
             yield core
-        logger.info(f"Start Read I/O Phase with volume = {convert_size(self.volume)} at {env.now}")
-        logger.info(f"Reading I/O with bandwidth = {bandwidth} MB/s")
+        logger.info(f"Start {self.operation.capitalize()} I/O Phase with volume = {convert_size(self.volume)} at {env.now}")
+        logger.info(f"{self.operation.capitalize()}(ing) I/O with bandwidth = {bandwidth} MB/s")
         yield env.timeout((self.volume/1e6)/bandwidth)
         for core in used_cores:
             cluster.compute_cores.release(core)
-        logger.info(f"End Read I/O Phase at {env.now}")
+        logger.info(f"End {self.operation.capitalize()} I/O Phase at {env.now}")
 
         # with cluster.compute_cores.request() as req:
         #     yield req
@@ -201,7 +201,7 @@ class Application:
                 yield self.env.process(item.run(self.env, cluster))
             else:
                 # io phase
-                print(f"{item_number} from a list of {len(cluster.tiers)}")
+                # print(f"{item_number} from a list of {len(cluster.tiers)}")
                 tier = cluster.tiers[self.tiers[item_number]]
 
                 #assert isinstance(tier, Tier)
