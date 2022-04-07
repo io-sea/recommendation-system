@@ -17,6 +17,7 @@ class IO_Compute:
         yield env.timeout(self.duration/compute_share_model(cluster.compute_cores.capacity - cluster.compute_cores.level))
         cluster.compute_cores.put(self.requested_cores)
         logger.info(f"End computing phase at {env.now} and releasing {self.requested_cores} cores")
+        return True
 
 
 class IO_Phase:
@@ -49,6 +50,7 @@ class IO_Phase:
         yield env.timeout((self.volume/1e6)/(bandwidth*speed_factor))
         cluster.compute_cores.put(cores)
         logger.info(f"End {self.operation.capitalize()} I/O Phase at {env.now}")
+        return True
 
         # with cluster.compute_cores.request() as req:
         #     yield req
@@ -73,6 +75,7 @@ class Application:
         # ensure format is valid, all list are length equal
         assert all([len(lst) == len(self.compute) for lst in [self.read, self.write, self.tiers]])
         # schedule all events
+        self.status = None
         self.schedule()
 
     def put_compute(self, duration, cores=1):
@@ -88,36 +91,56 @@ class Application:
         self.store.put(io_phase)
 
     def schedule(self):
+        self.status = []
         for i in range(len(self.compute)):
             # read is prioritary
             if self.read[i] > 0:
                 read_io = IO_Phase(operation='read', volume=self.read[i])
                 self.store.put(read_io)
-                #self.put_io(operation='read', volume=self.read[i])
+                self.status.append(False)
             # then write
             if self.write[i] > 0:
                 write_io = IO_Phase(operation='write', volume=self.write[i])
                 self.store.put(write_io)
+                self.status.append(False)
             # then compute duration = diff between two events
             if i < len(self.compute) - 1:
                 duration = self.compute[i+1] - self.compute[i]
                 self.put_compute(duration, cores=3)
+                self.status.append(False)
 
     def run(self, cluster):
+        # TODO previous_event
         item_number = 0
-        while self.store.items is not None:
+        phase = 0
+        while self.store.items:
             item = yield self.store.get()
+            print(self.status)
             if isinstance(item, IO_Compute):
                 # compute phase
-                yield self.env.process(item.run(self.env, cluster))
+                if phase == 0:
+                    self.status[phase] = yield self.env.process(item.run(self.env, cluster))
+                    phase += 1
+                elif phase > 0 and self.status[phase-1] == True:
+                    self.status[phase] = yield self.env.process(item.run(self.env, cluster))
+                    phase += 1
+                else:
+                    self.status[phase] = False
             else:
-                # io phase
-                # print(f"{item_number} from a list of {len(cluster.tiers)}")
                 tier = cluster.tiers[self.tiers[item_number]]
-
+                if phase == 0:
+                    self.status[phase] = yield self.env.process(item.run(self.env, cluster, cores=1, tier=tier))
+                    phase += 1
+                elif phase > 0 and self.status[phase-1] == True:
+                    self.status[phase] = yield self.env.process(item.run(self.env, cluster, cores=1, tier=tier))
+                    phase += 1
+                else:
+                    self.status[phase] = False
                 #assert isinstance(tier, Tier)
-                yield self.env.process(item.run(self.env, cluster, cores=1, tier=tier))
+                # yield self.env.process(item.run(self.env, cluster, cores=1, tier=tier))
                 item_number += 1
+
+        print(self.status)
 
     # def run(self, env, cluster):
 if __name__ == '__main__':
