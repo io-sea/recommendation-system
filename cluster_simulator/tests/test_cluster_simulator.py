@@ -26,8 +26,8 @@ class TestCluster(unittest.TestCase):
     def test_cluster_init(self):
         cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
         print(cluster)
-        self.assertIsInstance(cluster.compute_nodes, simpy.Container)
-        self.assertIsInstance(cluster.compute_cores, simpy.Container)
+        self.assertIsInstance(cluster.compute_nodes, simpy.Resource)
+        self.assertIsInstance(cluster.compute_cores, simpy.Resource)
 
     def test_compute_phase(self):
         cluster = Cluster(self.env, compute_nodes=3, cores_per_node=4)

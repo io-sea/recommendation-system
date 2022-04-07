@@ -7,16 +7,22 @@ from cluster import Cluster, Tier, bandwidth_share_model, compute_share_model, g
 
 
 class IO_Compute:
-    def __init__(self, duration, requested_cores=1):
+    def __init__(self, duration, cores=1):
         self.duration = duration
-        self.requested_cores = requested_cores
+        self.cores = cores
 
     def run(self, env, cluster):
-        cluster.compute_cores.get(self.requested_cores)
-        logger.info(f"Start computing phase at {env.now} with {self.requested_cores} requested cores")
-        yield env.timeout(self.duration/compute_share_model(cluster.compute_cores.capacity - cluster.compute_cores.level))
-        cluster.compute_cores.put(self.requested_cores)
-        logger.info(f"End computing phase at {env.now} and releasing {self.requested_cores} cores")
+        used_cores = []
+        # use self.cores
+        for i in range(self.cores):
+            core = cluster.compute_cores.request()
+            used_cores.append(core)
+            yield core
+        logger.info(f"Start computing phase at {env.now} with {self.cores} requested cores")
+        yield env.timeout(self.duration/compute_share_model(cluster.compute_cores.capacity - cluster.compute_cores.count))
+        for core in used_cores:
+            cluster.compute_cores.release(core)
+        logger.info(f"End computing phase at {env.now} and releasing {self.cores} cores")
         return True
 
 
@@ -43,12 +49,17 @@ class IO_Phase:
         tier = get_tier(tier, cluster)
         bandwidth = tier.bandwidth[self.operation]['seq'] * self.pattern + tier.bandwidth[self.operation]['rand']*(1-self.pattern) * compute_share_model(cores)
 
-        cluster.compute_cores.get(cores)
+        used_cores = []
+        for i in range(cores):
+            core = cluster.compute_cores.request()
+            used_cores.append(core)
+            yield core
         logger.info(f"Start {self.operation.capitalize()} I/O Phase with volume = {convert_size(self.volume)} at {env.now}")
         logger.info(f"{self.operation.capitalize()}(ing) I/O with bandwidth = {bandwidth} MB/s")
-        speed_factor = bandwidth_share_model(cluster.compute_cores.level)
+        speed_factor = bandwidth_share_model(cluster.compute_cores.count)
         yield env.timeout((self.volume/1e6)/(bandwidth*speed_factor))
-        cluster.compute_cores.put(cores)
+        for core in used_cores:
+            cluster.compute_cores.release(core)
         logger.info(f"End {self.operation.capitalize()} I/O Phase at {env.now}")
         return True
 
@@ -113,6 +124,7 @@ class Application:
         # TODO previous_event
         item_number = 0
         phase = 0
+        print(self.store.items)
         while self.store.items:
             item = yield self.store.get()
             print(self.status)
@@ -158,7 +170,7 @@ if __name__ == '__main__':
 
     ssd_tier = Tier(env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
     nvram_tier = Tier(env, 'NVRAM', bandwidth=nvram_bandwidth, capacity=80e9)
-    cluster = Cluster(env,  compute_nodes=1, cores_per_node=4, tiers=[ssd_tier, nvram_tier])
+    cluster = Cluster(env,  compute_nodes=1, cores_per_node=2, tiers=[ssd_tier, nvram_tier])
     app = Application(env, store,
                       compute=compute,
                       read=read,
