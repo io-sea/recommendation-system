@@ -207,6 +207,7 @@ class Application:
 if __name__ == '__main__':
     env = simpy.Environment()
     store = simpy.Store(env)
+    store2 = simpy.Store(env)
     data = simpy.Store(env)
     # env.process(run_compute_phase(cluster, env, duration=10, cores=3))
     nvram_bandwidth = {'read':  {'seq': 780, 'rand': 760},
@@ -222,18 +223,19 @@ if __name__ == '__main__':
                        read=[1e9, 0],
                        write=[0, 5e9],
                        data=data)
-    # app2 = Application(env, store,
-    #                    compute=[0, 20],
-    #                    read=[3e9, 0],
-    #                    write=[0, 10e9],
-    #                    data=data)
+    app2 = Application(env, store2,
+                       compute=[0],
+                       read=[3e9],
+                       write=[0],
+                       data=data)
+
     # app2 = Application(env, store,
     #                    compute=[0, 25],
     #                    read=[2e9, 0],
     #                    write=[0, 10e9],
     #                    tiers=[0, 1])
     env.process(app1.run(cluster, tiers=[0, 0]))
-    #env.process(app2.run(cluster, tiers=[1, 1]))
+    env.process(app2.run(cluster, tiers=[1, 1]))
     env.run()
     # print(cluster.compute_cores.capacity)
     # print(cluster.compute_cores.data)
