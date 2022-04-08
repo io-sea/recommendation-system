@@ -33,7 +33,8 @@ class IO_Compute:
             used_cores.append(core)
             yield core
         logger.info(f"Start computing phase at {env.now} with {self.cores} requested cores")
-        phase_duration = self.duration/compute_share_model(cluster.compute_cores.capacity - cluster.compute_cores.count)
+        phase_duration = self.duration/compute_share_model(self.cores)
+        # phase_duration = self.duration/compute_share_model(cluster.compute_cores.capacity - cluster.compute_cores.count)
         t_start = env.now
         yield env.timeout(phase_duration)
 
@@ -81,7 +82,7 @@ class IO_Phase:
     def run(self, env, cluster, cores=1, placement=None):
         # Pre compute parameters
         tier = get_tier(placement, cluster)
-        bandwidth = tier.bandwidth[self.operation]['seq'] * self.pattern + tier.bandwidth[self.operation]['rand']*(1-self.pattern) * compute_share_model(cores)
+        bandwidth = (tier.bandwidth[self.operation]['seq'] * self.pattern + tier.bandwidth[self.operation]['rand']*(1-self.pattern)) * compute_share_model(cores)
 
         used_cores = []
         for i in range(cores):
