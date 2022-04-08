@@ -39,14 +39,14 @@ class TestCluster(unittest.TestCase):
         cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
         #read_io = Read_IO_Phase(volume=9e9, pattern=0.2)
         read_io = IO_Phase(operation='read', volume=9e9, pattern=0.2)
-        self.env.process(read_io.run(self.env, cluster, tier=1))
+        self.env.process(read_io.run(self.env, cluster, placement=1))
         self.env.run()
 
     def test_write_io_phase(self):
         cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
         #read_io = Read_IO_Phase(volume=9e9, pattern=0.2)
         write_io = IO_Phase(operation='write', volume=9e9, pattern=0.2)
-        self.env.process(write_io.run(self.env, cluster, tier=1))
+        self.env.process(write_io.run(self.env, cluster, placement=1))
         self.env.run()
 
     def test_application_init(self):
@@ -75,7 +75,7 @@ class TestCluster(unittest.TestCase):
                           read=read,
                           write=write)
 
-        self.env.process(app.run(cluster, tiers=[0, 1]))
+        self.env.process(app.run(cluster, tiers=tiers))
         self.env.run()
         # self.env.run(until=25)
         #self.assertEqual(len(app.store.items), 3)
@@ -103,3 +103,29 @@ class TestApps(unittest.TestCase):
         self.env.run()
         for item in data.items:
             print(item)
+
+    def test_app_pure_read(self):
+        data = simpy.Store(self.env)
+        read_size = 1e9
+        cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=2,
+                          tiers=[self.ssd_tier, self.nvram_tier])
+        app1 = Application(self.env, self.store, compute=[0],
+                           read=[read_size], write=[0], data=data)
+        self.env.process(app1.run(cluster, tiers=[0]))
+        self.env.run()
+        self.assertEqual(len(data.items), 1)
+        tier_name = data.items[0]["data_placement"]["placement"]
+        self.assertEqual(data.items[0]["tier_level"][tier_name], read_size)
+
+    def test_app_pure_write(self):
+        data = simpy.Store(self.env)
+        write_size = 1e9
+        cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=2,
+                          tiers=[self.ssd_tier, self.nvram_tier])
+        app1 = Application(self.env, self.store, compute=[0],
+                           read=[0], write=[write_size], data=data)
+        self.env.process(app1.run(cluster, tiers=[0]))
+        self.env.run()
+        self.assertEqual(len(data.items), 1)
+        tier_name = data.items[0]["data_placement"]["placement"]
+        self.assertEqual(data.items[0]["tier_level"][tier_name], write_size)

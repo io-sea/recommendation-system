@@ -6,9 +6,11 @@ import math
 from cluster import Cluster, Tier, bandwidth_share_model, compute_share_model, get_tier, convert_size
 
 """TODO LIST:
-            keep self.store internal
-            add start_delay as app parameter
-            rename app.run(tiers <- placement)
+            
+            [  ] add start_delay as app parameter
+            [OK] rename app.run(tiers <- placement)
+            [  ] keep self.store internal
+            [  ] superimpose two apps
 """
 
 
@@ -76,9 +78,9 @@ class IO_Phase:
         if self.operation == "write":
             tier.capacity.put(self.volume)
 
-    def run(self, env, cluster, cores=1, tier=None):
+    def run(self, env, cluster, cores=1, placement=None):
         # Pre compute parameters
-        tier = get_tier(tier, cluster)
+        tier = get_tier(placement, cluster)
         bandwidth = tier.bandwidth[self.operation]['seq'] * self.pattern + tier.bandwidth[self.operation]['rand']*(1-self.pattern) * compute_share_model(cores)
 
         used_cores = []
@@ -99,7 +101,10 @@ class IO_Phase:
                 {"type": self.operation, "cpu_usage": cores,
                  "t_start": t_start, "t_end": t_end, "bandwidth": io_bandwidth,
                  "phase_duration": phase_duration, "volume": self.volume,
-                 "tiers_level": [tier.capacity.level for tier in cluster.tiers]})
+                 "tiers": [tier.name for tier in cluster.tiers],
+                 "data_placement": {"placement": tier.name},
+                 "tier_level": {tier.name: tier.capacity.level for tier in cluster.tiers}})
+        # "tiers_level": [tier.capacity.level for tier in cluster.tiers]})
         for core in used_cores:
             cluster.compute_cores.release(core)
 
@@ -166,7 +171,7 @@ class Application:
                 self.status.append(False)
 
     def run(self, cluster, tiers):
-        assert len(cluster.tiers) == len(tiers)
+        #assert len(cluster.tiers) == len(tiers)
         item_number = 0
         phase = 0
         while self.store.items:
@@ -183,12 +188,13 @@ class Application:
                     self.status[phase] = False
             else:
                 print(f"item_number = {item_number} while tiers={tiers}")
-                tier = cluster.tiers[tiers[item_number]]
+                print(f"status list = {self.status}")
+                placement = cluster.tiers[tiers[item_number]]
                 if phase == 0:
-                    self.status[phase] = yield self.env.process(item.run(self.env, cluster, cores=1, tier=tier))
+                    self.status[phase] = yield self.env.process(item.run(self.env, cluster, cores=1, placement=placement))
                     phase += 1
                 elif phase > 0 and self.status[phase-1] == True:
-                    self.status[phase] = yield self.env.process(item.run(self.env, cluster, cores=1, tier=tier))
+                    self.status[phase] = yield self.env.process(item.run(self.env, cluster, cores=1, placement=placement))
                     phase += 1
                 else:
                     self.status[phase] = False
@@ -217,12 +223,17 @@ if __name__ == '__main__':
                        write=[0, 5e9],
                        data=data)
     # app2 = Application(env, store,
+    #                    compute=[0, 20],
+    #                    read=[3e9, 0],
+    #                    write=[0, 10e9],
+    #                    data=data)
+    # app2 = Application(env, store,
     #                    compute=[0, 25],
     #                    read=[2e9, 0],
     #                    write=[0, 10e9],
     #                    tiers=[0, 1])
     env.process(app1.run(cluster, tiers=[0, 0]))
-    # env.process(app1.run(cluster))
+    #env.process(app2.run(cluster, tiers=[1, 1]))
     env.run()
     # print(cluster.compute_cores.capacity)
     # print(cluster.compute_cores.data)
