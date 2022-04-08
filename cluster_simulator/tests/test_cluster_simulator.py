@@ -58,8 +58,7 @@ class TestCluster(unittest.TestCase):
         app = Application(self.env, self.store,
                           compute=compute,
                           read=read,
-                          write=write,
-                          tiers=tiers)
+                          write=write)
         # print(app.store.capacity)
         # print(app.store.items)
         self.assertEqual(len(app.store.items), 3)
@@ -74,10 +73,33 @@ class TestCluster(unittest.TestCase):
         app = Application(self.env, self.store,
                           compute=compute,
                           read=read,
-                          write=write,
-                          tiers=tiers)
+                          write=write)
 
-        self.env.process(app.run(cluster))
+        self.env.process(app.run(cluster, tiers=[0, 1]))
         self.env.run()
         # self.env.run(until=25)
         #self.assertEqual(len(app.store.items), 3)
+
+
+class TestApps(unittest.TestCase):
+    def setUp(self):
+        self.env = simpy.Environment()
+        self.store = simpy.Store(self.env, capacity=1000)
+        nvram_bandwidth = {'read':  {'seq': 780, 'rand': 760},
+                           'write': {'seq': 515, 'rand': 505}}
+        ssd_bandwidth = {'read':  {'seq': 210, 'rand': 190},
+                         'write': {'seq': 100, 'rand': 100}}
+
+        self.ssd_tier = Tier(self.env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
+        self.nvram_tier = Tier(self.env, 'NVRAM', bandwidth=nvram_bandwidth, capacity=80e9)
+
+    def test_app_simple(self):
+        data = simpy.Store(self.env)
+        cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=2,
+                          tiers=[self.ssd_tier, self.nvram_tier])
+        app1 = Application(self.env, self.store, compute=[0, 10],
+                           read=[1e9, 0], write=[0, 5e9], data=data)
+        self.env.process(app1.run(cluster, tiers=[0, 0]))
+        self.env.run()
+        for item in data.items:
+            print(item)
