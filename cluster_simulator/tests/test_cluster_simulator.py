@@ -10,7 +10,6 @@ from cluster_simulator.application import Application, IO_Phase, IO_Compute
 class TestCluster(unittest.TestCase):
     def setUp(self):
         self.env = simpy.Environment()
-        self.store = simpy.Store(self.env, capacity=1000)
         nvram_bandwidth = {'read':  {'seq': 780, 'rand': 760},
                            'write': {'seq': 515, 'rand': 505}}
         ssd_bandwidth = {'read':  {'seq': 210, 'rand': 190},
@@ -55,7 +54,7 @@ class TestCluster(unittest.TestCase):
         read = [1e9, 0]
         write = [0, 5e9]
         tiers = [0, 1]
-        app = Application(self.env, self.store,
+        app = Application(self.env,
                           compute=compute,
                           read=read,
                           write=write)
@@ -70,7 +69,7 @@ class TestCluster(unittest.TestCase):
         read = [1e9, 0]
         write = [0, 5e9]
         tiers = [0, 1]
-        app = Application(self.env, self.store,
+        app = Application(self.env,
                           compute=compute,
                           read=read,
                           write=write)
@@ -84,7 +83,6 @@ class TestCluster(unittest.TestCase):
 class TestApps(unittest.TestCase):
     def setUp(self):
         self.env = simpy.Environment()
-        self.store = simpy.Store(self.env, capacity=1000)
         nvram_bandwidth = {'read':  {'seq': 780, 'rand': 760},
                            'write': {'seq': 515, 'rand': 505}}
         ssd_bandwidth = {'read':  {'seq': 210, 'rand': 190},
@@ -97,7 +95,7 @@ class TestApps(unittest.TestCase):
         data = simpy.Store(self.env)
         cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=2,
                           tiers=[self.ssd_tier, self.nvram_tier])
-        app1 = Application(self.env, self.store, compute=[0, 10],
+        app1 = Application(self.env, compute=[0, 10],
                            read=[1e9, 0], write=[0, 5e9], data=data)
         self.env.process(app1.run(cluster, tiers=[0, 0]))
         self.env.run()
@@ -109,7 +107,7 @@ class TestApps(unittest.TestCase):
         read_size = 1e9
         cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=2,
                           tiers=[self.ssd_tier, self.nvram_tier])
-        app1 = Application(self.env, self.store, compute=[0],
+        app1 = Application(self.env, compute=[0],
                            read=[read_size], write=[0], data=data)
         self.env.process(app1.run(cluster, tiers=[0]))
         self.env.run()
@@ -122,7 +120,7 @@ class TestApps(unittest.TestCase):
         write_size = 1e9
         cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=2,
                           tiers=[self.ssd_tier, self.nvram_tier])
-        app1 = Application(self.env, self.store, compute=[0],
+        app1 = Application(self.env, compute=[0],
                            read=[0], write=[write_size], data=data)
         self.env.process(app1.run(cluster, tiers=[0]))
         self.env.run()

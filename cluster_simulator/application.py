@@ -9,8 +9,8 @@ from cluster import Cluster, Tier, bandwidth_share_model, compute_share_model, g
             
             [  ] add start_delay as app parameter
             [OK] rename app.run(tiers <- placement)
-            [  ] keep self.store internal
-            [  ] superimpose two apps
+            [OK] keep self.store internal
+            [OK] superimpose two apps
 """
 
 
@@ -124,9 +124,9 @@ class IO_Phase:
 
 
 class Application:
-    def __init__(self, env, store, compute=[0, 10], read=[1e9, 0], write=[0, 5e9], data=None):
+    def __init__(self, env, compute=[0, 10], read=[1e9, 0], write=[0, 5e9], data=None):
         self.env = env
-        self.store = store
+        self.store = simpy.Store(self.env)
         self.compute = compute
         self.read = read
         self.write = write
@@ -203,11 +203,10 @@ class Application:
             # print(self.status)
         return self.data
 
+
     # def run(self, env, cluster):
 if __name__ == '__main__':
     env = simpy.Environment()
-    store = simpy.Store(env)
-    store2 = simpy.Store(env)
     data = simpy.Store(env)
     # env.process(run_compute_phase(cluster, env, duration=10, cores=3))
     nvram_bandwidth = {'read':  {'seq': 780, 'rand': 760},
@@ -218,12 +217,12 @@ if __name__ == '__main__':
     ssd_tier = Tier(env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
     nvram_tier = Tier(env, 'NVRAM', bandwidth=nvram_bandwidth, capacity=80e9)
     cluster = Cluster(env,  compute_nodes=1, cores_per_node=2, tiers=[ssd_tier, nvram_tier])
-    app1 = Application(env, store,
+    app1 = Application(env,
                        compute=[0, 10],
                        read=[1e9, 0],
                        write=[0, 5e9],
                        data=data)
-    app2 = Application(env, store2,
+    app2 = Application(env,
                        compute=[0],
                        read=[3e9],
                        write=[0],
