@@ -128,6 +128,19 @@ class TestApps(unittest.TestCase):
         tier_name = data.items[0]["data_placement"]["placement"]
         self.assertEqual(data.items[0]["tier_level"][tier_name], write_size)
 
+    def test_delayed_app(self):
+        data = simpy.Store(self.env)
+        write_size = 1e9
+        cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=2,
+                          tiers=[self.ssd_tier, self.nvram_tier])
+        app1 = Application(self.env, compute=[0, 10],
+                           read=[0, 0], write=[0, 0], data=data, delay=5)
+        self.env.process(app1.run(cluster, tiers=[0]))
+        self.env.run()
+        for item in data.items:
+            print(item)
+        self.assertEqual(data.items[0]["phase_duration"], data.items[1]["t_start"])
+
 
 class TestAppsSuperposition(unittest.TestCase):
     def setUp(self):

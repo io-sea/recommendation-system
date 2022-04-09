@@ -4,13 +4,16 @@ import numpy as np
 import pandas as pd
 import math
 from cluster import Cluster, Tier, bandwidth_share_model, compute_share_model, get_tier, convert_size
+import random
+import string
 
 """TODO LIST:
             
-            [  ] add start_delay as app parameter
+            [OK] add start_delay as app parameter
             [OK] rename app.run(tiers <- placement)
             [OK] keep self.store internal
             [OK] superimpose two apps
+            [  ] add id or name for each app and spread it in logs
 """
 
 
@@ -19,11 +22,36 @@ def monitor(data, lst):
         data.put(lst)
 
 
+def name_app():
+    return ''.join(random.sample(string.ascii_uppercase, 1)) + str(random.randint(0, 9))
+
+
+class Delay:
+    def __init__(self, duration, data=None, appname=None):
+        self.duration = duration
+        self.data = data if data else None
+        self.appname = appname if appname else ''
+
+    def run(self, env, cluster):
+        logger.info(f"(App {self.appname}) - Start waiting phase at {env.now}")
+        t_start = env.now
+        yield env.timeout(self.duration)
+        t_end = env.now
+        monitor(self.data,
+                {"app": self.appname, "type": "waiting", "cpu_usage": 0,
+                 "t_start": t_start, "t_end": t_end, "bandwidth": 0,
+                 "phase_duration": self.duration, "volume": 0,
+                 "tiers_level": [tier.capacity.level for tier in cluster.tiers]})
+        logger.info(f"(App {self.appname}) - End waiting phase at {env.now}")
+        return True
+
+
 class IO_Compute:
-    def __init__(self, duration, cores=1, data=None):
+    def __init__(self, duration, cores=1, data=None, appname=None):
         self.duration = duration
         self.cores = cores
         self.data = data if data else None
+        self.appname = appname if appname else ''
 
     def run(self, env, cluster):
         used_cores = []
@@ -32,7 +60,7 @@ class IO_Compute:
             core = cluster.compute_cores.request()
             used_cores.append(core)
             yield core
-        logger.info(f"Start computing phase at {env.now} with {self.cores} requested cores")
+        logger.info(f"(App {self.appname}) - Start computing phase at {env.now} with {self.cores} requested cores")
         phase_duration = self.duration/compute_share_model(self.cores)
         # phase_duration = self.duration/compute_share_model(cluster.compute_cores.capacity - cluster.compute_cores.count)
         t_start = env.now
@@ -40,7 +68,7 @@ class IO_Compute:
 
         t_end = env.now
         monitor(self.data,
-                {"type": "compute", "cpu_usage": self.cores,
+                {"app": self.appname, "type": "compute", "cpu_usage": self.cores,
                  "t_start": t_start, "t_end": t_end, "bandwidth": 0,
                  "phase_duration": phase_duration, "volume": 0,
                  "tiers_level": [tier.capacity.level for tier in cluster.tiers]})
@@ -48,12 +76,12 @@ class IO_Compute:
         for core in used_cores:
             cluster.compute_cores.release(core)
 
-        logger.info(f"End computing phase at {env.now} and releasing {self.cores} cores")
+        logger.info(f"(App {self.appname}) - End computing phase at {env.now} and releasing {self.cores} cores")
         return True
 
 
 class IO_Phase:
-    def __init__(self, operation='read', volume=1e9, pattern=1, data=None):
+    def __init__(self, operation='read', volume=1e9, pattern=1, data=None, appname=None):
         """
         pattern = 0.8:
             80% sequential and 20% random.
@@ -63,6 +91,7 @@ class IO_Phase:
         self.volume = volume
         self.pattern = pattern
         self.data = data if data else None
+        self.appname = appname if appname else ''
         # logger.info(self.__str__())
 
     def __str__(self):
@@ -89,7 +118,7 @@ class IO_Phase:
             core = cluster.compute_cores.request()
             used_cores.append(core)
             yield core
-        logger.info(f"Start {self.operation.capitalize()} I/O Phase with volume = {convert_size(self.volume)} at {env.now}")
+        logger.info(f"(App {self.appname}) - Start {self.operation.capitalize()} I/O Phase with volume = {convert_size(self.volume)} at {env.now}")
         logger.info(f"{self.operation.capitalize()}(ing) I/O with bandwidth = {bandwidth} MB/s")
         io_bandwidth = bandwidth*bandwidth_share_model(cluster.compute_cores.count)
         phase_duration = (self.volume/1e6)/io_bandwidth
@@ -109,7 +138,7 @@ class IO_Phase:
         for core in used_cores:
             cluster.compute_cores.release(core)
 
-        logger.info(f"End {self.operation.capitalize()} I/O Phase at {env.now}")
+        logger.info(f"(App {self.appname}) - End {self.operation.capitalize()} I/O Phase at {env.now}")
         return True
 
         # with cluster.compute_cores.request() as req:
@@ -125,12 +154,14 @@ class IO_Phase:
 
 
 class Application:
-    def __init__(self, env, compute=[0, 10], read=[1e9, 0], write=[0, 5e9], data=None):
+    def __init__(self, env, name=None, compute=[0, 10], read=[1e9, 0], write=[0, 5e9], data=None, delay=0):
         self.env = env
+        self.name = name if name else name_app()
         self.store = simpy.Store(self.env)
         self.compute = compute
         self.read = read
         self.write = write
+        self.delay = delay
         # ensure format is valid, all list are length equal
         assert all([len(lst) == len(self.compute) for lst in [self.read, self.write]])
         self.data = data if data else None
@@ -138,20 +169,27 @@ class Application:
         # schedule all events
         self.schedule()
 
+    def put_delay(self, duration):
+        delay_phase = Delay(duration, data=self.data, appname=self.name)
+        self.store.put(delay_phase)
+
     def put_compute(self, duration, cores=1):
         # self.env.process(run_compute_phase(cluster, self.env, duration, cores=cores))
         # store.put(run_compute_phase(cluster, self.env, duration, cores=cores))
-        io_compute = IO_Compute(duration, cores, data=self.data)
+        io_compute = IO_Compute(duration, cores, data=self.data, appname=self.name)
         self.store.put(io_compute)
 
     def put_io(self, operation, volume, pattern=1):
         # self.env.process(run_io_phase(cluster, self.env, volume))
         # store.put(run_io_phase(cluster, self.env, volume))
-        io_phase = IO_Phase(operation=operation, volume=volume, pattern=pattern, data=self.data)
+        io_phase = IO_Phase(operation=operation, volume=volume, pattern=pattern, data=self.data, appname=self.name)
         self.store.put(io_phase)
 
     def schedule(self):
         self.status = []
+        if self.delay > 0:
+            self.put_delay(duration=self.delay)
+            self.status.append(False)
         for i in range(len(self.compute)):
             # read is prioritary
             if self.read[i] > 0:
@@ -177,7 +215,10 @@ class Application:
         phase = 0
         while self.store.items:
             item = yield self.store.get()
-            if isinstance(item, IO_Compute):
+            if isinstance(item, Delay) and phase == 0:
+                self.status[phase] = yield self.env.process(item.run(self.env, cluster))
+                phase += 1
+            elif isinstance(item, IO_Compute):
                 # compute phase
                 if phase == 0:
                     self.status[phase] = yield self.env.process(item.run(self.env, cluster))

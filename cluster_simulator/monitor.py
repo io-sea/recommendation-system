@@ -61,15 +61,18 @@ class MonitorResource(simpy.Resource):
 #         yield env.timeout(1)
 
 
-# if __name__ == '__main__':
-#     env = simpy.Environment()
-#     res = simpy.Resource(env, capacity=1)
-#     data = []
-#     # Bind *data* as first argument to monitor()
-#     # see https://docs.python.org/3/library/functools.html#functools.partial
-#     monitor = partial(monitor, data)
-#     patch_resource(res, post=monitor)  # Patches (only) this resource instance
+if __name__ == '__main__':
+    #     env = simpy.Environment()
+    #     res = simpy.Resource(env, capacity=1)
+    #     data = []
+    #     # Bind *data* as first argument to monitor()
+    #     # see https://docs.python.org/3/library/functools.html#functools.partial
+    #     monitor = partial(monitor, data)
+    #     patch_resource(res, post=monitor)  # Patches (only) this resource instance
 
-#     p = env.process(test_process(env, res))
-#     env.run(p)
-#     print(data)
+    #     p = env.process(test_process(env, res))
+    #     env.run(p)
+    #     print(data)
+    name = ''
+    if not name:
+        print("dont see")
