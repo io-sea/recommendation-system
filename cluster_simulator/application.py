@@ -8,12 +8,12 @@ import random
 import string
 
 """TODO LIST:
-            
+
             [OK] add start_delay as app parameter
             [OK] rename app.run(tiers <- placement)
             [OK] keep self.store internal
             [OK] superimpose two apps
-            [  ] add id or name for each app and spread it in logs
+            [OK] add id or name for each app and spread it in logs
 """
 
 
@@ -38,10 +38,12 @@ class Delay:
         yield env.timeout(self.duration)
         t_end = env.now
         monitor(self.data,
-                {"app": self.appname, "type": "waiting", "cpu_usage": 0,
+                {"app": self.appname, "type": "wait", "cpu_usage": 0,
                  "t_start": t_start, "t_end": t_end, "bandwidth": 0,
                  "phase_duration": self.duration, "volume": 0,
-                 "tiers_level": [tier.capacity.level for tier in cluster.tiers]})
+                 "tiers": [tier.name for tier in cluster.tiers],
+                 "data_placement": None,
+                 "tier_level": {tier.name: tier.capacity.level for tier in cluster.tiers}})
         logger.info(f"(App {self.appname}) - End waiting phase at {env.now}")
         return True
 
@@ -71,7 +73,9 @@ class IO_Compute:
                 {"app": self.appname, "type": "compute", "cpu_usage": self.cores,
                  "t_start": t_start, "t_end": t_end, "bandwidth": 0,
                  "phase_duration": phase_duration, "volume": 0,
-                 "tiers_level": [tier.capacity.level for tier in cluster.tiers]})
+                 "tiers": [tier.name for tier in cluster.tiers],
+                 "data_placement": None,
+                 "tier_level": {tier.name: tier.capacity.level for tier in cluster.tiers}})
 
         for core in used_cores:
             cluster.compute_cores.release(core)
@@ -119,7 +123,7 @@ class IO_Phase:
             used_cores.append(core)
             yield core
         logger.info(f"(App {self.appname}) - Start {self.operation.capitalize()} I/O Phase with volume = {convert_size(self.volume)} at {env.now}")
-        logger.info(f"{self.operation.capitalize()}(ing) I/O with bandwidth = {bandwidth} MB/s")
+        logger.info(f"(App {self.appname}) - {self.operation.capitalize()}(ing) I/O with bandwidth = {bandwidth} MB/s")
         io_bandwidth = bandwidth*bandwidth_share_model(cluster.compute_cores.count)
         phase_duration = (self.volume/1e6)/io_bandwidth
         t_start = env.now
@@ -128,7 +132,7 @@ class IO_Phase:
 
         t_end = env.now
         monitor(self.data,
-                {"type": self.operation, "cpu_usage": cores,
+                {"app": self.appname, "type": self.operation, "cpu_usage": cores,
                  "t_start": t_start, "t_end": t_end, "bandwidth": io_bandwidth,
                  "phase_duration": phase_duration, "volume": self.volume,
                  "tiers": [tier.name for tier in cluster.tiers],
@@ -210,7 +214,7 @@ class Application:
                 self.status.append(False)
 
     def run(self, cluster, tiers):
-        #assert len(cluster.tiers) == len(tiers)
+        # assert len(cluster.tiers) == len(tiers)
         item_number = 0
         phase = 0
         while self.store.items:
