@@ -13,7 +13,7 @@ import string
             [OK] rename app.run(tiers <- placement)
             [OK] keep self.store internal
             [OK] superimpose two apps
-            [OK] add id or name for each app and spread it in logs
+            [OK] add id or name for each app and spread it in logs and monitoring
 """
 
 
@@ -248,7 +248,6 @@ class Application:
                 item_number += 1
             # print(self.status)
         return self.data
-
 
     # def run(self, env, cluster):
 if __name__ == '__main__':
