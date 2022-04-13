@@ -4,10 +4,11 @@ import numpy as np
 import simpy
 
 from cluster_simulator.cluster import Cluster, Tier, bandwidth_share_model, compute_share_model, get_tier, convert_size
-from cluster_simulator.application import Application, IO_Phase, IO_Compute
+from cluster_simulator.phase import DelayPhase, ComputePhase, IOPhase
+from cluster_simulator.application import Application
 
 
-class TestCluster(unittest.TestCase):
+class TestAppInit(unittest.TestCase):
     def setUp(self):
         self.env = simpy.Environment()
         nvram_bandwidth = {'read':  {'seq': 780, 'rand': 760},
@@ -17,36 +18,6 @@ class TestCluster(unittest.TestCase):
 
         self.ssd_tier = Tier(self.env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
         self.nvram_tier = Tier(self.env, 'NVRAM', bandwidth=nvram_bandwidth, capacity=80e9)
-
-    def test_tier_init(self):
-        print(self.ssd_tier)
-        print(self.nvram_tier)
-
-    def test_cluster_init(self):
-        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
-        print(cluster)
-        self.assertIsInstance(cluster.compute_nodes, simpy.Resource)
-        self.assertIsInstance(cluster.compute_cores, simpy.Resource)
-
-    def test_compute_phase(self):
-        cluster = Cluster(self.env, compute_nodes=3, cores_per_node=4)
-        compute_phase = IO_Compute(duration=10)
-        self.env.process(compute_phase.run(self.env, cluster))
-        self.env.run()
-
-    def test_read_io_phase(self):
-        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
-        #read_io = Read_IO_Phase(volume=9e9, pattern=0.2)
-        read_io = IO_Phase(operation='read', volume=9e9, pattern=0.2)
-        self.env.process(read_io.run(self.env, cluster, placement=1))
-        self.env.run()
-
-    def test_write_io_phase(self):
-        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
-        #read_io = Read_IO_Phase(volume=9e9, pattern=0.2)
-        write_io = IO_Phase(operation='write', volume=9e9, pattern=0.2)
-        self.env.process(write_io.run(self.env, cluster, placement=1))
-        self.env.run()
 
     def test_application_init(self):
         # Simple app: read 1GB -> compute 10s -> write 5GB
@@ -80,7 +51,7 @@ class TestCluster(unittest.TestCase):
         #self.assertEqual(len(app.store.items), 3)
 
 
-class TestApps(unittest.TestCase):
+class TestBasicApps(unittest.TestCase):
     def setUp(self):
         self.env = simpy.Environment()
         nvram_bandwidth = {'read':  {'seq': 780, 'rand': 760},
@@ -142,7 +113,7 @@ class TestApps(unittest.TestCase):
         self.assertEqual(data.items[0]["phase_duration"], data.items[1]["t_start"])
 
 
-class TestAppsSuperposition(unittest.TestCase):
+class TestAppsSuperimposition(unittest.TestCase):
     def setUp(self):
         self.env = simpy.Environment()
         nvram_bandwidth = {'read':  {'seq': 780, 'rand': 760},
@@ -217,3 +188,7 @@ class TestAppsSuperposition(unittest.TestCase):
         self.env.process(app2.run(cluster, tiers=[0, 0]))
         self.env.run()
         self.assertEqual(data.items[0]["t_start"], data.items[1]["t_start"])
+
+
+if __name__ == '__main__':
+    unittest.main(verbosity=2)
