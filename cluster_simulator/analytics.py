@@ -45,7 +45,6 @@ def display_apps(data, width=800, height=600):
         # print(f"----------{app}----------")
         #app_color = DEFAULT_COLORS[i]
         offset = 0
-
         x_app = []
         y_app = []
         text = []
