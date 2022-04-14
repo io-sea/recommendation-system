@@ -172,7 +172,7 @@ def display_run(data, cluster, width=800, height=600):
     # iterate on apps
     i = 0
     for app, app_elements in groupby(items,  key=itemgetter('app')):
-        print(f"----------{app}----------")
+        # print(f"----------{app}----------")
         #app_color = DEFAULT_COLORS[i]
         offset = 0
 
@@ -193,7 +193,7 @@ def display_run(data, cluster, width=800, height=600):
         fig.append_trace(go.Scatter(x=np.array(x_app), y=np.array(y_app),
                                     text=text,
                                     textposition="top center",
-                                    name=app, line_shape='hv', showlegend=False), row=i+1, col=1)
+                                    name=app, line_shape='hvh', showlegend=False), row=i+1, col=1)
         fig['layout']['yaxis'+str(i+1)]['title'] = 'dataflow in MB/s'
         i += 1
         fig.update_xaxes(title_text="time in s")

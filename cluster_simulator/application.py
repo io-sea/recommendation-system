@@ -33,8 +33,6 @@ class Application:
         self.status = None
         # schedule all events
         self.schedule()
-        # store the events after scheduling
-        self.phases = copy.deepcopy(self.store)
 
     def put_delay(self, duration):
         delay_phase = DelayPhase(duration, data=self.data, appname=self.name)
@@ -77,7 +75,7 @@ class Application:
                 self.status.append(False)
 
     def run(self, cluster, tiers):
-        # assert len(cluster.tiers) == len(tiers)
+        #assert len(cluster.tiers) == len(tiers)
         item_number = 0
         phase = 0
         while self.store.items:
@@ -100,10 +98,10 @@ class Application:
                 # print(f"status list = {self.status}")
                 placement = cluster.tiers[tiers[item_number]]
                 if phase == 0:
-                    self.status[phase] = yield self.env.process(item.run(self.env, cluster, cores=1, placement=placement))
+                    self.status[phase] = yield self.env.process(item.run(self.env, cluster, placement=placement))
                     phase += 1
                 elif phase > 0 and self.status[phase-1] == True:
-                    self.status[phase] = yield self.env.process(item.run(self.env, cluster, cores=1, placement=placement))
+                    self.status[phase] = yield self.env.process(item.run(self.env, cluster, placement=placement))
                     phase += 1
                 else:
                     self.status[phase] = False

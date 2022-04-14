@@ -72,6 +72,7 @@ class ComputePhase:
                  "data_placement": None,
                  "tier_level": {tier.name: tier.capacity.level for tier in cluster.tiers}})
 
+        # releasing cores
         for core in used_cores:
             cluster.compute_cores.release(core)
 
@@ -80,11 +81,12 @@ class ComputePhase:
 
 
 class IOPhase:
-    def __init__(self, operation='read', volume=1e9, pattern=1, data=None, appname=None):
+    def __init__(self, cores=1, operation='read', volume=1e9, pattern=1, data=None, appname=None):
         """
         pattern = 0.8:
             80% sequential and 20% random.
             blocksize for moment is not variable."""
+        self.cores = cores
         self.operation = operation
         assert self.operation in ['read', 'write']
         self.volume = volume
@@ -107,13 +109,13 @@ class IOPhase:
         if self.operation == "write":
             tier.capacity.put(self.volume)
 
-    def run(self, env, cluster, cores=1, placement=None):
+    def run(self, env, cluster, placement=None):
         # Pre compute parameters
         tier = get_tier(placement, cluster)
-        bandwidth = (tier.bandwidth[self.operation]['seq'] * self.pattern + tier.bandwidth[self.operation]['rand']*(1-self.pattern)) * compute_share_model(cores)
+        bandwidth = (tier.bandwidth[self.operation]['seq'] * self.pattern + tier.bandwidth[self.operation]['rand']*(1-self.pattern)) * compute_share_model(self.cores)
 
         used_cores = []
-        for i in range(cores):
+        for i in range(self.cores):
             core = cluster.compute_cores.request()
             used_cores.append(core)
             yield core
@@ -127,7 +129,7 @@ class IOPhase:
 
         t_end = env.now
         monitor(self.data,
-                {"app": self.appname, "type": self.operation, "cpu_usage": cores,
+                {"app": self.appname, "type": self.operation, "cpu_usage": self.cores,
                  "t_start": t_start, "t_end": t_end, "bandwidth": io_bandwidth,
                  "phase_duration": phase_duration, "volume": self.volume,
                  "tiers": [tier.name for tier in cluster.tiers],
