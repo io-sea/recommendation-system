@@ -238,7 +238,7 @@ def display_run(data, cluster, width=800, height=600):
                                     name=tier, line_shape='vh', showlegend=False), row=i+1, col=1)
         fig['layout']['yaxis' + str(i+1)]['title'] = tier + ' usage in %'
 
-    fig.update_layout(width=600, height=800, title_text="State of the Cluster")
+    fig.update_layout(width=width, height=height, title_text="State of the Cluster")
 
     return fig
 
