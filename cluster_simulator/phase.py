@@ -121,7 +121,8 @@ class IOPhase:
             yield core
         logger.info(f"(App {self.appname}) - Start {self.operation.capitalize()} I/O Phase with volume = {convert_size(self.volume)} at {env.now}")
         logger.info(f"(App {self.appname}) - {self.operation.capitalize()}(ing) I/O with bandwidth = {bandwidth} MB/s")
-        io_bandwidth = bandwidth*bandwidth_share_model(cluster.compute_cores.count)
+        io_bandwidth = bandwidth  # bandwidth_share_model(cluster.compute_cores.count)
+
         phase_duration = (self.volume/1e6)/io_bandwidth
         t_start = env.now
         self.update_tiers(cluster, tier)
