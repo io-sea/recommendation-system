@@ -64,17 +64,20 @@ class Tier:
         interpolation when data entry is absent, i.e. b['seq'] gives a value
     """
 
-    def __init__(self, env, name, bandwidth, capacity):
+    def __init__(self, env, name, bandwidth, capacity=100e9):
         self.name = name
         self.capacity = simpy.Container(env, init=0, capacity=capacity)
-        self.bandwidth = bandwidth
+        self.max_bandwidth = bandwidth
+        # modeling percent use of bandwidth
+        self.bandwidth = simpy.Resource(env, capacity=10)
+        #self.bandwidth = simpy.Container(env, init=100, capacity=100)
         # logger.info(self.__str__())
 
     def __str__(self):
         description = "-------------------\n"
         description += (f"Tier: {self.name} with capacity = {convert_size(self.capacity.capacity)}\n")
         description += ("{:<12} {:<12} {:<12}".format('Operation', 'Pattern', 'Bandwidth MB/s')+"\n")
-        for op, inner_dict in self.bandwidth.items():
+        for op, inner_dict in self.max_bandwidth.items():
             for pattern, value in inner_dict.items():
                 description += ("{:<12} {:<12} {:<12}".format(op, pattern, value)+"\n")
         return description

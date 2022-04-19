@@ -110,38 +110,57 @@ class Application:
             # print(self.status)
         return self.data
 
+
     # def run(self, env, cluster):
 if __name__ == '__main__':
     env = simpy.Environment()
     data = simpy.Store(env)
-    # env.process(run_compute_phase(cluster, env, duration=10, cores=3))
-    nvram_bandwidth = {'read':  {'seq': 780, 'rand': 760},
-                       'write': {'seq': 515, 'rand': 505}}
-    ssd_bandwidth = {'read':  {'seq': 210, 'rand': 190},
-                     'write': {'seq': 100, 'rand': 100}}
 
-    ssd_tier = Tier(env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
-    nvram_tier = Tier(env, 'NVRAM', bandwidth=nvram_bandwidth, capacity=80e9)
-    cluster = Cluster(env,  compute_nodes=1, cores_per_node=2, tiers=[ssd_tier, nvram_tier])
-    app1 = Application(env,
-                       compute=[0, 10],
-                       read=[1e9, 0],
-                       write=[0, 5e9],
-                       data=data)
-    app2 = Application(env,
-                       compute=[0],
-                       read=[3e9],
-                       write=[0],
-                       data=data)
+    container = simpy.Container(env, capacity=30, init=30)
 
-    # app2 = Application(env, store,
-    #                    compute=[0, 25],
-    #                    read=[2e9, 0],
-    #                    write=[0, 10e9],
-    #                    tiers=[0, 1])
-    env.process(app1.run(cluster, tiers=[0, 0]))
-    env.process(app2.run(cluster, tiers=[1, 1]))
+    def consume_container(env, container):
+        print(f"Entry container level is {container.level} at {env.now} ")
+        # if container.level < quantity:
+        #     print(f"adding container with {quantity - container.level } at {env.now}")
+        #     container.put(quantity - container.level)
+        quantity = max(container.level, 1)
+        book_consume = container.get(quantity)
+        print(f"now consuming {quantity}")
+        yield env.timeout(3) & book_consume
+        print(f"[Triggered] container level is {container.level} at {env.now} ")
+        container.put(30)
+
+    env.process(consume_container(env, container))
+    env.process(consume_container(env, container))
     env.run()
+    # env.process(run_compute_phase(cluster, env, duration=10, cores=3))
+    # nvram_bandwidth = {'read':  {'seq': 780, 'rand': 760},
+    #                    'write': {'seq': 515, 'rand': 505}}
+    # ssd_bandwidth = {'read':  {'seq': 210, 'rand': 190},
+    #                  'write': {'seq': 100, 'rand': 100}}
+
+    # ssd_tier = Tier(env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
+    # nvram_tier = Tier(env, 'NVRAM', bandwidth=nvram_bandwidth, capacity=80e9)
+    # cluster = Cluster(env,  compute_nodes=1, cores_per_node=2, tiers=[ssd_tier, nvram_tier])
+    # app1 = Application(env,
+    #                    compute=[0, 10],
+    #                    read=[1e9, 0],
+    #                    write=[0, 5e9],
+    #                    data=data)
+    # app2 = Application(env,
+    #                    compute=[0],
+    #                    read=[3e9],
+    #                    write=[0],
+    #                    data=data)
+
+    # # app2 = Application(env, store,
+    # #                    compute=[0, 25],
+    # #                    read=[2e9, 0],
+    # #                    write=[0, 10e9],
+    # #                    tiers=[0, 1])
+    # env.process(app1.run(cluster, tiers=[0, 0]))
+    # env.process(app2.run(cluster, tiers=[1, 1]))
+    # env.run()
 
     # item = app1.phases.get()
     # print("---")

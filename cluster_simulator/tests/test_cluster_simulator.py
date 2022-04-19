@@ -113,7 +113,7 @@ class TestBasicApps(unittest.TestCase):
         self.assertEqual(data.items[0]["phase_duration"], data.items[1]["t_start"])
 
 
-class TestAppsSuperimposition(unittest.TestCase):
+class TestPhaseSuperposition(unittest.TestCase):
     def setUp(self):
         self.env = simpy.Environment()
         nvram_bandwidth = {'read':  {'seq': 780, 'rand': 760},
@@ -163,7 +163,7 @@ class TestAppsSuperimposition(unittest.TestCase):
         """Two I/O phases that should run sequentially because the cluster
         has only one core."""
         data = simpy.Store(self.env)
-        cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=1,
+        cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=3,
                           tiers=[self.ssd_tier, self.nvram_tier])
         app1 = Application(self.env, compute=[0],
                            read=[1e9], write=[0], data=data)
@@ -182,8 +182,8 @@ class TestAppsSuperimposition(unittest.TestCase):
                           tiers=[self.ssd_tier, self.nvram_tier])
         app1 = Application(self.env, compute=[0],
                            read=[1e9], write=[0], data=data)
-        app2 = Application(self.env, compute=[0],
-                           read=[2e9], write=[0], data=data)
+        app2 = Application(self.env, compute=[0, 1],
+                           read=[0, 0], write=[0, 2e9], data=data)
         self.env.process(app1.run(cluster, tiers=[0, 0]))
         self.env.process(app2.run(cluster, tiers=[0, 0]))
         self.env.run()
