@@ -178,8 +178,6 @@ class IOPhase:
         self.update_tiers(cluster, tier)
         ret = yield booking_phase
         t_end = env.now  # ending time for phase
-        print(f"Current bandwidth count is {tier.bandwidth.count}")
-        print(f"Current bandwidth queue length is {len(tier.bandwidth.queue)}")
         if ret:
             self.log_phase_start(timestamp=t_start, io_bandwidth=io_bandwidth,
                                  max_bandwidth=max_bandwidth)
