@@ -48,7 +48,61 @@ class TestAppInit(unittest.TestCase):
         self.env.process(app.run(cluster, tiers=tiers))
         self.env.run()
         # self.env.run(until=25)
-        #self.assertEqual(len(app.store.items), 3)
+        # self.assertEqual(len(app.store.items), 3)
+
+    def test_app_fitness_no_data(self):
+        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
+        # Simple app: read 1GB -> compute 10s -> write 5GB
+        compute = [0, 10]
+        read = [1e9, 0]
+        write = [0, 5e9]
+        tiers = [0, 1]
+        app = Application(self.env,
+                          compute=compute,
+                          read=read,
+                          write=write)
+
+        self.env.process(app.run(cluster, tiers=tiers))
+        self.env.run()
+        self.assertIsNone(app.get_fitness())
+
+    def test_app_fitness(self):
+        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
+        # record data
+        data = simpy.Store(self.env)
+        # Simple app: read 1GB -> compute 10s -> write 5GB
+        compute = [0, 10]
+        read = [1e9, 0]
+        write = [0, 5e9]
+        tiers = [0, 1]
+        app = Application(self.env,
+                          compute=compute,
+                          read=read,
+                          write=write,
+                          data=data)
+        self.env.process(app.run(cluster, tiers=tiers))
+        self.env.run()
+        self.assertAlmostEqual(app.get_fitness(), 24, places=0)
+
+    def test_app_fitness_filter_name(self):
+        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
+        # record data
+        data = simpy.Store(self.env)
+        # Simple app: read 1GB -> compute 10s -> write 5GB
+        compute = [0, 10]
+        read = [1e9, 0]
+        write = [0, 5e9]
+        tiers = [0, 1]
+        app = Application(self.env,
+                          name="appname",
+                          compute=compute,
+                          read=read,
+                          write=write,
+                          data=data)
+        self.env.process(app.run(cluster, tiers=tiers))
+        self.env.run()
+        self.assertAlmostEqual(app.get_fitness(app_name_filter="appname"), 24, places=0)
+        self.assertEqual(app.get_fitness(app_name_filter="app_name"), 0)
 
 
 class TestBasicApps(unittest.TestCase):
@@ -72,6 +126,21 @@ class TestBasicApps(unittest.TestCase):
         self.env.run()
         for item in data.items:
             print(item)
+
+    def test_app_rerun(self):
+        data = simpy.Store(self.env)
+        cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=2,
+                          tiers=[self.ssd_tier, self.nvram_tier])
+        app1 = Application(self.env, compute=[0, 10],
+                           read=[1e9, 0], write=[0, 5e9], data=data)
+        self.env.process(app1.run(cluster, tiers=[0, 0]))
+        self.env.run()
+        print(app1.get_fitness())
+        print(data.items)
+        self.env.process(app1.run(cluster, tiers=[1, 1]))
+        self.env.run()
+        print(app1.get_fitness())
+        print(data.items)
 
     def test_app_pure_read(self):
         data = simpy.Store(self.env)

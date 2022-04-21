@@ -7,6 +7,7 @@ from cluster import Cluster, Tier, bandwidth_share_model, compute_share_model, g
 from phase import DelayPhase, ComputePhase, IOPhase, name_app
 import copy
 
+
 """TODO LIST:
 
             [OK] add start_delay as app parameter
@@ -110,57 +111,61 @@ class Application:
             # print(self.status)
         return self.data
 
+    def get_fitness(self, app_name_filter=None):
+        """Method to get app duration from execution records saved in data store"""
+        # sample_item = {'app': 'B8', 'type': 'read', 'cpu_usage': 1, 't_start': 0, 't_end': 4.761904761904762, 'bandwidth': 210.0, 'phase_duration': 4.761904761904762, 'volume': 1000000000.0, 'tiers': ['SSD', 'NVRAM'], 'data_placement': {'placement': 'SSD'}, 'tier_level': {'SSD': 1000000000.0, 'NVRAM': 0}}
+        t_max = 0
+        if not self.data:
+            logger.error("No data store provided")
+            return None
+        if not self.data.items:
+            return t_max
+        for phase in self.data.items:
+            if app_name_filter is not None:
+                if phase["app"] == app_name_filter:
+                    t_max = max(t_max, phase["t_end"])
+            else:
+                t_max = max(t_max, phase["t_end"])
+        return t_max
+
 
     # def run(self, env, cluster):
 if __name__ == '__main__':
     env = simpy.Environment()
     data = simpy.Store(env)
 
-    container = simpy.Container(env, capacity=30, init=30)
 
-    def consume_container(env, container):
-        print(f"Entry container level is {container.level} at {env.now} ")
-        # if container.level < quantity:
-        #     print(f"adding container with {quantity - container.level } at {env.now}")
-        #     container.put(quantity - container.level)
-        quantity = max(container.level, 1)
-        book_consume = container.get(quantity)
-        print(f"now consuming {quantity}")
-        yield env.timeout(3) & book_consume
-        print(f"[Triggered] container level is {container.level} at {env.now} ")
-        container.put(30)
+#     nvram_bandwidth = {'read':  {'seq': 780, 'rand': 760},
+#                        'write': {'seq': 515, 'rand': 505}}
+#     ssd_bandwidth = {'read':  {'seq': 210, 'rand': 190},
+#                      'write': {'seq': 100, 'rand': 100}}
 
-    env.process(consume_container(env, container))
-    env.process(consume_container(env, container))
-    env.run()
-    # env.process(run_compute_phase(cluster, env, duration=10, cores=3))
-    # nvram_bandwidth = {'read':  {'seq': 780, 'rand': 760},
-    #                    'write': {'seq': 515, 'rand': 505}}
-    # ssd_bandwidth = {'read':  {'seq': 210, 'rand': 190},
-    #                  'write': {'seq': 100, 'rand': 100}}
+#     ssd_tier = Tier(env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
+#     nvram_tier = Tier(env, 'NVRAM', bandwidth=nvram_bandwidth, capacity=80e9)
+#     cluster = Cluster(env,  compute_nodes=1, cores_per_node=2, tiers=[ssd_tier, nvram_tier])
+#     app1 = Application(env,
+#                        compute=[0, 10],
+#                        read=[1e9, 0],
+#                        write=[0, 5e9],
+#                        data=data)
+#     app2 = Application(env,
+#                        name="popo",
+#                        compute=[0],
+#                        read=[3e9],
+#                        write=[0],
+#                        data=data)
 
-    # ssd_tier = Tier(env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
-    # nvram_tier = Tier(env, 'NVRAM', bandwidth=nvram_bandwidth, capacity=80e9)
-    # cluster = Cluster(env,  compute_nodes=1, cores_per_node=2, tiers=[ssd_tier, nvram_tier])
-    # app1 = Application(env,
-    #                    compute=[0, 10],
-    #                    read=[1e9, 0],
-    #                    write=[0, 5e9],
-    #                    data=data)
-    # app2 = Application(env,
-    #                    compute=[0],
-    #                    read=[3e9],
-    #                    write=[0],
-    #                    data=data)
-
-    # # app2 = Application(env, store,
-    # #                    compute=[0, 25],
-    # #                    read=[2e9, 0],
-    # #                    write=[0, 10e9],
-    # #                    tiers=[0, 1])
-    # env.process(app1.run(cluster, tiers=[0, 0]))
-    # env.process(app2.run(cluster, tiers=[1, 1]))
-    # env.run()
+#     # app2 = Application(env, store,
+#     #                    compute=[0, 25],
+#     #                    read=[2e9, 0],
+#     #                    write=[0, 10e9],
+#     #                    tiers=[0, 1])
+#     env.process(app1.run(cluster, tiers=[0, 0]))
+#     env.process(app2.run(cluster, tiers=[1, 1]))
+#     env.run()
+#     print(get_app_duration(data, app="popo"))
+#     fig = analytics.display_run(data, cluster, width=700, height=900)
+#     fig.show()
 
     # item = app1.phases.get()
     # print("---")
