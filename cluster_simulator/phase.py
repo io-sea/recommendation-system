@@ -152,8 +152,7 @@ class IOPhase:
         booking_cores = [cluster.compute_cores.request() for i in range(self.cores)]
 
         # requesting bandwidth, avoiding contention model : take all available
-        print(f"Current bandwidth count is {tier.bandwidth.count}")
-        print(f"Current bandwidth queue length is {len(tier.bandwidth.queue)}")
+
         remaining_bandwidth = tier.bandwidth.capacity - tier.bandwidth.count
         if remaining_bandwidth == 0:
             # no bandwidth available, request all

@@ -127,6 +127,21 @@ class TestBasicApps(unittest.TestCase):
         for item in data.items:
             print(item)
 
+    def test_app_rerun(self):
+        data = simpy.Store(self.env)
+        cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=2,
+                          tiers=[self.ssd_tier, self.nvram_tier])
+        app1 = Application(self.env, compute=[0, 10],
+                           read=[1e9, 0], write=[0, 5e9], data=data)
+        self.env.process(app1.run(cluster, tiers=[0, 0]))
+        self.env.run()
+        print(app1.get_fitness())
+        print(data.items)
+        self.env.process(app1.run(cluster, tiers=[1, 1]))
+        self.env.run()
+        print(app1.get_fitness())
+        print(data.items)
+
     def test_app_pure_read(self):
         data = simpy.Store(self.env)
         read_size = 1e9
