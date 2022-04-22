@@ -149,6 +149,7 @@ class TestBasicApps(unittest.TestCase):
                           tiers=[self.ssd_tier, self.nvram_tier])
         app1 = Application(self.env, compute=[0],
                            read=[read_size], write=[0], data=data)
+
         self.env.process(app1.run(cluster, tiers=[0]))
         self.env.run()
         self.assertEqual(len(data.items), 1)
@@ -207,7 +208,9 @@ class TestPhaseSuperposition(unittest.TestCase):
         self.env.run()
         timespan = 0.0
         for item in data.items:
+            print(item)
             timespan = max(timespan, item["t_end"])
+        self.assertEqual(data.items[0]["t_end"], data.items[1]["t_start"])
         self.assertEqual(timespan, 25.0)
 
     def test_2_computes_parallel(self):
@@ -216,9 +219,9 @@ class TestPhaseSuperposition(unittest.TestCase):
         data = simpy.Store(self.env)
         cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=2,
                           tiers=[self.ssd_tier, self.nvram_tier])
-        app1 = Application(self.env, compute=[0, 10],
+        app1 = Application(self.env, compute=[0, 15],
                            read=[0, 0], write=[0, 0], data=data)
-        app2 = Application(self.env, compute=[0, 15],
+        app2 = Application(self.env, compute=[0, 1],
                            read=[0, 0], write=[0, 0], data=data)
         self.env.process(app1.run(cluster, tiers=[0, 0]))
         self.env.process(app2.run(cluster, tiers=[0, 0]))

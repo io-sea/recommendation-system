@@ -6,7 +6,8 @@ import math
 from cluster import Cluster, Tier, bandwidth_share_model, compute_share_model, get_tier, convert_size
 from phase import DelayPhase, ComputePhase, IOPhase, name_app
 import copy
-
+from simpy.events import AnyOf, AllOf, Event
+from loguru import logger
 
 """TODO LIST:
 
@@ -33,23 +34,27 @@ class Application:
         self.data = data if data else None
         self.status = None
         # schedule all events
+        self.cores_request = []
         self.schedule()
 
     def put_delay(self, duration):
         delay_phase = DelayPhase(duration, data=self.data, appname=self.name)
         self.store.put(delay_phase)
+        self.cores_request.append(0)
 
     def put_compute(self, duration, cores=1):
         # self.env.process(run_compute_phase(cluster, self.env, duration, cores=cores))
         # store.put(run_compute_phase(cluster, self.env, duration, cores=cores))
         compute_phase = ComputePhase(duration, cores, data=self.data, appname=self.name)
         self.store.put(compute_phase)
+        self.cores_request.append(compute_phase.cores)
 
     def put_io(self, operation, volume, pattern=1):
         # self.env.process(run_io_phase(cluster, self.env, volume))
         # store.put(run_io_phase(cluster, self.env, volume))
-        io_phase = IOPhase(operation=operation, volume=volume, pattern=pattern, data=self.data, appname=self.name)
+        io_phase = IOPhase(cores=1, operation=operation, volume=volume, pattern=pattern, data=self.data, appname=self.name)
         self.store.put(io_phase)
+        self.cores_request.append(io_phase.cores)
 
     def schedule(self):
         self.status = []
@@ -75,18 +80,26 @@ class Application:
                 self.put_compute(duration, cores=1)
                 self.status.append(False)
 
+    def request_cores(self, cluster):
+
+        return [cluster.compute_cores.request() for i in range(max(self.cores_request))]
+
     def run(self, cluster, tiers):
-        #assert len(cluster.tiers) == len(tiers)
+        # assert len(cluster.tiers) == len(tiers)
         item_number = 0
         phase = 0
+        requesting_cores = self.request_cores(cluster)
         while self.store.items:
+            logger.info(f"======= we requested {max(self.cores_request)} cores / {cluster.compute_cores.count}")
             item = yield self.store.get()
+            logger.info(f"======= we requested {max(self.cores_request)} cores / {cluster.compute_cores.count}")
             if isinstance(item, DelayPhase) and phase == 0:
                 self.status[phase] = yield self.env.process(item.run(self.env, cluster))
                 phase += 1
             elif isinstance(item, ComputePhase):
                 # compute phase
                 if phase == 0:
+                    yield AllOf(self.env, requesting_cores)
                     self.status[phase] = yield self.env.process(item.run(self.env, cluster))
                     phase += 1
                 elif phase > 0 and self.status[phase-1] == True:
@@ -95,10 +108,9 @@ class Application:
                 else:
                     self.status[phase] = False
             else:
-                # print(f"item_number = {item_number} while tiers={tiers}")
-                # print(f"status list = {self.status}")
                 placement = cluster.tiers[tiers[item_number]]
                 if phase == 0:
+                    yield AllOf(self.env, requesting_cores)
                     self.status[phase] = yield self.env.process(item.run(self.env, cluster, placement=placement))
                     phase += 1
                 elif phase > 0 and self.status[phase-1] == True:
@@ -108,7 +120,9 @@ class Application:
                     self.status[phase] = False
                     phase += 1
                 item_number += 1
-            # print(self.status)
+            logger.info(f"======= we requested {max(self.cores_request)} cores / {cluster.compute_cores.count}")
+        releasing_cores = [cluster.compute_cores.release(core) for core in requesting_cores]
+        yield AllOf(self.env, releasing_cores)
         return self.data
 
     def get_fitness(self, app_name_filter=None):
@@ -134,35 +148,37 @@ if __name__ == '__main__':
     env = simpy.Environment()
     data = simpy.Store(env)
 
+    nvram_bandwidth = {'read':  {'seq': 780, 'rand': 760},
+                       'write': {'seq': 515, 'rand': 505}}
+    ssd_bandwidth = {'read':  {'seq': 210, 'rand': 190},
+                     'write': {'seq': 100, 'rand': 100}}
 
-#     nvram_bandwidth = {'read':  {'seq': 780, 'rand': 760},
-#                        'write': {'seq': 515, 'rand': 505}}
-#     ssd_bandwidth = {'read':  {'seq': 210, 'rand': 190},
-#                      'write': {'seq': 100, 'rand': 100}}
+    ssd_tier = Tier(env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
+    nvram_tier = Tier(env, 'NVRAM', bandwidth=nvram_bandwidth, capacity=80e9)
+    cluster = Cluster(env,  compute_nodes=1, cores_per_node=3, tiers=[ssd_tier, nvram_tier])
+    app1 = Application(env,
+                       compute=[0, 10],
+                       read=[0, 0],
+                       write=[0, 0],
+                       data=data)
+    app2 = Application(env,
+                       name="popo",
+                       compute=[0, 15],
+                       read=[0, 0],
+                       write=[0, 0],
+                       data=data)
 
-#     ssd_tier = Tier(env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
-#     nvram_tier = Tier(env, 'NVRAM', bandwidth=nvram_bandwidth, capacity=80e9)
-#     cluster = Cluster(env,  compute_nodes=1, cores_per_node=2, tiers=[ssd_tier, nvram_tier])
-#     app1 = Application(env,
-#                        compute=[0, 10],
-#                        read=[1e9, 0],
-#                        write=[0, 5e9],
-#                        data=data)
-#     app2 = Application(env,
-#                        name="popo",
-#                        compute=[0],
-#                        read=[3e9],
-#                        write=[0],
-#                        data=data)
+    # app2 = Application(env, store,
+    #                    compute=[0, 25],
+    #                    read=[2e9, 0],
+    #                    write=[0, 10e9],
+    #                    tiers=[0, 1])
+    env.process(app1.run(cluster, tiers=[0, 0]))
+    env.process(app2.run(cluster, tiers=[1, 1]))
+    env.run()
 
-#     # app2 = Application(env, store,
-#     #                    compute=[0, 25],
-#     #                    read=[2e9, 0],
-#     #                    write=[0, 10e9],
-#     #                    tiers=[0, 1])
-#     env.process(app1.run(cluster, tiers=[0, 0]))
-#     env.process(app2.run(cluster, tiers=[1, 1]))
-#     env.run()
+    for item in data.items:
+        print(item)
 #     print(get_app_duration(data, app="popo"))
 #     fig = analytics.display_run(data, cluster, width=700, height=900)
 #     fig.show()

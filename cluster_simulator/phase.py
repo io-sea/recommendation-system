@@ -54,10 +54,10 @@ class ComputePhase:
     def run(self, env, cluster):
         used_cores = []
         # use self.cores
-        for i in range(self.cores):
-            core = cluster.compute_cores.request()
-            used_cores.append(core)
-            yield core
+        # for i in range(self.cores):
+        #     core = cluster.compute_cores.request()
+        #     used_cores.append(core)
+        #     yield core
         logger.info(f"(App {self.appname}) - Start computing phase at {env.now} with {self.cores} requested cores")
         phase_duration = self.duration/compute_share_model(self.cores)
         # phase_duration = self.duration/compute_share_model(cluster.compute_cores.capacity - cluster.compute_cores.count)
@@ -74,8 +74,8 @@ class ComputePhase:
                  "tier_level": {tier.name: tier.capacity.level for tier in cluster.tiers}})
 
         # releasing cores
-        for core in used_cores:
-            cluster.compute_cores.release(core)
+        # for core in used_cores:
+        #     cluster.compute_cores.release(core)
 
         logger.info(f"(App {self.appname}) - End computing phase at {env.now} and releasing {self.cores} cores")
         return True
@@ -149,8 +149,6 @@ class IOPhase:
         # TODO max_bandwidth depends on *cores and *nodes but upperbound by node-> switch connection
         max_bandwidth = (tier.max_bandwidth[self.operation]['seq'] * self.pattern + tier.max_bandwidth[self.operation]['rand']*(1-self.pattern)) * self.cores
 
-        booking_cores = [cluster.compute_cores.request() for i in range(self.cores)]
-
         # requesting bandwidth, avoiding contention model : take all available
 
         remaining_bandwidth = tier.bandwidth.capacity - tier.bandwidth.count
@@ -172,7 +170,7 @@ class IOPhase:
         # yield env.timeout(phase_duration)
         booking_phase = env.timeout(phase_duration, value=True)
         # ensure all resources are available
-        yield AllOf(env, booking_cores) & AllOf(env, booking_bandwidth)
+        yield AllOf(env, booking_bandwidth)
         t_start = env.now  # starting time for phase
         self.update_tiers(cluster, tier)
         ret = yield booking_phase
@@ -188,10 +186,9 @@ class IOPhase:
                  "data_placement": {"placement": tier.name},
                  "tier_level": {tier.name: tier.capacity.level for tier in cluster.tiers}})
 
-        releasing_cores = [cluster.compute_cores.release(core) for core in booking_cores]
         releasing_bandwidth = [tier.bandwidth.release(bandwidth) for bandwidth in booking_bandwidth]
         # releasing all resouces
-        yield AllOf(env, releasing_cores) & AllOf(env, releasing_bandwidth)
+        yield AllOf(env, releasing_bandwidth)
         self.log_phase_end(timestamp=t_end)
 
         return True
