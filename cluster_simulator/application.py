@@ -16,6 +16,7 @@ from loguru import logger
             [OK] keep self.store internal
             [OK] superimpose two apps
             [OK] add id or name for each app and spread it in logs and monitoring
+            [  ] bandwidth is a preemptible resource
 
 """
 
@@ -90,9 +91,7 @@ class Application:
         phase = 0
         requesting_cores = self.request_cores(cluster)
         while self.store.items:
-            logger.info(f"======= we requested {max(self.cores_request)} cores / {cluster.compute_cores.count}")
             item = yield self.store.get()
-            logger.info(f"======= we requested {max(self.cores_request)} cores / {cluster.compute_cores.count}")
             if isinstance(item, DelayPhase) and phase == 0:
                 self.status[phase] = yield self.env.process(item.run(self.env, cluster))
                 phase += 1
@@ -120,7 +119,7 @@ class Application:
                     self.status[phase] = False
                     phase += 1
                 item_number += 1
-            logger.info(f"======= we requested {max(self.cores_request)} cores / {cluster.compute_cores.count}")
+
         releasing_cores = [cluster.compute_cores.release(core) for core in requesting_cores]
         yield AllOf(self.env, releasing_cores)
         return self.data
@@ -143,45 +142,131 @@ class Application:
         return t_max
 
 
-    # def run(self, env, cluster):
+class IO:
+    def __init__(self, env, name, volume, bandwidth):
+        self.env = env
+        self.name = name
+        self.volume = volume
+        self.bandwidth = bandwidth
+        self.concurrent = False
+        self.process = env.process(self.run())
+
+    def run(self):
+        volume = self.volume
+
+        # retry IO until its volume is consumed
+        while volume:
+            # construct a request event
+            try:
+                booking_bandwidth = [self.bandwidth.request(priority=i+1) for i in range(self.bandwidth.capacity)]
+            except:
+                pass
+
+            available_bandwidth = 0
+            try:
+                start = self.env.now
+                a = yield AnyOf(env, booking_bandwidth)
+                # at least one bandwidth slot is obtained
+                start = self.env.now
+                for ia in a:
+                    logger.info(f"resources : {ia}: {ia.ok}, priority={ia.priority}")
+                    if ia.ok:
+                        available_bandwidth += 1
+
+                logger.info(f"[{self.name}](starting) time = {self.env.now} | "
+                            f"volume = {volume} | available_bandwidth = {available_bandwidth}")
+                print(f"available_bandwidth = {available_bandwidth}")
+                duration = volume/available_bandwidth
+                yield self.env.timeout(duration)
+                logger.info(f"[{self.name}](consuming) time = {start}-->{self.env.now} | "
+                            f"volume = {volume} | "
+                            f"bandwidth : {available_bandwidth} used / {self.bandwidth.capacity} ")
+                volume = 0  # exits the loop
+
+            except simpy.Interrupt as interrupt:
+                self.concurrent = True
+                print(interrupt.cause.resource)
+                # update volume
+                volume = volume - (self.env.now - start)*available_bandwidth
+                logger.info(f"interrupt usage_since/diff = {interrupt.cause.usage_since}/{(self.env.now - start)}")
+                logger.info(f"[{self.name}](concurrence) time = {self.env.now} | "
+                            f"volume = {volume} | "
+                            f"bandwidth : {available_bandwidth} used / {self.bandwidth.capacity} ")
+        logger.info(f"[{self.name}](consumed) time = {self.env.now} | "
+                    f"volume = {volume} |")
+        # release resources
+        #booking_bandwidth = [res.release() for res in booking_bandwidth]
+
+
+def resource_user(name, env, resource, wait, prio):
+    yield env.timeout(wait)
+    volume = 2
+    while volume > 0:
+        with resource.request(priority=prio) as req:
+            print('%s requesting at %s with priority=%s | count=%s' % (name, env.now, prio, resource.count))
+            yield req
+            print('%s got resource at %s | count=%s' % (name, env.now, resource.count))
+            try:
+                yield env.timeout(volume)
+                volume = 0
+                print('%s completed at time %g | count=%s' % (name, env.now, resource.count))
+            except simpy.Interrupt as interrupt:
+                by = interrupt.cause.by
+                usage = env.now - interrupt.cause.usage_since
+                volume -= usage
+                prio -= 0.1  # bump my prio enough so I'm next
+                print('%s got preempted by %s at %s after %s | count=%s' %
+                      (name, by, env.now, usage, resource.count))
+
+
 if __name__ == '__main__':
     env = simpy.Environment()
-    data = simpy.Store(env)
-
-    nvram_bandwidth = {'read':  {'seq': 780, 'rand': 760},
-                       'write': {'seq': 515, 'rand': 505}}
-    ssd_bandwidth = {'read':  {'seq': 210, 'rand': 190},
-                     'write': {'seq': 100, 'rand': 100}}
-
-    ssd_tier = Tier(env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
-    nvram_tier = Tier(env, 'NVRAM', bandwidth=nvram_bandwidth, capacity=80e9)
-    cluster = Cluster(env,  compute_nodes=1, cores_per_node=3, tiers=[ssd_tier, nvram_tier])
-    app1 = Application(env,
-                       compute=[0, 10],
-                       read=[0, 0],
-                       write=[0, 0],
-                       data=data)
-    app2 = Application(env,
-                       name="popo",
-                       compute=[0, 15],
-                       read=[0, 0],
-                       write=[0, 0],
-                       data=data)
-
-    # app2 = Application(env, store,
-    #                    compute=[0, 25],
-    #                    read=[2e9, 0],
-    #                    write=[0, 10e9],
-    #                    tiers=[0, 1])
-    env.process(app1.run(cluster, tiers=[0, 0]))
-    env.process(app2.run(cluster, tiers=[1, 1]))
+    res = simpy.PreemptiveResource(env, capacity=10)
+    p1 = env.process(resource_user("app1", env, res, wait=0, prio=0))
+    p2 = env.process(resource_user("app2", env, res, wait=0, prio=0))
+    p3 = env.process(resource_user("app3", env, res, wait=0, prio=-1))
     env.run()
+    # env = simpy.Environment()
+    # bandwidth = simpy.PreemptiveResource(env, capacity=6)
+    # IOs = [IO(env, name=str(i), volume=30, bandwidth=bandwidth) for i in range(3)]
+    # env.run()
 
-    for item in data.items:
-        print(item)
-#     print(get_app_duration(data, app="popo"))
-#     fig = analytics.display_run(data, cluster, width=700, height=900)
-#     fig.show()
+    # data = simpy.Store(env)
+
+    # nvram_bandwidth = {'read':  {'seq': 780, 'rand': 760},
+    #                    'write': {'seq': 515, 'rand': 505}}
+    # ssd_bandwidth = {'read':  {'seq': 210, 'rand': 190},
+    #                  'write': {'seq': 100, 'rand': 100}}
+
+    # ssd_tier = Tier(env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
+    # nvram_tier = Tier(env, 'NVRAM', bandwidth=nvram_bandwidth, capacity=80e9)
+    # cluster = Cluster(env,  compute_nodes=1, cores_per_node=2, tiers=[ssd_tier, nvram_tier])
+    # app1 = Application(env,
+    #                    compute=[0, 10],
+    #                    read=[0, 0],
+    #                    write=[0, 0],
+    #                    data=data)
+    # app2 = Application(env,
+    #                    name="popo",
+    #                    compute=[0, 15],
+    #                    read=[0, 0],
+    #                    write=[0, 0],
+    #                    data=data)
+
+    # # app2 = Application(env, store,
+    # #                    compute=[0, 25],
+    # #                    read=[2e9, 0],
+    # #                    write=[0, 10e9],
+    # #                    tiers=[0, 1])
+    # env.process(app1.run(cluster, tiers=[0, 0]))
+    # env.process(app2.run(cluster, tiers=[1, 1]))
+    # env.run()
+
+    # for item in data.items:
+    #     print(item)
+    #     print(get_app_duration(data, app="popo"))
+    #     fig = analytics.display_run(data, cluster, width=700, height=900)
+    #     fig.show()
 
     # item = app1.phases.get()
     # print("---")
