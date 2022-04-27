@@ -65,11 +65,12 @@ class Tier:
     """
 
     def __init__(self, env, name, bandwidth, capacity=100e9):
+        self.env = env
         self.name = name
-        self.capacity = simpy.Container(env, init=0, capacity=capacity)
+        self.capacity = simpy.Container(self.env, init=0, capacity=capacity)
         self.max_bandwidth = bandwidth
         # modeling percent use of bandwidth
-        self.bandwidth = simpy.Resource(env, capacity=10)
+        self.bandwidth = simpy.PreemptiveResource(self.env, capacity=10)
         #self.bandwidth = simpy.Container(env, init=100, capacity=100)
         # logger.info(self.__str__())
 
