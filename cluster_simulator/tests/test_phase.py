@@ -72,7 +72,18 @@ class TestBandwidthShare(unittest.TestCase):
 
         self.env.run()
         for io in read_ios:
-            print(f"app: {io} | bandwidth usage: {io.bandwidth_usage}")
+            print(f"app: {io} | bandwidth usage: {io.bandwidth_usage} MB/s")
+
+    def test_many_read_phases(self):
+        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
+        #read_io = Read_IOPhase(volume=9e9, pattern=0.2)
+        read_ios = [IOPhase(operation='read', volume=1e9) for i in range(3)]
+        for i, io in enumerate(read_ios):
+            self.env.process(io.run(self.env, cluster, placement=1, delay=i*0))  # nvram 200-100
+
+        self.env.run()
+        for io in read_ios:
+            print(f"app: {io} | bandwidth usage: {io.bandwidth_usage} MB/s")
 
 
 if __name__ == '__main__':

@@ -144,7 +144,7 @@ class IOPhase:
     #         self.update_tiers(cluster, tier)
     #         booking_phase = env.timeout(phase_duration, value=True)
 
-    def run(self, env, cluster, placement=None):
+    def run(self, env, cluster, placement=None, delay=0):
         # get the tier where the I/O will be performed
         tier = get_tier(placement, cluster)
         # get the max bandwidth available in the tier
@@ -155,17 +155,19 @@ class IOPhase:
         # contention model : share equally available bandwidth
         volume = self.volume
         self.env = env
+        if delay:
+            yield self.env.timeout(delay)
         time_step = 1
         # retry IO until its volume is consumed
         while volume > 0:
-            with tier.bandwidth.request(priority=time.time()) as req:
+            with tier.bandwidth.request(priority=-time.time(), preempt=True) as req:
                 yield req
                 try:  # try exhausting IO volume
                     available_bandwidth = max_bandwidth/tier.bandwidth.count
                     t_start = self.env.now
                     yield self.env.timeout(time_step)
                     t_end = self.env.now
-                    self.bandwidth_usage[t_start] = available_bandwidth
+                    self.bandwidth_usage[t_start] = available_bandwidth/1e6
 
                     self.log_phase_start(timestamp=env.now,
                                          io_bandwidth=available_bandwidth,           max_bandwidth=max_bandwidth)
