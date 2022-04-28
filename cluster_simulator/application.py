@@ -158,10 +158,10 @@ class IO:
         yield self.env.timeout(self.delay)
         # remaining volume of the IO to be conveyed
         volume = self.volume
-        time_step = 1
         # retry IO until its volume is consumed
 
         while volume > 0:
+            start = self.env.now
             with self.bandwidth.request(priority=self.prio) as req:
                 self.b_usage[env.now] = round(100/bandwidth.count, 2)
                 yield req
@@ -169,18 +169,26 @@ class IO:
                 try:
                     # try exhausting IO volume
                     available_bandwidth = 1/self.bandwidth.count
-                    duration = time_step
-                    # duration = volume/available_bandwidth
-                    logger.info(f"[{self.name}](starting) time = {self.env.now} | "
-                                f"volume = {volume} | available_bandwidth = {available_bandwidth}")
-                    start = self.env.now
+                    time_to_next = self.env.peek()
+                    # logger.info(f"[{self.name}](starting) time = {self.env.now} | "
+                    #             f"volume = {volume} | available_bandwidth = {available_bandwidth}")
+                    if time_to_next <= volume/available_bandwidth:
+                        # if the next event is shorter than the IO volume
+                        yield self.env.timeout(time_to_next)
+                        volume -= time_to_next*available_bandwidth
+                        # logger.info(f"[{self.name}](consuming) time "
+                        #             f"= {start}-->{start+time_to_next} | "
+                        #             f"remaining volume = {volume} | "
+                        #             f"available_bandwidth : {available_bandwidth} ")
+
+                    else:
+                        yield self.env.timeout(volume/available_bandwidth)
+                        volume = 0
+
                     self.b_usage[env.now] = round(100/bandwidth.count, 2)
-                    yield self.env.timeout(duration)
                     available_bandwidth = 1/self.bandwidth.count
-                    volume -= time_step*available_bandwidth  # until 0 exit the loop
-                    logger.info(f"[{self.name}](consuming) time = {start}-->{self.env.now} | "
-                                f"volume = {volume} | "
-                                f"available_bandwidth : {available_bandwidth} ")
+                    # until 0 exit the loop
+
                 except simpy.Interrupt as interrupt:
                     self.concurrent = True
                     logger.info(f"[{self.name}](preempted) at {self.env.now} | "
@@ -193,8 +201,8 @@ class IO:
                     # prio -= 1
                     logger.info(f"[{self.name}](consuming) {time_usage*available_bandwidth} out of {self.volume} | current volume = {volume}")
                     self.b_usage[env.now] = round(100/bandwidth.count, 2)
-            logger.info(f"[{self.name}](consumed) start = {start} end = {self.env.now} | "
-                        f"volume = {volume} |")
+            # logger.info(f"[{self.name}](consumed) start = {start} end = {self.env.now} | "
+            #             f"volume = {self.volume}-->{volume} |")
         print(self.b_usage)
 
         # release resources
