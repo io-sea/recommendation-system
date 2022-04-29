@@ -53,6 +53,7 @@ class TestPhase(unittest.TestCase):
 class TestBandwidthShare(unittest.TestCase):
     def setUp(self):
         self.env = simpy.Environment()
+        self.used_bandwidth = dict()
         nvram_bandwidth = {'read':  {'seq': 800, 'rand': 800},
                            'write': {'seq': 400, 'rand': 400}}
         ssd_bandwidth = {'read':  {'seq': 200, 'rand': 200},
@@ -79,7 +80,7 @@ class TestBandwidthShare(unittest.TestCase):
         #read_io = Read_IOPhase(volume=9e9, pattern=0.2)
         read_ios = [IOPhase(operation='read', volume=1e9) for i in range(3)]
         for i, io in enumerate(read_ios):
-            self.env.process(io.run(self.env, cluster, placement=1, delay=i*0))  # nvram 200-100
+            self.env.process(io.run(self.env, cluster, placement=1, delay=i))  # nvram 800
 
         self.env.run()
         for io in read_ios:

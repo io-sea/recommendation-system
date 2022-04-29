@@ -118,7 +118,7 @@ class IOPhase:
         logger.info(f"(App {self.appname}) - Start {self.operation.capitalize()} I/O Phase with volume = {convert_size(self.volume)} at {timestamp}")
 
         # logger.info(f"(App {self.appname}) - {self.operation.capitalize()}(ing) I/O with bandwidth = {max_bandwidth} MB/s available at {timestamp}")
-        logger.info(f"(App {self.appname}) - {self.operation.capitalize()}(ing) available bandwidth = {round(io_bandwidth/max_bandwidth, 2)} MB/s available at {timestamp}")
+        logger.info(f"(App {self.appname}) - {self.operation.capitalize()}(ing) available bandwidth = {round(io_bandwidth, 2)} MB/s available at {timestamp}")
 
         logger.info(f"(App {self.appname}) - {self.operation.capitalize()}(ing) I/O with bandwidth = {io_bandwidth} MB/s")
 
@@ -165,28 +165,33 @@ class IOPhase:
                 try:  # try exhausting IO volume
                     available_bandwidth = max_bandwidth/tier.bandwidth.count
                     t_start = self.env.now
-                    yield self.env.timeout(time_step)
+                    # yield self.env.timeout(time_step)
+                    yield self.env.timeout(volume/available_bandwidth)
                     t_end = self.env.now
                     self.bandwidth_usage[t_start] = available_bandwidth/1e6
 
                     self.log_phase_start(timestamp=env.now,
-                                         io_bandwidth=available_bandwidth,           max_bandwidth=max_bandwidth)
+                                         io_bandwidth=available_bandwidth/1e6,           max_bandwidth=max_bandwidth)
                     available_bandwidth = max_bandwidth/tier.bandwidth.count
-                    volume -= time_step*available_bandwidth  # until 0 exit the loop
+                    # volume -= time_step*available_bandwidth  # until 0 exit the loop
+
                     monitor(self.data,
                             {"app": self.appname, "type": self.operation, "cpu_usage": self.cores,
-                             "t_start": t_start, "t_end": t_end, "bandwidth": available_bandwidth,
-                             "phase_duration": t_end-t_start, "volume": time_step*available_bandwidth,
+                             "t_start": t_start, "t_end": t_end, "bandwidth": available_bandwidth/1e6,
+                             "phase_duration": t_end-t_start, "volume": volume,
                              "tiers": [tier.name for tier in cluster.tiers],
                              "data_placement": {"placement": tier.name},
                              "tier_level": {tier.name: tier.capacity.level for tier in cluster.tiers}})
+                    volume = 0
                 except simpy.Interrupt as interrupt:
                     t_end = self.env.now
                     time_usage = t_end - interrupt.cause.usage_since
+                    logger.info(f"duration before interruption {time_usage}")
+                    available_bandwidth = max_bandwidth/tier.bandwidth.count
                     volume -= time_usage*available_bandwidth
                     monitor(self.data,
                             {"app": self.appname, "type": self.operation, "cpu_usage": self.cores,
-                             "t_start": interrupt.cause.usage_since, "t_end": t_end, "bandwidth": available_bandwidth,
+                             "t_start": interrupt.cause.usage_since, "t_end": t_end, "bandwidth": available_bandwidth/1e6,
                              "phase_duration": t_end-t_start, "volume": time_usage*available_bandwidth,
                              "tiers": [tier.name for tier in cluster.tiers],
                              "data_placement": {"placement": tier.name},

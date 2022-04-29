@@ -8,6 +8,7 @@ from phase import DelayPhase, ComputePhase, IOPhase, name_app
 import copy
 from simpy.events import AnyOf, AllOf, Event
 from loguru import logger
+import math
 
 """TODO LIST:
 
@@ -161,33 +162,24 @@ class IO:
         # retry IO until its volume is consumed
 
         while volume > 0:
-            start = self.env.now
+
             with self.bandwidth.request(priority=self.prio) as req:
                 self.b_usage[env.now] = round(100/bandwidth.count, 2)
                 yield req
                 self.b_usage[env.now] = round(100/bandwidth.count, 2)
                 try:
                     # try exhausting IO volume
+                    # update bandwidth usage
                     available_bandwidth = 1/self.bandwidth.count
-                    time_to_next = self.env.peek()
-                    # logger.info(f"[{self.name}](starting) time = {self.env.now} | "
-                    #             f"volume = {volume} | available_bandwidth = {available_bandwidth}")
-                    if time_to_next <= volume/available_bandwidth:
-                        # if the next event is shorter than the IO volume
-                        yield self.env.timeout(time_to_next)
-                        volume -= time_to_next*available_bandwidth
-                        # logger.info(f"[{self.name}](consuming) time "
-                        #             f"= {start}-->{start+time_to_next} | "
-                        #             f"remaining volume = {volume} | "
-                        #             f"available_bandwidth : {available_bandwidth} ")
-
-                    else:
-                        yield self.env.timeout(volume/available_bandwidth)
-                        volume = 0
-
+                    step_duration = min(self.env.peek(), volume/available_bandwidth)
+                    start = self.env.now
+                    yield self.env.timeout(step_duration)
+                    volume -= step_duration * available_bandwidth
+                    logger.info(f"[{self.name}](step) time "
+                                f"= {start}-->{start+step_duration} | "
+                                f"remaining volume = {volume} | "
+                                f"available_bandwidth : {available_bandwidth} ")
                     self.b_usage[env.now] = round(100/bandwidth.count, 2)
-                    available_bandwidth = 1/self.bandwidth.count
-                    # until 0 exit the loop
 
                 except simpy.Interrupt as interrupt:
                     self.concurrent = True
@@ -198,18 +190,48 @@ class IO:
                     volume -= time_usage*available_bandwidth
                     # update bandiwdth
                     available_bandwidth = 1/self.bandwidth.count
-                    # prio -= 1
+                    self.prio -= 1
                     logger.info(f"[{self.name}](consuming) {time_usage*available_bandwidth} out of {self.volume} | current volume = {volume}")
                     self.b_usage[env.now] = round(100/bandwidth.count, 2)
-            # logger.info(f"[{self.name}](consumed) start = {start} end = {self.env.now} | "
-            #             f"volume = {self.volume}-->{volume} |")
-        print(self.b_usage)
-
-        # release resources
-        # booking_bandwidth = [res.release() for res in booking_bandwidth]
+        # logger.info(f"[{self.name}](consumed) start = {start} end = {self.env.now} | "
+        #             f"volume = {self.volume}-->{volume} |")
+        # print(self.b_usage)
 
 
 def resource_user(name, env, resource, wait, prio):
+    b_usage = dict()
+    yield env.timeout(wait)
+    volume = 2
+    while volume > 0:
+        req = resource.request(priority=prio)
+        print('%s requesting at %s with priority=%s | count=%s' % (name, env.now, prio, resource.count))
+        b_usage[env.now] = resource.count
+        yield req
+        print('%s got resource at %s | count=%s | bandwidth=%s%%' % (name, env.now, resource.count, round(100/resource.count, 1)))
+        b_usage[env.now] = resource.count
+        try:
+            print(f"next event will take at {env.peek()}")
+            if volume <= env.peek():  # volume consumed before event
+                yield env.timeout(volume)
+                volume = 0
+            else:
+                yield env.timeout(env.peek())
+                volume -= env.peek()
+
+            b_usage[env.now] = resource.count
+        except simpy.Interrupt as interrupt:
+            by = interrupt.cause.by
+            usage = env.now - interrupt.cause.usage_since
+            volume -= usage
+            prio -= 0.1  # bump my prio enough so I'm next
+            print('%s got preempted by %s at %s after %s | count=%s' %
+                  (name, by, env.now, usage, resource.count))
+            b_usage[env.now] = resource.count
+    print('%s completed at time %g | count=%s | bandwidth=%s%%' % (name, env.now, resource.count, round(100/resource.count, 1)))
+    print(b_usage)
+
+
+def io_run(name, env, resource, wait, prio):
     b_usage = dict()
     yield env.timeout(wait)
     volume = 2
@@ -221,34 +243,45 @@ def resource_user(name, env, resource, wait, prio):
             print('%s got resource at %s | count=%s | bandwidth=%s%%' % (name, env.now, resource.count, round(100/resource.count, 1)))
             b_usage[env.now] = resource.count
             try:
-                yield env.timeout(volume)
-                volume = 0
-                print('%s completed at time %g | count=%s | bandwidth=%s%%' % (name, env.now, resource.count, round(100/resource.count, 1)))
+                print(f"next event will take at {env.peek()}")
+                if volume/resource.count <= env.peek():  # volume consumed before event
+                    yield env.timeout(volume*resource.count)
+                    volume = 0
+                    print('%s completed at time %g | count=%s | bandwidth=%s%%' % (name, env.now, resource.count, round(100/resource.count, 1)))
+                else:
+                    yield env.timeout(env.peek())
+                    volume -= env.peek()/resource.count
+                    if volume <= 0:
+                        print('%s completed at time %g | count=%s | bandwidth=%s%%' % (name, env.now, resource.count, round(100/resource.count, 1)))
+
                 b_usage[env.now] = resource.count
             except simpy.Interrupt as interrupt:
                 by = interrupt.cause.by
                 usage = env.now - interrupt.cause.usage_since
                 volume -= usage
-                prio -= 0.1  # bump my prio enough so I'm next
+                # prio -= 0.1  # bump my prio enough so I'm next
                 print('%s got preempted by %s at %s after %s | count=%s' %
                       (name, by, env.now, usage, resource.count))
                 b_usage[env.now] = resource.count
+
     print(b_usage)
 
 
 if __name__ == '__main__':
     # env = simpy.Environment()
     # res = simpy.PreemptiveResource(env, capacity=10)
-    # p1 = env.process(resource_user("app1", env, res, wait=0, prio=0))
-    # p2 = env.process(resource_user("app2", env, res, wait=1, prio=0))
+    # p1 = env.process(io_run("app1", env, res, wait=0, prio=0))
+    # p2 = env.process(io_run("app2", env, res, wait=1, prio=0))
     # #p3 = env.process(resource_user("app3", env, res, wait=0, prio=-1))
     # env.run()
     env = simpy.Environment()
-    bandwidth = simpy.PreemptiveResource(env, capacity=3)
-    IOs = [IO(env, name=str(i), volume=3,
-              bandwidth=bandwidth, delay=0*i*4, prio=i) for i in range(4)]
+    bandwidth = simpy.PriorityResource(env, capacity=2)
+    #bandwidth = simpy.PreemptiveResource(env, capacity=2)
+    IOs = [IO(env, name=str(i), volume=1,
+              bandwidth=bandwidth, delay=i*0.5, prio=i) for i in range(2)]
 
     env.run()
+    # print(bandwidth.data)
     for io in IOs:
         print(f"app: {io.name} | bandwidth usage: {io.b_usage}")
 
