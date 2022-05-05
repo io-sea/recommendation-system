@@ -39,7 +39,7 @@ class TestAppInit(unittest.TestCase):
         compute = [0, 10]
         read = [1e9, 0]
         write = [0, 5e9]
-        tiers = [0, 1]
+        tiers = [1, 0]
         app = Application(self.env,
                           compute=compute,
                           read=read,
@@ -235,7 +235,7 @@ class TestPhaseSuperposition(unittest.TestCase):
         """Two I/O phases that should run sequentially because the cluster
         has only one core."""
         data = simpy.Store(self.env)
-        cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=3,
+        cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=1,
                           tiers=[self.ssd_tier, self.nvram_tier])
         app1 = Application(self.env, compute=[0],
                            read=[1e9], write=[0], data=data)

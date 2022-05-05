@@ -29,6 +29,13 @@ class TestPhase(unittest.TestCase):
         self.assertIsInstance(cluster.compute_nodes, simpy.Resource)
         self.assertIsInstance(cluster.compute_cores, simpy.Resource)
 
+    def test_update_tier(self):
+        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
+        #read_io = Read_IOPhase(volume=9e9, pattern=0.2)
+        read_io = IOPhase(operation='read', volume=9e9)
+        self.env.process(read_io.run(self.env, cluster, placement=1))
+        self.env.run(until=10)
+
     def test_compute_phase(self):
         cluster = Cluster(self.env, compute_nodes=3, cores_per_node=4)
         compute_phase = ComputePhase(duration=10)
@@ -53,6 +60,7 @@ class TestPhase(unittest.TestCase):
 class TestBandwidthShare(unittest.TestCase):
     def setUp(self):
         self.env = simpy.Environment()
+        self.data = simpy.Store(self.env)
         self.used_bandwidth = dict()
         nvram_bandwidth = {'read':  {'seq': 800, 'rand': 800},
                            'write': {'seq': 400, 'rand': 400}}
@@ -67,24 +75,64 @@ class TestBandwidthShare(unittest.TestCase):
     def test_2_read_phases(self):
         cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
         #read_io = Read_IOPhase(volume=9e9, pattern=0.2)
-        read_ios = [IOPhase(operation='read', volume=1e9) for i in range(2)]
+        read_ios = [IOPhase(operation='read', volume=1e9, data=self.data) for i in range(2)]
+        placement = 1
         for io in read_ios:
-            self.env.process(io.run(self.env, cluster, placement=1))  # nvram 200-100
-
+            self.env.process(io.run(self.env, cluster, placement=placement))  # nvram 200-100
         self.env.run()
-        for io in read_ios:
-            print(f"app: {io} | bandwidth usage: {io.bandwidth_usage} MB/s")
+        tier = get_tier(cluster, placement)
+        self.assertAlmostEqual(tier.max_bandwidth["read"]["seq"]/2,
+                               self.data.items[0]["bandwidth"])
 
-    def test_many_read_phases(self):
+    def test_2_read_phases_2_placements(self):
         cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
         #read_io = Read_IOPhase(volume=9e9, pattern=0.2)
-        read_ios = [IOPhase(operation='read', volume=1e9) for i in range(3)]
+        read_io_1 = IOPhase(operation='read', volume=1e9, data=self.data)
+        read_io_2 = IOPhase(operation='read', volume=1e9, data=self.data)
+        self.env.process(read_io_1.run(self.env, cluster, placement="SSD"))  # 200
+        self.env.process(read_io_2.run(self.env, cluster, placement="NVRAM"))  # 800
+        self.env.run()
+        self.assertEqual(set([item["bandwidth"] for item in self.data.items]),
+                         {200, 800})
+
+    def test_many_concurrent_read_phases(self):
+        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
+        number_of_apps = 3
+        read_ios = [IOPhase(operation='read', volume=1e9, data=self.data) for i in range(number_of_apps)]
+        for i, io in enumerate(read_ios):
+            self.env.process(io.run(self.env, cluster, placement=1, delay=i*0))  # nvram 800
+
+        self.env.run()
+        conc = []
+        for item in self.data.items:
+            conc.append(item["bandwidth_concurrency"])
+        self.assertEqual(max(conc), number_of_apps)
+
+    def test_many_concurrent_phases_with_delay(self):
+        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
+        number_of_apps = 2
+        read_ios = [IOPhase(appname="#"+str(i), operation='read', volume=1e9, data=self.data) for i in range(number_of_apps)]
         for i, io in enumerate(read_ios):
             self.env.process(io.run(self.env, cluster, placement=1, delay=i))  # nvram 800
 
         self.env.run()
-        for io in read_ios:
-            print(f"app: {io} | bandwidth usage: {io.bandwidth_usage} MB/s")
+        conc = []
+        for item in self.data.items:
+            conc.append(item["bandwidth_concurrency"])
+        self.assertEqual(max(conc), number_of_apps)
+
+    def test_many_concurrent_phases(self):
+        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
+        read_io = IOPhase(appname="#1", operation='read', volume=1e9, data=self.data)
+        write_io = IOPhase(appname="#2", operation='write', volume=1e9, data=self.data)
+        self.env.process(read_io.run(self.env, cluster, placement=1, delay=0))  # nvram 800
+        self.env.process(write_io.run(self.env, cluster, placement=1, delay=0.5))  # nvram 400
+
+        self.env.run()
+        conc = []
+        for item in self.data.items:
+            conc.append(item["bandwidth_concurrency"])
+        self.assertEqual(max(conc), 2)
 
 
 if __name__ == '__main__':

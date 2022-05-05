@@ -11,12 +11,27 @@ from simpy.events import AnyOf, AllOf, Event
 
 
 def monitor(data, lst):
-    state = "--Monitoring"
+    state = "\n | Monitoring"
     for key, value in lst.items():
         state += "| " + key + ": " + str(value) + " "
     logger.debug(state)
     if isinstance(data, simpy.Store):
         data.put(lst)
+    # log_step(lst)
+
+
+# def log_step(lst):
+
+#     # {"app": self.appname, "type": "compute", "cpu_usage": self.cores,
+#     #     "t_start": t_start, "t_end": t_end, "bandwidth": 0,
+#     #     "phase_duration": phase_duration, "volume": 0,
+#     #     "tiers": [tier.name for tier in cluster.tiers],
+#     #     "data_placement": None,
+#     #     "tier_level": {tier.name: tier.capacity.level for tier in cluster.tiers}}
+#     placement = lst["data_placement"]["placement"] if lst["data_placement"] else "None"
+#     logger.info(
+#         f"App {lst["app"]} | Phase: {lst["type"]} | Time: {lst["t_start"]}-->{lst["t_end"]}"
+#         f"({lst["duration"]}s) | Volume = {lst["volume"]} in tier {placement}")
 
 
 def name_app():
@@ -93,7 +108,7 @@ class IOPhase:
         assert self.operation in ['read', 'write']
         self.volume = volume
         self.pattern = pattern
-        self.bandwidth_usage = dict()
+        self.bandwidth_usage = 1
         self.data = data if data else None
         self.appname = appname if appname else ''
         # logger.info(self.__str__())
@@ -104,49 +119,36 @@ class IOPhase:
         description += (f"{self.operation.capitalize()} I/O Phase of volume {convert_size(self.volume)} with pattern: {io_pattern}\n")
         return description
 
-    def update_tiers(self, cluster, tier):
-        tier = get_tier(tier, cluster)
+    def update_tier(self, tier, volume):
+        """Update tier level with the algebric value of volume.
+
+        Args:
+            tier (Tier): tier for which the level will be updated.
+            volume (float): volume value (positive or negative) to adjust tier level.
+        """
         # assert isinstance(tier, Tier)
         # reading operation suppose at least some volume in the tier
         if self.operation == "read" and tier.capacity.level < self.volume:
             tier.capacity.put(self.volume - tier.capacity.level)
         if self.operation == "write":
-            tier.capacity.put(self.volume)
+            if volume > 0:
+                tier.capacity.put(volume)
+            elif volume < 0:
+                tier.capacity.get(abs(volume))
 
-    def log_phase_start(self, timestamp=0, io_bandwidth=None, max_bandwidth=None):
+    def run_step(self, last_event, next_event, time_to_complete):
+        if 0 < next_event - last_event < time_to_complete:
+            step_duration = next_event - last_event
+        else:
+            step_duration = time_to_complete
+        # return step_duration
+        # yield self.env.timeout(step_duration)
+        return step_duration
 
-        logger.info(f"(App {self.appname}) - Start {self.operation.capitalize()} I/O Phase with volume = {convert_size(self.volume)} at {timestamp}")
-
-        # logger.info(f"(App {self.appname}) - {self.operation.capitalize()}(ing) I/O with bandwidth = {max_bandwidth} MB/s available at {timestamp}")
-        logger.info(f"(App {self.appname}) - {self.operation.capitalize()}(ing) available bandwidth = {round(io_bandwidth, 2)} MB/s available at {timestamp}")
-
-        logger.info(f"(App {self.appname}) - {self.operation.capitalize()}(ing) I/O with bandwidth = {io_bandwidth} MB/s")
-
-    def log_phase_end(self, timestamp):
-        logger.info(f"(App {self.appname}) - End {self.operation.capitalize()} I/O Phase at {timestamp}")
-
-    # def run(self, env, cluster, placement=None):
-    #     """Run the I/O phase within a cluster and according to a specifier placement in available tiers."""
-    #     tier = get_tier(placement, cluster)  # get the tier from placement list
-    #     max_tier_bandwidth = (tier.max_bandwidth[self.operation]['seq'] * self.pattern +
-    #                           tier.max_bandwidth[self.operation]['rand']*(1-self.pattern)) * self.cores
-    #     # requesting bandwidth, avoiding contention model : take all available
-    #     remaining_bandwidth = tier.bandwidth.capacity - tier.bandwidth.count
-    #     if remaining_bandwidth:
-    #         # booking bandwidth
-    #         booking_bandwidth = [tier.bandwidth.request() for i in range(remaining_bandwidth)]
-    #         # booking cores
-    #         booking_cores = [cluster.compute_cores.request() for i in range(self.cores)]
-    #         # adjust io bandwidth
-    #         io_bandwidth = max_tier_bandwidth*remaining_bandwidth/tier.bandwidth.capacity
-    #         phase_duration = (self.volume/1e6)/io_bandwidth  # bandwidth in MB/s
-    #         t_start = env.now
-    #         self.update_tiers(cluster, tier)
-    #         booking_phase = env.timeout(phase_duration, value=True)
-
-    def run(self, env, cluster, placement=None, delay=0):
+    def run(self, env, cluster, placement, delay=0):
+        # TODO : known bug when async IO reproduced in test_many_concurrent_phases_with_delay
         # get the tier where the I/O will be performed
-        tier = get_tier(placement, cluster)
+        tier = get_tier(cluster, placement)
         # get the max bandwidth available in the tier
         max_bandwidth = (tier.max_bandwidth[self.operation]['seq'] * self.pattern +
                          tier.max_bandwidth[self.operation]['rand'] * (1-self.pattern)) * self.cores*1e6
@@ -154,47 +156,49 @@ class IOPhase:
         # max_bandwidth = max(max_bandwidth, switch_bandwidth)
         # contention model : share equally available bandwidth
         volume = self.volume
+        last_event = 0
         self.env = env
+
         if delay:
             yield self.env.timeout(delay)
-        time_step = 1
         # retry IO until its volume is consumed
+        next_event = self.env.peek()
+        end_event = self.env.event()
         while volume > 0:
-            with tier.bandwidth.request(priority=-time.time(), preempt=True) as req:
+            with tier.bandwidth.request() as req:
                 yield req
-                try:  # try exhausting IO volume
-                    available_bandwidth = max_bandwidth/tier.bandwidth.count
-                    t_start = self.env.now
-                    # yield self.env.timeout(time_step)
-                    yield self.env.timeout(volume/available_bandwidth)
-                    t_end = self.env.now
-                    self.bandwidth_usage[t_start] = available_bandwidth/1e6
+                self.bandwidth_usage = tier.bandwidth.count
+                # Available bandiwidth should be f(max_bandwidth, count)
+                available_bandwidth = max_bandwidth/self.bandwidth_usage
 
-                    self.log_phase_start(timestamp=env.now,
-                                         io_bandwidth=available_bandwidth/1e6,           max_bandwidth=max_bandwidth)
-                    available_bandwidth = max_bandwidth/tier.bandwidth.count
-                    # volume -= time_step*available_bandwidth  # until 0 exit the loop
+                next_event = self.env.peek()
 
-                    monitor(self.data,
-                            {"app": self.appname, "type": self.operation, "cpu_usage": self.cores,
-                             "t_start": t_start, "t_end": t_end, "bandwidth": available_bandwidth/1e6,
-                             "phase_duration": t_end-t_start, "volume": volume,
-                             "tiers": [tier.name for tier in cluster.tiers],
-                             "data_placement": {"placement": tier.name},
-                             "tier_level": {tier.name: tier.capacity.level for tier in cluster.tiers}})
-                    volume = 0
-                except simpy.Interrupt as interrupt:
-                    t_end = self.env.now
-                    time_usage = t_end - interrupt.cause.usage_since
-                    logger.info(f"duration before interruption {time_usage}")
-                    available_bandwidth = max_bandwidth/tier.bandwidth.count
-                    volume -= time_usage*available_bandwidth
-                    monitor(self.data,
-                            {"app": self.appname, "type": self.operation, "cpu_usage": self.cores,
-                             "t_start": interrupt.cause.usage_since, "t_end": t_end, "bandwidth": available_bandwidth/1e6,
-                             "phase_duration": t_end-t_start, "volume": time_usage*available_bandwidth,
-                             "tiers": [tier.name for tier in cluster.tiers],
-                             "data_placement": {"placement": tier.name},
-                             "tier_level": {tier.name: tier.capacity.level for tier in cluster.tiers}})
-        self.log_phase_end(timestamp=t_end)
+                # take the smallest step, step_duration must be > 0
+                # print(f"at {self.env.now} | last_event = {last_event} | next_event {next_event} | peek={self.env.peek()} | conc={tier.bandwidth.count}")
+                step_duration = self.run_step(last_event, next_event, volume/available_bandwidth)
+                step_event = self.env.timeout(step_duration)
+                t_start = self.env.now
+                yield step_event
+                t_end = self.env.now
+                self.update_tier(tier, step_duration * available_bandwidth)
+                volume -= step_duration * available_bandwidth
+                # TODO update tier state
+                monitor(self.data,
+                        {"app": self.appname, "type": self.operation, "cpu_usage": self.cores,
+                         "t_start": t_start, "t_end": t_end,
+                         "bandwidth_concurrency": self.bandwidth_usage,
+                         "bandwidth": available_bandwidth/1e6, "phase_duration": t_end-t_start,
+                         "volume": convert_size(step_duration * available_bandwidth),
+                         "tiers": [tier.name for tier in cluster.tiers],
+                         "data_placement": {"placement": tier.name},
+                         "tier_level": {tier.name: tier.capacity.level for tier in cluster.tiers}})
+
+                # if volume <= 0:
+                #     end_event.succeed()
+                #     print("Event finished")
+                #     next_event = self.env.peek()
+                # print(f"at {self.env.now} | last_event = {last_event} | next_event {next_event} | peek={self.env.peek()} | conc={tier.bandwidth.count} | step_duration = {self.run_step(last_event, next_event, volume/available_bandwidth)}")
+                # next_event = self.env.peek()
+                # last_event += step_duration
+
         return True

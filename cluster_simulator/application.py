@@ -144,7 +144,7 @@ class Application:
 
 
 class IO:
-    def __init__(self, env, name, volume, bandwidth, delay, prio):
+    def __init__(self, env, name, volume, bandwidth, delay=0, prio=0):
         self.env = env
         self.name = name
         self.volume = volume
@@ -154,6 +154,7 @@ class IO:
         self.concurrent = False
         self.b_usage = dict()
         self.last_event = 0
+        self.next_event = 0
         self.process = env.process(self.run())
 
     def run(self):
@@ -171,8 +172,13 @@ class IO:
                 # update bandwidth usage
                 available_bandwidth = 1/(self.bandwidth.count+len(self.bandwidth.queue))
                 start = self.env.now
-                step_duration = min(self.env.peek() - self.last_event, volume/available_bandwidth)
-                logger.info(f"env.peek = {self.env.peek()}")
+                self.next_event = self.env.peek()
+
+                # take the smallest step, step_duration must be > 0
+                if 0 < self.next_event - self.last_event < volume/available_bandwidth:
+                    step_duration = self.next_event - self.last_event
+                else:
+                    step_duration = volume/available_bandwidth
                 yield self.env.timeout(step_duration)
                 self.last_event += step_duration
                 volume -= step_duration * available_bandwidth
@@ -278,10 +284,10 @@ if __name__ == '__main__':
     # #p3 = env.process(resource_user("app3", env, res, wait=0, prio=-1))
     # env.run()
     env = simpy.Environment()
-    bandwidth = simpy.PreemptiveResource(env, capacity=10)
-    #bandwidth = simpy.PreemptiveResource(env, capacity=2)
+    #bandwidth = simpy.PreemptiveResource(env, capacity=10)
+    bandwidth = simpy.Resource(env, capacity=10)
     IOs = [IO(env, name=str(i), volume=2,
-              bandwidth=bandwidth, delay=i*1, prio=i) for i in range(2)]
+              bandwidth=bandwidth, delay=i*0.5, prio=i) for i in range(2)]
 
     env.run()
     # print(bandwidth.data)
