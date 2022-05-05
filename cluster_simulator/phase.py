@@ -3,7 +3,7 @@ from loguru import logger
 import numpy as np
 import pandas as pd
 import math
-from cluster import Cluster, Tier, bandwidth_share_model, compute_share_model, get_tier, convert_size
+from cluster import Cluster, Tier, EphemeralTier, bandwidth_share_model, compute_share_model, get_tier, convert_size
 import random
 import string
 import time
@@ -146,10 +146,19 @@ class IOPhase:
         return step_duration
 
     def run(self, env, cluster, placement, delay=0):
-        # TODO : known bug when async IO reproduced in test_many_concurrent_phases_with_delay
         # get the tier where the I/O will be performed
         tier = get_tier(cluster, placement)
+        print(type(tier))
+        print(isinstance(tier, Tier))
+        ret = yield env.process(self.run_stage(env, cluster, tier, delay=delay))
+        if ret is True:
+            ret2 = yield env.process(self.run_stage(env, cluster, tier.persistent_tier, delay=delay))
+
+    def run_stage(self, env, cluster, tier, delay=0):
+        # TODO : known bug when async IO reproduced in test_many_concurrent_phases_with_delay
+
         # get the max bandwidth available in the tier
+        # TODO make a method maybe in cluster class?
         max_bandwidth = (tier.max_bandwidth[self.operation]['seq'] * self.pattern +
                          tier.max_bandwidth[self.operation]['rand'] * (1-self.pattern)) * self.cores*1e6
         # TODO, if switches are upper borne, we need to adjust the max_bandwidth
@@ -183,15 +192,19 @@ class IOPhase:
                 self.update_tier(tier, step_duration * available_bandwidth)
                 volume -= step_duration * available_bandwidth
                 # TODO update tier state
-                monitor(self.data,
-                        {"app": self.appname, "type": self.operation, "cpu_usage": self.cores,
-                         "t_start": t_start, "t_end": t_end,
-                         "bandwidth_concurrency": self.bandwidth_usage,
-                         "bandwidth": available_bandwidth/1e6, "phase_duration": t_end-t_start,
-                         "volume": convert_size(step_duration * available_bandwidth),
-                         "tiers": [tier.name for tier in cluster.tiers],
-                         "data_placement": {"placement": tier.name},
-                         "tier_level": {tier.name: tier.capacity.level for tier in cluster.tiers}})
+                monitoring_info = {"app": self.appname, "type": self.operation,
+                                   "cpu_usage": self.cores,
+                                   "t_start": t_start, "t_end": t_end,
+                                   "bandwidth_concurrency": self.bandwidth_usage,
+                                   "bandwidth": available_bandwidth/1e6, "phase_duration": t_end-t_start,
+                                   "volume": convert_size(step_duration * available_bandwidth),
+                                   "tiers": [tier.name for tier in cluster.tiers],
+                                   "data_placement": {"placement": tier.name},
+                                   "tier_level": {tier.name: tier.capacity.level for tier in cluster.tiers}}
+                if cluster.ephemeral_tier:
+                    monitoring_info.update({cluster.ephemeral_tier.name + "_level": cluster.ephemeral_tier.capacity.level})
+
+                monitor(self.data, monitoring_info)
 
                 # if volume <= 0:
                 #     end_event.succeed()

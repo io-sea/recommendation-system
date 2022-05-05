@@ -4,7 +4,7 @@ import numpy as np
 import simpy
 from loguru import logger
 
-from cluster_simulator.cluster import Cluster, Tier, bandwidth_share_model, compute_share_model, get_tier, convert_size
+from cluster_simulator.cluster import Cluster, Tier, EphemeralTier, bandwidth_share_model, compute_share_model, get_tier, convert_size
 from cluster_simulator.phase import DelayPhase, ComputePhase, IOPhase
 
 
@@ -55,6 +55,36 @@ class TestPhase(unittest.TestCase):
         write_io = IOPhase(operation='write', volume=9e9, pattern=0.2)
         self.env.process(write_io.run(self.env, cluster, placement=1))
         self.env.run(until=10)
+
+
+class TestPhaseEphemeralTier(unittest.TestCase):
+    def setUp(self):
+        self.env = simpy.Environment()
+        self.data = simpy.Store(self.env)
+        self.nvram_bandwidth = {'read':  {'seq': 800, 'rand': 800},
+                                'write': {'seq': 400, 'rand': 400}}
+        ssd_bandwidth = {'read':  {'seq': 200, 'rand': 200},
+                         'write': {'seq': 100, 'rand': 100}}
+        hdd_bandwidth = {'read':  {'seq': 80, 'rand': 80},
+                         'write': {'seq': 40, 'rand': 40}}
+        self.hdd_tier = Tier(self.env, 'HDD', bandwidth=hdd_bandwidth, capacity=1e12)
+        self.ssd_tier = Tier(self.env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
+        self.nvram_tier = Tier(self.env, 'NVRAM', bandwidth=self.nvram_bandwidth, capacity=10e9)
+
+    def test_phase_ephemeral(self):
+        """Test running simple write phase on ephemeral tier."""
+        # define an IO phase
+        write_io = IOPhase(operation='write', volume=1e9, data=self.data)
+        # define burst buffer with its backend PFS
+        bb = EphemeralTier(self.env, name="BB", persistent_tier=self.hdd_tier,
+                           bandwidth=self.nvram_bandwidth, capacity=10e9)
+        cluster = Cluster(self.env, tiers=[self.hdd_tier, self.ssd_tier],
+                          ephemeral_tier=bb)
+        # target BB atached to tier referenced as 0
+        result = get_tier(cluster, tier_reference=0, use_bb=True)
+        # run the phase on the tier with placement = bb
+        self.env.process(write_io.run(self.env, cluster, placement=bb))  # nvram 200-100
+        self.env.run()
 
 
 class TestBandwidthShare(unittest.TestCase):

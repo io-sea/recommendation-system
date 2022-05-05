@@ -132,9 +132,9 @@ def get_tier(cluster, tier_reference, use_bb=False):
             tier = tier_reference
 
         if tier is None:
-            print("-----------oh-----")
-            print(type(tier_reference))
-            print(tier_reference.name)
+            # print("-----------oh-----")
+            # print(type(tier_reference))
+            # print(tier_reference.name)
             raise Exception(f"Tier {tier} not found")
 
         return tier
