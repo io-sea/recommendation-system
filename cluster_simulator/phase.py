@@ -6,16 +6,32 @@ import math
 from cluster import Cluster, Tier, bandwidth_share_model, compute_share_model, get_tier, convert_size
 import random
 import string
+import time
 from simpy.events import AnyOf, AllOf, Event
 
 
 def monitor(data, lst):
-    state = "--Monitoring"
+    state = "\n | Monitoring"
     for key, value in lst.items():
         state += "| " + key + ": " + str(value) + " "
     logger.debug(state)
     if isinstance(data, simpy.Store):
         data.put(lst)
+    # log_step(lst)
+
+
+# def log_step(lst):
+
+#     # {"app": self.appname, "type": "compute", "cpu_usage": self.cores,
+#     #     "t_start": t_start, "t_end": t_end, "bandwidth": 0,
+#     #     "phase_duration": phase_duration, "volume": 0,
+#     #     "tiers": [tier.name for tier in cluster.tiers],
+#     #     "data_placement": None,
+#     #     "tier_level": {tier.name: tier.capacity.level for tier in cluster.tiers}}
+#     placement = lst["data_placement"]["placement"] if lst["data_placement"] else "None"
+#     logger.info(
+#         f"App {lst["app"]} | Phase: {lst["type"]} | Time: {lst["t_start"]}-->{lst["t_end"]}"
+#         f"({lst["duration"]}s) | Volume = {lst["volume"]} in tier {placement}")
 
 
 def name_app():
@@ -54,10 +70,10 @@ class ComputePhase:
     def run(self, env, cluster):
         used_cores = []
         # use self.cores
-        for i in range(self.cores):
-            core = cluster.compute_cores.request()
-            used_cores.append(core)
-            yield core
+        # for i in range(self.cores):
+        #     core = cluster.compute_cores.request()
+        #     used_cores.append(core)
+        #     yield core
         logger.info(f"(App {self.appname}) - Start computing phase at {env.now} with {self.cores} requested cores")
         phase_duration = self.duration/compute_share_model(self.cores)
         # phase_duration = self.duration/compute_share_model(cluster.compute_cores.capacity - cluster.compute_cores.count)
@@ -74,8 +90,8 @@ class ComputePhase:
                  "tier_level": {tier.name: tier.capacity.level for tier in cluster.tiers}})
 
         # releasing cores
-        for core in used_cores:
-            cluster.compute_cores.release(core)
+        # for core in used_cores:
+        #     cluster.compute_cores.release(core)
 
         logger.info(f"(App {self.appname}) - End computing phase at {env.now} and releasing {self.cores} cores")
         return True
@@ -92,6 +108,7 @@ class IOPhase:
         assert self.operation in ['read', 'write']
         self.volume = volume
         self.pattern = pattern
+        self.bandwidth_usage = 1
         self.data = data if data else None
         self.appname = appname if appname else ''
         # logger.info(self.__str__())
@@ -102,107 +119,86 @@ class IOPhase:
         description += (f"{self.operation.capitalize()} I/O Phase of volume {convert_size(self.volume)} with pattern: {io_pattern}\n")
         return description
 
-    def update_tiers(self, cluster, tier):
-        tier = get_tier(tier, cluster)
+    def update_tier(self, tier, volume):
+        """Update tier level with the algebric value of volume.
+
+        Args:
+            tier (Tier): tier for which the level will be updated.
+            volume (float): volume value (positive or negative) to adjust tier level.
+        """
         # assert isinstance(tier, Tier)
         # reading operation suppose at least some volume in the tier
         if self.operation == "read" and tier.capacity.level < self.volume:
             tier.capacity.put(self.volume - tier.capacity.level)
         if self.operation == "write":
-            tier.capacity.put(self.volume)
+            if volume > 0:
+                tier.capacity.put(volume)
+            elif volume < 0:
+                tier.capacity.get(abs(volume))
 
-    def log_phase_start(self, timestamp=0, io_bandwidth=None, max_bandwidth=None):
-
-        logger.info(f"(App {self.appname}) - Start {self.operation.capitalize()} I/O Phase with volume = {convert_size(self.volume)} at {timestamp}")
-
-        # logger.info(f"(App {self.appname}) - {self.operation.capitalize()}(ing) I/O with bandwidth = {max_bandwidth} MB/s available at {timestamp}")
-        logger.info(f"(App {self.appname}) - {self.operation.capitalize()}(ing) available bandwidth = {max_bandwidth} MB/s available at {timestamp}")
-
-        logger.info(f"(App {self.appname}) - {self.operation.capitalize()}(ing) I/O with bandwidth = {io_bandwidth} MB/s")
-
-    def log_phase_end(self, timestamp):
-        logger.info(f"(App {self.appname}) - End {self.operation.capitalize()} I/O Phase at {timestamp}")
-
-    # def run(self, env, cluster, placement=None):
-    #     """Run the I/O phase within a cluster and according to a specifier placement in available tiers."""
-    #     tier = get_tier(placement, cluster)  # get the tier from placement list
-    #     max_tier_bandwidth = (tier.max_bandwidth[self.operation]['seq'] * self.pattern +
-    #                           tier.max_bandwidth[self.operation]['rand']*(1-self.pattern)) * self.cores
-    #     # requesting bandwidth, avoiding contention model : take all available
-    #     remaining_bandwidth = tier.bandwidth.capacity - tier.bandwidth.count
-    #     if remaining_bandwidth:
-    #         # booking bandwidth
-    #         booking_bandwidth = [tier.bandwidth.request() for i in range(remaining_bandwidth)]
-    #         # booking cores
-    #         booking_cores = [cluster.compute_cores.request() for i in range(self.cores)]
-    #         # adjust io bandwidth
-    #         io_bandwidth = max_tier_bandwidth*remaining_bandwidth/tier.bandwidth.capacity
-    #         phase_duration = (self.volume/1e6)/io_bandwidth  # bandwidth in MB/s
-    #         t_start = env.now
-    #         self.update_tiers(cluster, tier)
-    #         booking_phase = env.timeout(phase_duration, value=True)
-
-    def run(self, env, cluster, placement=None):
-        # Pre compute parameters
-        tier = get_tier(placement, cluster)
-        # max_bandwidth depends on tier, pattern, blocksize (later) and used cores
-        # TODO max_bandwidth depends on *cores and *nodes but upperbound by node-> switch connection
-        max_bandwidth = (tier.max_bandwidth[self.operation]['seq'] * self.pattern + tier.max_bandwidth[self.operation]['rand']*(1-self.pattern)) * self.cores
-
-        booking_cores = [cluster.compute_cores.request() for i in range(self.cores)]
-
-        # requesting bandwidth, avoiding contention model : take all available
-
-        remaining_bandwidth = tier.bandwidth.capacity - tier.bandwidth.count
-        if remaining_bandwidth == 0:
-            # no bandwidth available, request all
-            remaining_bandwidth = tier.bandwidth.capacity
-            booking_bandwidth = [tier.bandwidth.request() for i in range(tier.bandwidth.capacity)]
+    def run_step(self, last_event, next_event, time_to_complete):
+        if 0 < next_event - last_event < time_to_complete:
+            step_duration = next_event - last_event
         else:
-            booking_bandwidth = [tier.bandwidth.request() for i in range(remaining_bandwidth)]
-        logger.info(f"(App {self.appname}) - Bandwidth availability {remaining_bandwidth} Over a max of = {tier.bandwidth.capacity} at {env.now}")
-        # reserve_bandwidth is a percent of total read and write bandwidth
-        # https://simpy.readthedocs.io/en/latest/topical_guides/events.html?highlight=multiple%20events#waiting-for-multiple-events-at-once
+            step_duration = time_to_complete
+        # return step_duration
+        # yield self.env.timeout(step_duration)
+        return step_duration
 
-        # adjust io bandwidth
-        io_bandwidth = max_bandwidth*remaining_bandwidth/tier.bandwidth.capacity
+    def run(self, env, cluster, placement, delay=0):
+        # TODO : known bug when async IO reproduced in test_many_concurrent_phases_with_delay
+        # get the tier where the I/O will be performed
+        tier = get_tier(cluster, placement)
+        # get the max bandwidth available in the tier
+        max_bandwidth = (tier.max_bandwidth[self.operation]['seq'] * self.pattern +
+                         tier.max_bandwidth[self.operation]['rand'] * (1-self.pattern)) * self.cores*1e6
+        # TODO, if switches are upper borne, we need to adjust the max_bandwidth
+        # max_bandwidth = max(max_bandwidth, switch_bandwidth)
+        # contention model : share equally available bandwidth
+        volume = self.volume
+        last_event = 0
+        self.env = env
 
-        phase_duration = (self.volume/1e6)/io_bandwidth  # bandwidth in MB/s
+        if delay:
+            yield self.env.timeout(delay)
+        # retry IO until its volume is consumed
+        next_event = self.env.peek()
+        end_event = self.env.event()
+        while volume > 0:
+            with tier.bandwidth.request() as req:
+                yield req
+                self.bandwidth_usage = tier.bandwidth.count
+                # Available bandiwidth should be f(max_bandwidth, count)
+                available_bandwidth = max_bandwidth/self.bandwidth_usage
 
-        # yield env.timeout(phase_duration)
-        booking_phase = env.timeout(phase_duration, value=True)
-        # ensure all resources are available
-        yield AllOf(env, booking_cores) & AllOf(env, booking_bandwidth)
-        t_start = env.now  # starting time for phase
-        self.update_tiers(cluster, tier)
-        ret = yield booking_phase
-        t_end = env.now  # ending time for phase
-        if ret:
-            self.log_phase_start(timestamp=t_start, io_bandwidth=io_bandwidth,
-                                 max_bandwidth=max_bandwidth)
-        monitor(self.data,
-                {"app": self.appname, "type": self.operation, "cpu_usage": self.cores,
-                 "t_start": t_start, "t_end": t_end, "bandwidth": io_bandwidth,
-                 "phase_duration": phase_duration, "volume": self.volume,
-                 "tiers": [tier.name for tier in cluster.tiers],
-                 "data_placement": {"placement": tier.name},
-                 "tier_level": {tier.name: tier.capacity.level for tier in cluster.tiers}})
+                next_event = self.env.peek()
 
-        releasing_cores = [cluster.compute_cores.release(core) for core in booking_cores]
-        releasing_bandwidth = [tier.bandwidth.release(bandwidth) for bandwidth in booking_bandwidth]
-        # releasing all resouces
-        yield AllOf(env, releasing_cores) & AllOf(env, releasing_bandwidth)
-        self.log_phase_end(timestamp=t_end)
+                # take the smallest step, step_duration must be > 0
+                # print(f"at {self.env.now} | last_event = {last_event} | next_event {next_event} | peek={self.env.peek()} | conc={tier.bandwidth.count}")
+                step_duration = self.run_step(last_event, next_event, volume/available_bandwidth)
+                step_event = self.env.timeout(step_duration)
+                t_start = self.env.now
+                yield step_event
+                t_end = self.env.now
+                self.update_tier(tier, step_duration * available_bandwidth)
+                volume -= step_duration * available_bandwidth
+                # TODO update tier state
+                monitor(self.data,
+                        {"app": self.appname, "type": self.operation, "cpu_usage": self.cores,
+                         "t_start": t_start, "t_end": t_end,
+                         "bandwidth_concurrency": self.bandwidth_usage,
+                         "bandwidth": available_bandwidth/1e6, "phase_duration": t_end-t_start,
+                         "volume": convert_size(step_duration * available_bandwidth),
+                         "tiers": [tier.name for tier in cluster.tiers],
+                         "data_placement": {"placement": tier.name},
+                         "tier_level": {tier.name: tier.capacity.level for tier in cluster.tiers}})
+
+                # if volume <= 0:
+                #     end_event.succeed()
+                #     print("Event finished")
+                #     next_event = self.env.peek()
+                # print(f"at {self.env.now} | last_event = {last_event} | next_event {next_event} | peek={self.env.peek()} | conc={tier.bandwidth.count} | step_duration = {self.run_step(last_event, next_event, volume/available_bandwidth)}")
+                # next_event = self.env.peek()
+                # last_event += step_duration
 
         return True
-
-# with cluster.compute_cores.request() as req:
-#     yield req
-#     logger.info(f"Start I/O phase with {cluster.compute_cores.count} cores at {env.now}")
-#     speed_factor = speed_share_model(cluster.compute_cores.count)
-#     speed = cluster.storage_speed.level
-#     yield cluster.storage_speed.get(speed)
-#     yield cluster.storage_capacity.put(self.volume)
-#     yield env.timeout(self.volume/(speed*speed_factor))
-#     yield cluster.storage_speed.put(speed)
-#     logger.info(f"End I/O phase at {env.now}")
