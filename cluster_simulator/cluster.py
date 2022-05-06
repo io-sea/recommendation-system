@@ -89,6 +89,7 @@ class EphemeralTier(Tier):
     def __init__(self, env, name, persistent_tier, bandwidth, capacity=80e9):
         # the non transient tier it is attached to
         self.persistent_tier = persistent_tier
+        #self.cores = simpy.Resource(env, capacity=cores)
         super().__init__(env, name, bandwidth, capacity=capacity)
 
 
@@ -110,7 +111,7 @@ def get_tier(cluster, tier_reference, use_bb=False):
     Args:
         cluster (Cluster): a cluster object that contains the tiers
         tier_reference (string, int): tier name or index in the list of tiers
-        use_bb (bool): if True, data will be placed in the ephemeral_tier which is attached to the indicated tier
+        use_bb (bool): if True, data will be placed in the ephemeral_tier which is attached to the indicated tier.
 
     Returns:
         Tier or EphemeralTier: The storage tier that will be targeted for I/O operations.
