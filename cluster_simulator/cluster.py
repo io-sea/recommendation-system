@@ -16,16 +16,21 @@ def convert_size(size_bytes):
     return "%s %s" % (s, size_name[i])
 
 
+def monitor(data, lst):
+    state = "\n | Monitoring"
+    for key, value in lst.items():
+        state += "| " + key + ": " + str(value) + " "
+    logger.debug(state)
+    if isinstance(data, simpy.Store):
+        data.put(lst)
+
+
 class Cluster:
-    def __init__(self, env, compute_nodes=1, cores_per_node=2, tiers=[], ephemeral_tier=None):
-        # self.compute_nodes = simpy.Container(env, capacity=compute_nodes)
-        # self.compute_cores = simpy.Container(env, capacity=cores_per_node*compute_nodes)
+    def __init__(self, env, compute_nodes=1, cores_per_node=2, tiers=[], ephemeral_tier=None, data=None):
         self.compute_nodes = simpy.Resource(env, capacity=compute_nodes)
         self.compute_cores = simpy.Resource(env, capacity=cores_per_node*compute_nodes)
-        self.tiers = []
-        for tier in tiers:
-            if isinstance(tier, Tier):
-                self.tiers.append(tier)
+        self.data = data or None
+        self.tiers = [tier for tier in tiers if isinstance(tier, Tier)]
         self.ephemeral_tier = ephemeral_tier if isinstance(ephemeral_tier, EphemeralTier) else None
         # logger.info(self.__str__())
 
@@ -39,6 +44,77 @@ class Cluster:
         return description
         # self.storage_capacity = simpy.Container(env, init=0, capacity=storage_capacity)
         # self.storage_speed = simpy.Container(env, init=storage_speed, capacity=storage_speed)
+
+    def get_max_bandwidth(self, tier, cores=1, operation='read', pattern=1):
+        """Get the maximum bandwidth for a given tier, number of cores dedicated to the operation, a type of operation and an IO pattern."""
+        if not isinstance(tier, Tier):
+            tier = get_tier(self, tier)
+        return (tier.max_bandwidth[operation]['seq'] * pattern +
+                tier.max_bandwidth[operation]['rand'] * (1-pattern)) * cores*1e6
+
+    def move_data(self, env, source_tier, target_tier, iophase, erase=False, data=None):
+        """Move data from source_tier to target_tier.
+
+        Args:
+            env (Simpy.Environment): simulation environment.
+            source_tier (Tier): the tier object where data is.
+            target_tier (Tier): the tier where to move data to.
+            iophase (IOPhase): the phase of the I/O operation.
+        """
+        self.env = env
+        self.data = data if data else None
+        # adjust source_tier level if necessary to be consistent
+        if source_tier.capacity.level < iophase.volume:
+            source_tier.capacity.put(iophase.volume - source_tier.capacity.level)
+        target_free_space = (target_tier.capacity.capacity - target_tier.capacity.level)
+        last_event = 0
+        volume = iophase.volume
+        while volume > 0:
+            with source_tier.bandwidth.request() as source_req:
+                with target_tier.bandwidth.request() as target_req:
+                    # ensure both bw tokens are available
+                    yield source_req & target_req
+                    read_from_source_bandwidth = self.get_max_bandwidth(source_tier, operation='read', pattern=iophase.pattern)/source_tier.bandwidth.count
+                    write_to_target_bandwidth = self.get_max_bandwidth(target_tier, operation='write', pattern=iophase.pattern)/target_tier.bandwidth.count
+                    available_bandwidth = min(read_from_source_bandwidth, write_to_target_bandwidth)
+                    time_to_complete = volume / available_bandwidth
+                    next_event = self.env.peek()
+                    step_duration = next_event - last_event if 0 < next_event - last_event < time_to_complete else time_to_complete
+                    # define the duration event will take
+                    step_event = self.env.timeout(step_duration)
+                    t_start = self.env.now
+                    yield step_event
+                    t_end = self.env.now
+                    volume -= step_duration * available_bandwidth
+                    # update target_tier level
+                    target_tier.capacity.put(step_duration * available_bandwidth)
+                    if erase:
+                        source_tier.capacity.get(step_duration * available_bandwidth)
+
+                    monitoring_info = {"data_movement": {"source": source_tier.name, "target": target_tier.name},
+                                       "t_start": t_start, "t_end": t_end,
+                                       "bandwidth": available_bandwidth/1e6,
+                                       "phase_duration": t_end-t_start,
+                                       "volume": convert_size(step_duration * available_bandwidth),
+                                       "tiers": [tier.name for tier in self.tiers],
+                                       "tier_level": {tier.name: tier.capacity.level for tier in self.tiers}}
+                    # when cluster include bb tier
+                    if self.ephemeral_tier:
+                        monitoring_info.update({self.ephemeral_tier.name + "_level":
+                                                self.ephemeral_tier.capacity.level})
+
+                    monitor(self.data, monitoring_info)
+        return True
+
+    # def bb_evict_data(self, env, bb_tier):
+    #     """When flavor or datanode volume is full, start evicting at the speed of the lower tier.
+    #     Args:
+    #         env (simpy.Environment): env where all events are triggered.
+    #     """
+    #     # while True:
+    #     #     if bb_tier.capacity.level >= 0.9*bb_tier.capacity.capacity:
+    #     #         amount_to_destage = bb_tier.capacity.level - 0.9*bb_tier.capacity.capacity
+    #     #         ret = yield env.process(self.run_stage(env, cluster, ))
 
 
 class Tier:

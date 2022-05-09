@@ -197,7 +197,6 @@ class IOPhase:
                 t_end = self.env.now
                 self.update_tier(tier, step_duration * available_bandwidth)
                 volume -= step_duration * available_bandwidth
-                # TODO update tier state
                 monitoring_info = {"app": self.appname, "type": self.operation,
                                    "cpu_usage": self.cores,
                                    "t_start": t_start, "t_end": t_end,
@@ -210,14 +209,17 @@ class IOPhase:
                 # when cluster include bb tier
                 if cluster.ephemeral_tier:
                     monitoring_info.update({cluster.ephemeral_tier.name + "_level": cluster.ephemeral_tier.capacity.level})
-
                 monitor(self.data, monitoring_info)
 
                 # if volume <= 0:
                 #     end_event.succeed()
                 #     print("Event finished")
                 #     next_event = self.env.peek()
-                # print(f"at {self.env.now} | last_event = {last_event} | next_event {next_event} | peek={self.env.peek()} | conc={tier.bandwidth.count} | step_duration = {self.run_step(last_event, next_event, volume/available_bandwidth)}")
+                # print(f"at {self.env.now} | last_event = {last_event} | next_event {next_event} | peek={self.env.peek()} | conc={tier.bandwidth.count} | step_duration = {self.run_step(last_event, next_event, volume/availble_bandwidth)}")
                 # next_event = self.env.peek()
                 # last_event += step_duration
         return True
+
+
+if __name__ == '__main__':
+    print("coco")
