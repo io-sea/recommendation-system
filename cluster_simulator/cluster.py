@@ -45,42 +45,57 @@ class Cluster:
         # self.storage_capacity = simpy.Container(env, init=0, capacity=storage_capacity)
         # self.storage_speed = simpy.Container(env, init=storage_speed, capacity=storage_speed)
 
-    def get_max_bandwidth(self, tier, cores=1, operation='read', pattern=1):
-        """Get the maximum bandwidth for a given tier, number of cores dedicated to the operation, a type of operation and an IO pattern."""
+    def get_max_bandwidth(self, tier, cores=1, operation='read'):
+        """Get the maximum bandwidth for a given tier, number of cores dedicated to the operation, a type of operation. Sequential pattern are assumed during copy/move."""
         if not isinstance(tier, Tier):
             tier = get_tier(self, tier)
-        return (tier.max_bandwidth[operation]['seq'] * pattern +
-                tier.max_bandwidth[operation]['rand'] * (1-pattern)) * cores*1e6
+        return (tier.max_bandwidth[operation]['seq']) * cores*1e6
 
-    def move_data(self, env, source_tier, target_tier, iophase, erase=False, data=None):
+    def move_data(self, env, source_tier, target_tier, total_volume, erase=False, data=None):
         """Move data from source_tier to target_tier.
 
         Args:
             env (Simpy.Environment): simulation environment.
             source_tier (Tier): the tier object where data is.
             target_tier (Tier): the tier where to move data to.
-            iophase (IOPhase): the phase of the I/O operation.
+            total_volume (int, float): total volume of data to tranfer.
         """
         self.env = env
-        self.data = data if data else None
+        self.data = data or None
         # adjust source_tier level if necessary to be consistent
-        if source_tier.capacity.level < iophase.volume:
-            source_tier.capacity.put(iophase.volume - source_tier.capacity.level)
+        if source_tier.capacity.level < total_volume:
+            source_tier.capacity.put(total_volume - source_tier.capacity.level)
         target_free_space = (target_tier.capacity.capacity - target_tier.capacity.level)
+
         last_event = 0
-        volume = iophase.volume
+        volume = total_volume
         while volume > 0:
             with source_tier.bandwidth.request() as source_req:
                 with target_tier.bandwidth.request() as target_req:
                     # ensure both bw tokens are available
                     yield source_req & target_req
-                    read_from_source_bandwidth = self.get_max_bandwidth(source_tier, operation='read', pattern=iophase.pattern)/source_tier.bandwidth.count
-                    write_to_target_bandwidth = self.get_max_bandwidth(target_tier, operation='write', pattern=iophase.pattern)/target_tier.bandwidth.count
+                    read_from_source_bandwidth = self.get_max_bandwidth(source_tier, operation='read')/source_tier.bandwidth.count
+                    write_to_target_bandwidth = self.get_max_bandwidth(target_tier, operation='write')/target_tier.bandwidth.count
                     available_bandwidth = min(read_from_source_bandwidth, write_to_target_bandwidth)
                     time_to_complete = volume / available_bandwidth
+
+                    # considering when volume excessed threshold by x%
+                    print(f"is it BB type? {isinstance(target_tier, EphemeralTier)}")
+                    if isinstance(target_tier, EphemeralTier):
+                        volume_to_reach_threshold = 0.9*target_tier.capacity.capacity - target_tier.capacity.level + 1e9
+                        logger.info(f"volume to reach threshold = {volume_to_reach_threshold/1e9}")
+                        logger.info(f"volume to complete io = {volume/1e9}")
+                        time_to_reach_threshold = volume_to_reach_threshold / available_bandwidth
+                        logger.info(f"time to reach threshold = {time_to_reach_threshold}")
+                        logger.info(f"time to complete oi = {time_to_complete}")
+                        min_time = min(time_to_reach_threshold, time_to_complete)
+                        time_to_complete = min_time if min_time > 0 else max(time_to_reach_threshold, time_to_complete)
+                        logger.info("updating time to complete")
+
                     next_event = self.env.peek()
                     step_duration = next_event - last_event if 0 < next_event - last_event < time_to_complete else time_to_complete
                     # define the duration event will take
+                    logger.info(f"step duration is {step_duration}")
                     step_event = self.env.timeout(step_duration)
                     t_start = self.env.now
                     yield step_event
@@ -90,7 +105,9 @@ class Cluster:
                     target_tier.capacity.put(step_duration * available_bandwidth)
                     if erase:
                         source_tier.capacity.get(step_duration * available_bandwidth)
-
+                    if isinstance(target_tier, EphemeralTier):
+                        # recurr destaging excess IO from BB to persistent
+                        self.move_data(self.env, target_tier, target_tier.persistent_tier, total_volume=step_duration * available_bandwidth)
                     monitoring_info = {"data_movement": {"source": source_tier.name, "target": target_tier.name},
                                        "t_start": t_start, "t_end": t_end,
                                        "bandwidth": available_bandwidth/1e6,
@@ -100,21 +117,30 @@ class Cluster:
                                        "tier_level": {tier.name: tier.capacity.level for tier in self.tiers}}
                     # when cluster include bb tier
                     if self.ephemeral_tier:
-                        monitoring_info.update({self.ephemeral_tier.name + "_level":
+                        monitoring_info.update({f"{self.ephemeral_tier.name}_level":
                                                 self.ephemeral_tier.capacity.level})
 
                     monitor(self.data, monitoring_info)
         return True
 
-    # def bb_evict_data(self, env, bb_tier):
-    #     """When flavor or datanode volume is full, start evicting at the speed of the lower tier.
-    #     Args:
-    #         env (simpy.Environment): env where all events are triggered.
-    #     """
-    #     # while True:
-    #     #     if bb_tier.capacity.level >= 0.9*bb_tier.capacity.capacity:
-    #     #         amount_to_destage = bb_tier.capacity.level - 0.9*bb_tier.capacity.capacity
-    #     #         ret = yield env.process(self.run_stage(env, cluster, ))
+    def monitor_ephemeral_tier(self, env, bb_tier):
+        """When flavor or datanode volume is full, start evicting at the speed of the lower tier.
+        Args:
+            env (simpy.Environment): env where all events are triggered.
+        """
+        self.env = env
+
+        excess = bb_tier.capacity.level - 0.9*bb_tier.capacity.capacity
+        print(bb_tier.capacity.capacity/1e9)
+        print(bb_tier.capacity.level/1e9)
+        print(excess/1e9)
+        if excess > 0:
+            iophase = IOPhase(volume=excess)
+            logger.info(f"BB level exceeded 90% -> eviction policy enabled")
+            # move excess data to pertistent tier with erase
+            #self.env.process(self.move_data(self.env, bb_tier, bb_tier.persistent_tier, iophase, erase=True, data=None))
+            yield self.move_data(self.env, bb_tier, bb_tier.persistent_tier, iophase,
+                                 erase=True, data=None)
 
 
 class Tier:
@@ -165,8 +191,14 @@ class EphemeralTier(Tier):
     def __init__(self, env, name, persistent_tier, bandwidth, capacity=80e9):
         # the non transient tier it is attached to
         self.persistent_tier = persistent_tier
-        #self.cores = simpy.Resource(env, capacity=cores)
+        # self.cores = simpy.Resource(env, capacity=cores)
         super().__init__(env, name, bandwidth, capacity=capacity)
+
+    # def evict(self, env):
+    #     """Eviction policy for ephemeral tiers."""
+    #     while True:
+    #         if self.capacity.level < 0.9*self.capacity.capacity:
+    #             logger.info(f"Eviction policy for {self.name}")
 
 
 def bandwidth_share_model(n_threads):
