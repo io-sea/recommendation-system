@@ -187,29 +187,30 @@ class TestClusterDataMovement(unittest.TestCase):
         self.assertEqual(last_item["tier_level"]["SSD"], 3e9)
         self.assertEqual(last_item["tier_level"]["NVRAM"], 6e9)
 
+    def test_move_data_concurrency_1_without_erase(self):
         """Test that for simple data movement the retained bandwidth is the bottelneck of read and write"""
-        # self.nvram_bandwidth = {'read':  {'seq': 800, 'rand': 800},
-        #                         'write': {'seq': 400, 'rand': 400}}
-        # ssd_bandwidth = {'read':  {'seq': 200, 'rand': 200},
-        #                  'write': {'seq': 100, 'rand': 100}}
-        # hdd_bandwidth = {'read':  {'seq': 80, 'rand': 80},
-        #                  'write': {'seq': 40, 'rand': 40}}
-        iophase = IOPhase(volume=3e9)
+        self.nvram_bandwidth = {'read':  {'seq': 800, 'rand': 800},
+                                'write': {'seq': 400, 'rand': 400}}
+        ssd_bandwidth = {'read':  {'seq': 200, 'rand': 200},
+                         'write': {'seq': 100, 'rand': 100}}
+        hdd_bandwidth = {'read':  {'seq': 80, 'rand': 80},
+                         'write': {'seq': 40, 'rand': 40}}
+
         cluster = Cluster(self.env, tiers=[self.hdd_tier, self.ssd_tier, self.nvram_tier],
                           ephemeral_tier=self.SBB)
         move_data_event_1 = cluster.move_data(self.env, self.ssd_tier, self.nvram_tier,
                                               total_volume=3e9,
-                                              erase=False, data=self.data)  # SSD(200) -> NVRAM(400)
+                                              erase=True, data=self.data)  # SSD(200) -> NVRAM(400)
         move_data_event_2 = cluster.move_data(self.env, self.hdd_tier, self.nvram_tier,
-                                              total_volume=3e9,
-                                              erase=False, data=self.data)  # HDD(80) -> NVRAM(400)
+                                              total_volume=5e9,
+                                              erase=True, data=self.data)  # HDD(80) -> NVRAM(400)
         self.env.process(move_data_event_1)
         self.env.process(move_data_event_2)
         self.env.run()
         last_item = self.data.items[-1]
-        self.assertEqual(last_item["tier_level"]["HDD"], 3e9)
-        self.assertEqual(last_item["tier_level"]["SSD"], 3e9)
-        self.assertEqual(last_item["tier_level"]["NVRAM"], 6e9)
+        self.assertEqual(last_item["tier_level"]["HDD"], 0)
+        self.assertEqual(last_item["tier_level"]["SSD"], 0)
+        self.assertEqual(last_item["tier_level"]["NVRAM"], 8e9)
 
 
 class TestClusterEphemeralService(unittest.TestCase):
@@ -234,15 +235,51 @@ class TestClusterEphemeralService(unittest.TestCase):
                                ephemeral_tier=self.SBB)
 
     def test_move_data_to_bb(self):
-        """Test reaching 90% of BB capacity and eviction policy."""
+        """Test moving data to burst buffer."""
         cluster = Cluster(self.env, tiers=[self.hdd_tier, self.ssd_tier, self.nvram_tier],
                           ephemeral_tier=self.SBB)
         move_data_event = cluster.move_data(self.env, self.ssd_tier, self.SBB,
-                                            total_volume=3e9,
+                                            total_volume=10e9,
                                             erase=False, data=self.data)  # SSD(200) -> NVRAM(400)
-        eviction_policy = cluster.monitor_ephemeral_tier(self.env, self.SBB)
 
         self.env.process(move_data_event)
-        self.env.process(eviction_policy)
         self.env.run()
-        # self.env.process(move_data_event_2)
+        last_item = self.data.items[-1]
+        self.assertEqual(last_item["tier_level"]["SSD"], 10e9)
+        self.assertEqual(last_item["BB_level"], 10e9)
+
+    def test_destage_data_from_bb_no_erase(self):
+        """Test reaching 90% of BB capacity and eviction policy."""
+        cluster = Cluster(self.env, tiers=[self.hdd_tier, self.ssd_tier, self.nvram_tier],
+                          ephemeral_tier=self.SBB)
+        # fill some data to SBB
+        move_data_event = cluster.move_data(self.env, self.ssd_tier, self.SBB,
+                                            total_volume=5e9,
+                                            erase=False, data=self.data)  # SSD(200) -> NVRAM(400)
+
+        destage_data_event = cluster.destage(self.env, self.SBB, self.ssd_tier,
+                                             total_volume=5e9, erase=False, data=self.data)  # SSD(200) -> NVRAM(400
+        self.env.process(move_data_event)
+        self.env.process(destage_data_event)
+        self.env.run()
+        last_item = self.data.items[-1]
+        # self.assertEqual(last_item["tier_level"]["SSD"], 10e9)
+        self.assertEqual(last_item["BB_level"], 5e9)
+
+    def test_destage_data_from_bb_with_erase(self):
+        """Test reaching 90% of BB capacity and eviction policy."""
+        cluster = Cluster(self.env, tiers=[self.hdd_tier, self.ssd_tier, self.nvram_tier],
+                          ephemeral_tier=self.SBB)
+        # fill some data to SBB
+        move_data_event = cluster.move_data(self.env, self.ssd_tier, self.SBB,
+                                            total_volume=9.5e9,
+                                            erase=False, data=self.data)  # SSD(200) -> NVRAM(400)
+
+        destage_data_event = cluster.destage(self.env, self.SBB, self.ssd_tier,
+                                             total_volume=5e9, erase=True, data=self.data)  # SSD(200) -> NVRAM(400
+        self.env.process(move_data_event)
+        self.env.process(destage_data_event)
+        self.env.run()
+        #last_item = self.data.items[-1]
+        # self.assertEqual(last_item["tier_level"]["SSD"], 10e9)
+        #self.assertEqual(last_item["BB_level"], 5e9)

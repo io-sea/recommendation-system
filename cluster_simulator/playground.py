@@ -84,7 +84,7 @@ if __name__ == '__main__':
     cbb = ClusterBlackBox()
     PARAMETER_SPACE = cbb.parameter_space
     # combinations are self.n_tiers ** sum(self.ios)
-    NBR_ITERATION = cbb.n_tiers ** sum(cbb.ios)
+    NBR_ITERATION = 500  # cbb.n_tiers ** sum(cbb.ios)
 
     np.random.seed(5)
     bbopt = BBOptimizer(black_box=cbb,
