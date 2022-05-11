@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import math
 from cluster import Cluster, Tier, bandwidth_share_model, compute_share_model, get_tier, convert_size
+from cluster_simulator.cluster import EphemeralTier
 import random
 import string
 import time
@@ -145,11 +146,25 @@ class IOPhase:
         # yield self.env.timeout(step_duration)
         return step_duration
 
-    def run(self, env, cluster, placement, delay=0):
-        # TODO : known bug when async IO reproduced in test_many_concurrent_phases_with_delay
+    def run(self, env, cluster, placement, use_bb=False, delay=0):
         # get the tier where the I/O will be performed
-        tier = get_tier(cluster, placement)
+        tier = get_tier(cluster, placement, use_bb=use_bb)
+        if isinstance(tier, EphemeralTier):
+            # if target is ephemeral, buffer the I/O in tier
+            ret = yield env.process(self.run_stage(env, cluster, tier, delay=delay))
+            if ret is True:
+                # if I/O is successful, destage on persistent tier
+                ret2 = yield env.process(self.run_stage(env, cluster, tier.persistent_tier, delay=delay))
+                return ret2
+        else:
+            ret = yield env.process(self.run_stage(env, cluster, tier, delay=delay))
+            return ret
+
+    def run_stage(self, env, cluster, tier, delay=0):
+        # TODO : known bug when async IO reproduced in test_many_concurrent_phases_with_delay
+
         # get the max bandwidth available in the tier
+        # TODO make a method maybe in cluster class?
         max_bandwidth = (tier.max_bandwidth[self.operation]['seq'] * self.pattern +
                          tier.max_bandwidth[self.operation]['rand'] * (1-self.pattern)) * self.cores*1e6
         # TODO, if switches are upper borne, we need to adjust the max_bandwidth
@@ -182,23 +197,29 @@ class IOPhase:
                 t_end = self.env.now
                 self.update_tier(tier, step_duration * available_bandwidth)
                 volume -= step_duration * available_bandwidth
-                # TODO update tier state
-                monitor(self.data,
-                        {"app": self.appname, "type": self.operation, "cpu_usage": self.cores,
-                         "t_start": t_start, "t_end": t_end,
-                         "bandwidth_concurrency": self.bandwidth_usage,
-                         "bandwidth": available_bandwidth/1e6, "phase_duration": t_end-t_start,
-                         "volume": convert_size(step_duration * available_bandwidth),
-                         "tiers": [tier.name for tier in cluster.tiers],
-                         "data_placement": {"placement": tier.name},
-                         "tier_level": {tier.name: tier.capacity.level for tier in cluster.tiers}})
+                monitoring_info = {"app": self.appname, "type": self.operation,
+                                   "cpu_usage": self.cores,
+                                   "t_start": t_start, "t_end": t_end,
+                                   "bandwidth_concurrency": self.bandwidth_usage,
+                                   "bandwidth": available_bandwidth/1e6, "phase_duration": t_end-t_start,
+                                   "volume": convert_size(step_duration * available_bandwidth),
+                                   "tiers": [tier.name for tier in cluster.tiers],
+                                   "data_placement": {"placement": tier.name},
+                                   "tier_level": {tier.name: tier.capacity.level for tier in cluster.tiers}}
+                # when cluster include bb tier
+                if cluster.ephemeral_tier:
+                    monitoring_info.update({cluster.ephemeral_tier.name + "_level": cluster.ephemeral_tier.capacity.level})
+                monitor(self.data, monitoring_info)
 
                 # if volume <= 0:
                 #     end_event.succeed()
                 #     print("Event finished")
                 #     next_event = self.env.peek()
-                # print(f"at {self.env.now} | last_event = {last_event} | next_event {next_event} | peek={self.env.peek()} | conc={tier.bandwidth.count} | step_duration = {self.run_step(last_event, next_event, volume/available_bandwidth)}")
+                # print(f"at {self.env.now} | last_event = {last_event} | next_event {next_event} | peek={self.env.peek()} | conc={tier.bandwidth.count} | step_duration = {self.run_step(last_event, next_event, volume/availble_bandwidth)}")
                 # next_event = self.env.peek()
                 # last_event += step_duration
-
         return True
+
+
+if __name__ == '__main__':
+    print("coco")

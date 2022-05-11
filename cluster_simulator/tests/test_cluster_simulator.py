@@ -36,7 +36,7 @@ class TestAppInit(unittest.TestCase):
     def test_application_run(self):
         cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
         # Simple app: read 1GB -> compute 10s -> write 5GB
-        compute = [0, 10]
+        compute = [0,  10]
         read = [1e9, 0]
         write = [0, 5e9]
         tiers = [1, 0]
