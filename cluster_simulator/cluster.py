@@ -98,7 +98,7 @@ class Cluster:
                                        "t_start": t_start, "t_end": t_end,
                                        "bandwidth": available_bandwidth/1e6,
                                        "phase_duration": t_end-t_start,
-                                       "volume": convert_size(step_duration * available_bandwidth),
+                                       "volume": step_duration * available_bandwidth,
                                        "tiers": [tier.name for tier in self.tiers],
                                        "tier_level": {tier.name: tier.capacity.level for tier in self.tiers}}
                     # when cluster include bb tier
@@ -155,7 +155,7 @@ class Cluster:
                                    "t_start": t_start, "t_end": t_end,
                                    "bandwidth": available_bandwidth/1e6,
                                    "phase_duration": t_end-t_start,
-                                   "volume": convert_size(step_duration * available_bandwidth),
+                                   "volume": step_duration * available_bandwidth,
                                    "tiers": [tier.name for tier in self.tiers],
                                    "tier_level": {tier.name: tier.capacity.level for tier in self.tiers},
                                    f"{ephemeral_tier.name}_level": ephemeral_tier.capacity.level}
@@ -209,7 +209,7 @@ class Cluster:
                                        "t_start": t_start, "t_end": t_end,
                                        "bandwidth": available_bandwidth/1e6,
                                        "phase_duration": t_end-t_start,
-                                       "volume": convert_size(step_duration * available_bandwidth),
+                                       "volume": step_duration * available_bandwidth,
                                        "tiers": [tier.name for tier in self.tiers],
                                        "tier_level": {tier.name: tier.capacity.level for tier in self.tiers},
                                        f"{ephemeral_tier.name}_level": ephemeral_tier.capacity.level}

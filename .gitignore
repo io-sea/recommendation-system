@@ -1,5 +1,6 @@
 # VScode
 .vscode/
+.VSCodeCounter/
 bbo/
 # Byte-compiled / optimized / DLL files
 __pycache__/

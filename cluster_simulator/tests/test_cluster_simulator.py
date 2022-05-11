@@ -6,6 +6,7 @@ import simpy
 from cluster_simulator.cluster import Cluster, Tier, bandwidth_share_model, compute_share_model, get_tier, convert_size
 from cluster_simulator.phase import DelayPhase, ComputePhase, IOPhase
 from cluster_simulator.application import Application
+from analytics import display_run
 
 
 class TestAppInit(unittest.TestCase):
@@ -252,14 +253,52 @@ class TestPhaseSuperposition(unittest.TestCase):
         data = simpy.Store(self.env)
         cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=2,
                           tiers=[self.ssd_tier, self.nvram_tier])
-        app1 = Application(self.env, compute=[0],
+        app1 = Application(self.env, name="#1", compute=[0],
                            read=[1e9], write=[0], data=data)
-        app2 = Application(self.env, compute=[0, 1],
+        app2 = Application(self.env, name="#2", compute=[0, 1],
                            read=[0, 0], write=[0, 2e9], data=data)
         self.env.process(app1.run(cluster, tiers=[0, 0]))
         self.env.process(app2.run(cluster, tiers=[0, 0]))
         self.env.run()
+        fig = display_run(data, cluster, width=800, height=900)
+        fig.show()
         self.assertEqual(data.items[0]["t_start"], data.items[1]["t_start"])
+
+    def test_2_IO_parallel_1(self):
+        """Two I/O phases that should run in parallel because the cluster
+        has2 cores."""
+        data = simpy.Store(self.env)
+        cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=2,
+                          tiers=[self.ssd_tier, self.nvram_tier])
+        app1 = Application(self.env, name="#read2G->Comp2s", compute=[0, 2],
+                           read=[1e9, 0], write=[0, 0], data=data)
+        app2 = Application(self.env, name="#comp1s->write2G", compute=[0, 1],
+                           read=[0, 0], write=[0, 2e9], data=data)
+        self.env.process(app2.run(cluster, tiers=[0, 0]))
+        self.env.process(app1.run(cluster, tiers=[0, 0]))
+
+        self.env.run()
+        fig = display_run(data, cluster, width=800, height=900)
+        fig.show()
+        self.assertEqual(data.items[0]["t_start"], data.items[1]["t_start"])
+
+    def test_2_IO_parallel_2(self):
+        """Two I/O phases that should run in parallel because the cluster
+        has2 cores."""
+        data = simpy.Store(self.env)
+        cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=3,
+                          tiers=[self.ssd_tier, self.nvram_tier])
+        app1 = Application(self.env, name="read3G->comp15s", compute=[0, 15], read=[3e9, 0],
+                           write=[0, 0], data=data)
+        app2 = Application(self.env, name="read1G->comp10s", compute=[0, 10], read=[1e9, 0],
+                           write=[0, 0], data=data)
+
+        self.env.process(app1.run(cluster, tiers=[1, 1]))
+        self.env.process(app2.run(cluster, tiers=[1, 1]))
+        self.env.run()
+        #self.assertEqual(data.items[0]["t_start"], data.items[1]["t_start"])
+        fig = display_run(data, cluster, width=800, height=900)
+        fig.show()
 
 
 if __name__ == '__main__':
