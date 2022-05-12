@@ -4,7 +4,8 @@ import numpy as np
 import pandas as pd
 import math
 from cluster import Cluster, Tier, bandwidth_share_model, compute_share_model, get_tier, convert_size
-from cluster_simulator.cluster import EphemeralTier
+# from cluster_simulator.cluster import EphemeralTier <-- causes import problem for notebooks
+from cluster import EphemeralTier
 import random
 import string
 import time
@@ -130,12 +131,12 @@ class IOPhase:
         # assert isinstance(tier, Tier)
         # reading operation suppose at least some volume in the tier
         if self.operation == "read" and tier.capacity.level < self.volume:
-            tier.capacity.put(self.volume - tier.capacity.level)
+            yield tier.capacity.put(self.volume - tier.capacity.level)
         if self.operation == "write":
             if volume > 0:
-                tier.capacity.put(volume)
+                yield tier.capacity.put(volume)
             elif volume < 0:
-                tier.capacity.get(abs(volume))
+                yield tier.capacity.get(abs(volume))
 
     def run_step(self, last_event, next_event, time_to_complete):
         if 0 < next_event - last_event < time_to_complete:
@@ -171,13 +172,15 @@ class IOPhase:
         # max_bandwidth = max(max_bandwidth, switch_bandwidth)
         # contention model : share equally available bandwidth
         volume = self.volume
-        last_event = 0
         self.env = env
-
+        #last_event = 0
+        self.env.last_event = 0
+        # TODO : monitor bandwidth.count?
         if delay:
             yield self.env.timeout(delay)
         # retry IO until its volume is consumed
-        next_event = self.env.peek()
+        # next_event = last_event  # self.env.peek()
+        self.env.next_event = self.env.last_event
         end_event = self.env.event()
         while volume > 0:
             with tier.bandwidth.request() as req:
@@ -185,28 +188,40 @@ class IOPhase:
                 self.bandwidth_usage = tier.bandwidth.count
                 # Available bandiwidth should be f(max_bandwidth, count)
                 available_bandwidth = max_bandwidth/self.bandwidth_usage
+                #next_event = self.env.peek()
+                self.env.next_event = min(self.env.peek(), self.env.next_event) if self.env.next_event > 0 else self.env.peek()
 
-                next_event = self.env.peek()
-
+                # print(f"{self.appname}(start) | last_event = {self.env.last_event} | next_event = {self.env.next_event} | peek event = {self.env.peek()}")
                 # take the smallest step, step_duration must be > 0
                 # print(f"at {self.env.now} | last_event = {last_event} | next_event {next_event} | peek={self.env.peek()} | conc={tier.bandwidth.count}")
-                step_duration = self.run_step(last_event, next_event, volume/available_bandwidth)
+                #step_duration = self.run_step(last_event, next_event, volume/available_bandwidth)
+                step_duration = self.run_step(self.env.last_event, self.env.next_event, volume/available_bandwidth)
+
                 step_event = self.env.timeout(step_duration)
+                self.env.next_event = min(self.env.peek(), self.env.next_event) if self.env.next_event > 0 else self.env.peek()
+                # print(f"{self.appname}(mid, step_duration={step_duration}) | last_event = {self.env.last_event} | next_event = {self.env.next_event} | peek event = {self.env.peek()}")
+                # print(f"{self.appname}(mid, step_duration={step_duration}) | last_event = {last_event} | next_event = {next_event} | peek event = {self.env.peek()}")
                 t_start = self.env.now
+                self.env.last_event = t_start
                 yield step_event
                 t_end = self.env.now
-                self.update_tier(tier, step_duration * available_bandwidth)
+                #last_event = t_end
+                # self.env.last_event = t_end
+
+                yield self.env.process(self.update_tier(tier, step_duration * available_bandwidth))
                 volume -= step_duration * available_bandwidth
                 monitoring_info = {"app": self.appname, "type": self.operation,
                                    "cpu_usage": self.cores,
                                    "t_start": t_start, "t_end": t_end,
                                    "bandwidth_concurrency": self.bandwidth_usage,
                                    "bandwidth": available_bandwidth/1e6, "phase_duration": t_end-t_start,
-                                   "volume": convert_size(step_duration * available_bandwidth),
+                                   "volume": step_duration * available_bandwidth,
                                    "tiers": [tier.name for tier in cluster.tiers],
                                    "data_placement": {"placement": tier.name},
                                    "tier_level": {tier.name: tier.capacity.level for tier in cluster.tiers}}
-                # when cluster include bb tier
+                # print(f"{self.appname}(end, step_duration={step_duration}) | last_event = {self.env.last_event} | next_event = {self.env.next_event} | peek event = {self.env.peek()}")
+                # print(f"{self.appname}(end, step_duration={step_duration}) | last_event = {last_event} | next_event = {next_event} | peek event = {self.env.peek()}")
+                # # when cluster include bb tier
                 if cluster.ephemeral_tier:
                     monitoring_info.update({cluster.ephemeral_tier.name + "_level": cluster.ephemeral_tier.capacity.level})
                 monitor(self.data, monitoring_info)

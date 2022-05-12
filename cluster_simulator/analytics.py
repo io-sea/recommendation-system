@@ -159,15 +159,15 @@ def display_cluster(data, cluster, width=800, height=600):
 def display_run(data, cluster, width=800, height=600):
 
     apps = list(set(list(data['app'] for data in data.items)))
-
-    fig = make_subplots(rows=len(apps)+len(cluster.tiers)+1, cols=1, shared_xaxes=True,
-                        # vertical_spacing=0.2,
-                        subplot_titles=apps + ["CPU Cores"] +
-                        [tier.name + " ("+convert_size(tier.capacity.capacity)+")" for tier in cluster.tiers])
-
     # sort by app key
     items = sorted(data.items, key=itemgetter('app'))
     # list of apps
+    list_apps = [app for app, _ in groupby(items,  key=itemgetter('app'))]
+
+    fig = make_subplots(rows=len(apps)+len(cluster.tiers)+1, cols=1, shared_xaxes=True,
+                        # vertical_spacing=0.2,
+                        subplot_titles=list_apps + ["CPU Cores"] +
+                        [tier.name + " ("+convert_size(tier.capacity.capacity)+")" for tier in cluster.tiers])
 
     # iterate on apps
     i = 0
