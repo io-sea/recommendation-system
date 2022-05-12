@@ -6,6 +6,7 @@ from loguru import logger
 
 from cluster_simulator.cluster import Cluster, Tier, EphemeralTier, bandwidth_share_model, compute_share_model, get_tier, convert_size
 from cluster_simulator.phase import DelayPhase, ComputePhase, IOPhase
+from analytics import display_run
 
 
 class TestPhase(unittest.TestCase):
@@ -139,7 +140,8 @@ class TestPhaseEphemeralTier(unittest.TestCase):
     def test_phase_use_bb_contention(self):
         """Test running simple write phase on ephemeral tier."""
         # define an IO phase
-        write_io = IOPhase(operation='write', volume=11e9, data=self.data, appname="Buffered")
+        write_io = IOPhase(operation='write', volume=10e9, data=self.data, appname="Buffered")
+        write_io_c = IOPhase(operation='write', volume=10e9, data=self.data, appname="Concurrent")
 
         # define burst buffer with its backend PFS
         bb = EphemeralTier(self.env, name="BB", persistent_tier=self.hdd_tier,
@@ -147,11 +149,15 @@ class TestPhaseEphemeralTier(unittest.TestCase):
         cluster = Cluster(self.env, tiers=[self.hdd_tier, self.ssd_tier],
                           ephemeral_tier=bb)
         # run the phase on the tier with placement = bb
-        self.env.process(write_io.run(self.env, cluster, placement=0, use_bb=True))  # nvram 200-100
-
+        self.env.process(write_io.run(self.env, cluster, placement=0, use_bb=True))  # nvram 400
+        self.env.process(write_io_c.run(self.env, cluster, placement=0, use_bb=False))  # hdd 40
         self.env.run()
+        # fig = display_run(self.data, cluster, width=800, height=900)
+        # fig.show()
+        # finally hdd should get 2*10e9
+        self.assertAlmostEqual((self.data.items[-1]["tier_level"]["HDD"]), 20e9)
         # ensure at last item that persistent/eph levels are correct
-        item = self.data.items[-1]
+        # self.data.items[-1]
         #self.assertAlmostEqual((item["tier_level"]["HDD"]), 2e9)
         #self.assertAlmostEqual((item["BB_level"]), 1e9)
 
