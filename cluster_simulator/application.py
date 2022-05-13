@@ -143,6 +143,36 @@ class Application:
         return t_max
 
 
+def process_io(env, name, tier, volume, delay):
+    """process IOs from compute node to a specific tier having its bandwidth as shared resource"""
+    last_event = 0
+    next_event = 0
+    if delay:
+        yield env.timeout(delay)
+
+    while volume > 0:
+        with tier.bandwidth.request() as req:
+            yield req
+            available_bandwidth = 1/(tier.bandwidth.count+len(tier.bandwidth.queue))
+            start = env.now
+            next_event = self.env.peek()
+
+            # take the smallest step, step_duration must be > 0
+            if 0 < next_event - last_event < volume/available_bandwidth:
+                step_duration = next_event - last_event
+            else:
+                step_duration = volume/available_bandwidth
+            yield env.timeout(step_duration)
+            self.last_event += step_duration
+            volume -= step_duration * available_bandwidth
+            #available_bandwidth = 1/self.bandwidth.count
+            logger.info(f"[{self.name}](step) time "
+                        f"= {start}-->{start+step_duration} | "
+                        f"remaining volume = {volume} | "
+                        f"available_bandwidth : {available_bandwidth} ")
+            self.b_usage[env.now] = round(100/self.bandwidth.count, 2)
+
+
 class IO:
     def __init__(self, env, name, volume, bandwidth, delay=0, prio=0):
         self.env = env
@@ -286,8 +316,8 @@ if __name__ == '__main__':
     env = simpy.Environment()
     #bandwidth = simpy.PreemptiveResource(env, capacity=10)
     bandwidth = simpy.Resource(env, capacity=10)
-    IOs = [IO(env, name=str(i), volume=2,
-              bandwidth=bandwidth, delay=i*0.5, prio=i) for i in range(2)]
+    IOs = [IO(env, name=str(i), volume=2+i,
+              bandwidth=bandwidth, delay=i, prio=i) for i in range(3)]
 
     env.run()
     # print(bandwidth.data)
