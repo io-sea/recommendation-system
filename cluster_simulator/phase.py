@@ -4,8 +4,8 @@ import numpy as np
 import pandas as pd
 import math
 from cluster import Cluster, Tier, bandwidth_share_model, compute_share_model, get_tier, convert_size
-# from cluster_simulator.cluster import EphemeralTier <-- causes import problem for notebooks
-from cluster_simulator.cluster import EphemeralTier
+from cluster_simulator.cluster import EphemeralTier  # <-- causes import problem for notebooks
+#from cluster import EphemeralTier
 import random
 import string
 import time
@@ -206,7 +206,7 @@ class IOPhase:
                 yield step_event
                 t_end = self.env.now
                 #last_event = t_end
-                # self.env.last_event = t_end
+                self.env.last_event = t_end
 
                 yield self.env.process(self.update_tier(tier, step_duration * available_bandwidth))
                 volume -= step_duration * available_bandwidth

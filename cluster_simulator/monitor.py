@@ -1,22 +1,28 @@
 import simpy
 from functools import partial, wraps
+from loguru import logger
 
 
 class MonitorResource(simpy.Resource):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.data = []
+        self.env = args[0]
+        #self.data = []
 
     def request(self, *args, **kwargs):
 
         ret = super().request(*args, **kwargs)
-        self.data.append((self._env.now, self.count))
+        # logger.info(f"[req]Currently used resources at {self.env.now}: {self.count} out of {self.capacity}")
+        #self.data.append((self._env.now, self.count))
         return ret
 
     def release(self, *args, **kwargs):
 
         ret = super().release(*args, **kwargs)
-        self.data.append((self._env.now, self.count))
+        logger.info(f"[release]Currently used resources at {self.env.now}: {self.count} out of {self.capacity}")
+        for user in self.users:
+            logger.info(f"User: {user} using resource since {user.usage_since}")
+        #self.data.append((self._env.now, self.count))
         return ret
 
 # def trace(env, callback):
