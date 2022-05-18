@@ -1,17 +1,29 @@
 import simpy
 from functools import partial, wraps
 from loguru import logger
+from phase_event import IO
+
+
+def check_bandwidth(env, bandwidth):
+    """Checks running IO when bandwidth occupation changes. IOs should be interrupted on release or request of a bandwidth slot.
+    """
+    logger.info("checking...")
+    for io_event in IO.current_ios:
+        if not io_event.triggered:  # capture the IOs not finished
+            logger.info(f"still running IO : {io_event}")
 
 
 class MonitorResource(simpy.Resource):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.env = args[0]
+
         #self.data = []
 
     def request(self, *args, **kwargs):
 
         ret = super().request(*args, **kwargs)
+        check_bandwidth(self.env, self)
         # logger.info(f"[req]Currently used resources at {self.env.now}: {self.count} out of {self.capacity}")
         #self.data.append((self._env.now, self.count))
         return ret
