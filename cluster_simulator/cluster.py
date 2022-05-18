@@ -88,6 +88,7 @@ class Cluster:
                     t_start = self.env.now
                     yield step_event
                     t_end = self.env.now
+                    last_event += step_duration
                     volume -= step_duration * available_bandwidth
                     # update target_tier level
                     target_tier.capacity.put(step_duration * available_bandwidth)
@@ -143,6 +144,7 @@ class Cluster:
                 step_event = self.env.timeout(step_duration)
                 t_start = self.env.now
                 yield step_event
+                last_event += step_duration
                 t_end = self.env.now
                 volume -= step_duration * available_bandwidth
                 dirty_volume = step_duration * available_bandwidth

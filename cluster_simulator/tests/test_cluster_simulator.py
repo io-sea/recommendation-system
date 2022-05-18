@@ -5,7 +5,7 @@ import simpy
 
 from cluster_simulator.cluster import Cluster, Tier, bandwidth_share_model, compute_share_model, get_tier, convert_size
 from cluster_simulator.phase import DelayPhase, ComputePhase, IOPhase
-from cluster_simulator.application import Application
+from cluster_simulator.application import Application, process_io
 from analytics import display_run
 
 
@@ -299,6 +299,24 @@ class TestPhaseSuperposition(unittest.TestCase):
         #self.assertEqual(data.items[0]["t_start"], data.items[1]["t_start"])
         fig = display_run(data, cluster, width=800, height=900)
         fig.show()
+
+
+class TestProcessIOFunction(unittest.TestCase):
+    def setUp(self):
+        self.env = simpy.Environment()
+        nvram_bandwidth = {'read':  {'seq': 780, 'rand': 760},
+                           'write': {'seq': 515, 'rand': 505}}
+        ssd_bandwidth = {'read':  {'seq': 210, 'rand': 190},
+                         'write': {'seq': 100, 'rand': 100}}
+        self.ssd_tier = Tier(self.env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
+        self.nvram_tier = Tier(self.env, 'NVRAM', bandwidth=nvram_bandwidth, capacity=80e9)
+
+    def test_process_io(self):
+        """Test process_io routine that might be shared as a standard function to process I/O from apps."""
+        ios = [process_io(self.env, name=f"app#{i}", tier=self.nvram_tier, volume=(i+1)*1e9, delay=i) for i in range(2)]
+        for io in ios:
+            self.env.process(io)
+        self.env.run()
 
 
 if __name__ == '__main__':
