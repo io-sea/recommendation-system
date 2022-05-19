@@ -67,13 +67,14 @@ class ClusterBlackBox:
         return io_app
 
     def compute(self, placement=None):  # np.array([[0, 1], [0, 1]])
-        self.__init__()  # https://stackoverflow.com/questions/45061369/simpy-how-to-run-a-simulation-multiple-times
+        self.__init__()
+        # https://stackoverflow.com/questions/45061369/simpy-how-to-run-a-simulation-multiple-times
         start_index = 0
         print(placement)
         for i_app, app in enumerate(self.apps):
             place_tier = placement[start_index: start_index + self.ios[i_app]]
             start_index = self.ios[i_app]
-            self.env.process(app.run(self.cluster, tiers=place_tier))
+            self.env.process(app.run(self.cluster, placement=place_tier))
         # run the simulation
         self.env.run()
         return app.get_fitness()
