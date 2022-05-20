@@ -1,3 +1,16 @@
+#!/usr/bin/env python
+"""
+This module proposes a class to define HPC cluster as a set of compute resources and storage facilities. Both are shared between applications running on the cluster.
+"""
+
+
+__copyright__ = """
+Copyright(C) 2022 Bull S. A. S. - All rights reserved
+Bull, Rue Jean Jaures, B.P.68, 78340, Les Clayes-sous-Bois, France
+This is not Free or Open Source software.
+Please contact Bull S. A. S. for details about its license.
+"""
+
 import simpy
 from loguru import logger
 import numpy as np
@@ -6,28 +19,57 @@ from monitor import MonitorResource
 
 
 def convert_size(size_bytes):
-    # later replace 1000 by 1024
+    """Function to display a data volume in human readable way (B, KB, MB,...) instead of 1e3, 1e6, 1e9 bytes.
+
+    Args:
+        size_bytes (float): volume of data in bytes to convert.
+
+    Returns:
+        string: containing the volume expressed with a more convenient unit.
+    """
+    BYTE_UNIT = 1000  # replace 1000 by 1024 fir B, KiB, MiB, ...
     if size_bytes == 0:
         return "0B"
     size_name = ("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
-    i = int(math.floor(math.log(size_bytes, 1000)))
-    p = math.pow(1000, i)
+    i = int(math.floor(math.log(size_bytes, BYTE_UNIT)))
+    p = math.pow(BYTE_UNIT, i)
     s = round(size_bytes / p, 2)
-    return "%s %s" % (s, size_name[i])
+    return f"{s} {size_name[i]}"  # "%s %s" % (s, size_name[i])
 
 
 def monitor(data, lst):
+    """Monitoring function that feed a queue of records on phases events when an application is running on the cluster.
+
+    Args:
+        data (simpy.Store): a store object that queues elements of information useful for logging and analytics.
+        lst (dict): information element to add to the data store.
+    """
     state = "\n | Monitoring"
     for key, value in lst.items():
-        state += "| " + key + ": " + str(value) + " "
+        state += f"| {key}: {str(value)} "
     logger.debug(state)
     if isinstance(data, simpy.Store):
         data.put(lst)
 
 
 class Cluster:
+    """A cluster is a set of compute nodes each node having a fixed number of cores. The storage system is heterogenous and consists on a set of tiers. Each tier has its own capacity and performances.
+    Generally speaking, these tiers are referenced as persistent storage, which means that data conveyed through tiers is kept persistently and can be retrieved anytime by an application, unless it is explicitly removed as in data movers methods.
+    A cluster contains also a specific type of tiers that is ephemeral, which means that it does not keep data beyond the execution time of an application. Ephemeral tiers are often supported by datanodes that hold their own compute units and also high storage hardware to serve as burst buffers backend. Burst buffers partitions their resources into flavors to dispatch them smartly between applications. They have also their own policy of eviction when storage are (quasi) saturated as well as a destaging capacity in order to move data to a persistent storage tier. As a consequence, each ephemeral tier has its a specific tier attached to it.
+    """
+
     def __init__(self, env, compute_nodes=1, cores_per_node=2, tiers=[], ephemeral_tier=None,
                  data=None):
+        """Inits a Cluster instance with mentioned attributes.
+
+        Args:
+            env (simpy.Environment): an environement where all simulation happens.
+            compute_nodes (int, optional): number of compute nodes to specify. Defaults to 1.
+            cores_per_node (int, optional): number of cores per compute node. Defaults to 2.
+            tiers (list, optional): list of instances from Tier class. Defaults to [].
+            ephemeral_tier (EphemeralTier, optional): specifies an ephemeral tier attached to this cluster. Defaults to None.
+            data (simpy.Store, optional): a queue like object to store data relative to execution of an application on the cluster. Defaults to None.
+        """
         self.compute_nodes = simpy.Resource(env, capacity=compute_nodes)
         self.compute_cores = simpy.Resource(env, capacity=cores_per_node*compute_nodes)
         self.data = data or None
@@ -36,6 +78,11 @@ class Cluster:
         # logger.info(self.__str__())
 
     def __str__(self):
+        """Displays some cluster properties in readable way.
+
+        Returns:
+            string: description of the cluster properties and state.
+        """
         description = "====================\n"
         description += (f"Cluster with {self.compute_nodes.capacity} compute nodes \n")
         description += f"Each having {self.compute_cores.capacity} cores in total \n"
@@ -43,17 +90,30 @@ class Cluster:
             for tier in self.tiers:
                 description += tier.__str__()
         return description
-        # self.storage_capacity = simpy.Container(env, init=0, capacity=storage_capacity)
-        # self.storage_speed = simpy.Container(env, init=storage_speed, capacity=storage_speed)
 
     def get_max_bandwidth(self, tier, cores=1, operation='read', pattern=1):
-        """Get the maximum bandwidth for a given tier, number of cores dedicated to the operation, a type of operation. Sequential pattern are assumed during copy/move."""
+        """Get the maximum bandwidth for a given tier, number of cores dedicated to the operation, a type of operation. Sequential pattern are assumed during copy/move as well as an important blocksize.
+
+        Args:
+            tier (Tier or index): the tier from which the bandwidth will be estimated.
+            cores (int, optional): _description_. Defaults to 1.
+            operation (str, optional): _description_. Defaults to 'read'.
+            pattern (int, optional): _description_. Defaults to 1.
+
+        Returns:
+            float: a bandwidth value in MB/s for the specified arguments.
+        """
         if not isinstance(tier, Tier):
             tier = get_tier(self, tier)
         return (tier.max_bandwidth[operation]['seq'] * pattern +
                 tier.max_bandwidth[operation]['rand'] * (1-pattern)) * cores*1e6
 
     def move_data(self, env, source_tier, target_tier, total_volume, erase=False, data=None):
+        """
+
+        Args:
+
+        """
         """Move data from source_tier to target_tier. Both are supposed to be persistent (will keep data).
 
         Args:
@@ -61,7 +121,14 @@ class Cluster:
             source_tier (Tier): the tier object where data is.
             target_tier (Tier): the tier where to move data to.
             total_volume (int, float): total volume of data to tranfer.
+            
+        Returns:
+            bool: True if I/O event succeed.
+
+        Yields:
+            simpy.Process: yielding to resources consumption and I/O processing.
         """
+        # TODO : refactor this mess
         self.env = env
         self.data = data or None
         # adjust source_tier level if necessary to be consistent
@@ -113,13 +180,18 @@ class Cluster:
     def write_from_app_to_buffer(self, env, ephemeral_tier, target_tier,
                                  total_volume, erase=False, data=None):
         """Move data generate from an application to a datanode (ephemeral_tier).
-
         Args:
             env (Simpy.Environment): simulation environment.
             ephemeral_tier (EphemeralTier): the cache tier buffer the burst before moving to target_tier.
             target_tier (Tier): the tier where to move data to.
             total_volume (int, float): total volume of data to tranfer.
+        Returns:
+            bool: True if I/O event succeed.
+
+        Yields:
+            simpy.Process: yielding to resources consumption and I/O processing.
         """
+        # TODO : refactor this mess
         self.env = env
         self.data = data or None
         last_event = 0
@@ -172,8 +244,15 @@ class Cluster:
             env (Simpy.Environment): simulation environment.
             ephemeral_tier (EphemeralTier): the cache tier buffer the burst before moving to target_tier.
             target_tier (Tier): the tier where to move data to.
-            total_volume (int, float): total volume of data to tranfer.
+            total_volume (int, float): total volume of data to transfer.
+
+        Returns:
+            bool: True if I/O event succeed.
+
+        Yields:
+            simpy.Process: yielding to resources consumption and I/O processing.
         """
+        # TODO : refactor this mess
         self.env = env
         self.data = data or None
         last_event = 0
@@ -220,15 +299,16 @@ class Cluster:
 
     def monitor_ephemeral_tier(self, env, bb_tier):
         """When flavor or datanode volume is full, start evicting at the speed of the lower tier.
+
         Args:
             env (simpy.Environment): env where all events are triggered.
+
+        Yields:
+            simpy.Process: process a data movement.
         """
         self.env = env
 
         excess = bb_tier.capacity.level - 0.9*bb_tier.capacity.capacity
-        print(bb_tier.capacity.capacity/1e9)
-        print(bb_tier.capacity.level/1e9)
-        print(excess/1e9)
         if excess > 0:
             logger.info("BB level exceeded 90% -> eviction policy enabled")
             # move excess data to pertistent tier with erase
@@ -238,6 +318,9 @@ class Cluster:
 
     def evict_ephemeral_tier(self, env, bb_tier, volume):
         """Evict data with volume from ephemeral tier to its attached peristent tier.
+
+        Yields:
+            simpy.Process: process a data movement.
         """
         self.env = env
         logger.info("BB level exceeded 90% -> eviction policy enabled")
@@ -246,9 +329,7 @@ class Cluster:
 
 
 class Tier:
-    """
-    In this model we expect a bandwidth value at its asymptotic state.
-    Only the maximum is considered.
+    """Model a tier storage service with a focus on a limited bandwidth resource as well as a limited capacity. In this model we expect a bandwidth value at its asymptotic state, so blocksize is still not a parameter. Only the asymptotic part of the throughput curve is considered.
     Other considered variables are:
         read/write variables
         sequential/random variables
@@ -260,6 +341,14 @@ class Tier:
     """
 
     def __init__(self, env, name, bandwidth, capacity=100e9):
+        """Inits a tier instance with some storage service specifications.
+
+        Args:
+            env (simpy.Environment): the simpy environment where all simulations happens.s
+            name (string): a name to make analytics readable and to assign a unique ID to a tier.
+            bandwidth (simpy.Resource): bandwidth as limited number of slots that can be consumed.  Default capacity is up to 10 concurrent I/O sharing the maximum value of the bandwidth.
+            capacity (simpy.Container, optional): storage capacity of the tier. Defaults to 100e9.
+        """
         self.env = env
         self.name = name
         self.capacity = simpy.Container(self.env, init=0, capacity=capacity)
@@ -271,6 +360,11 @@ class Tier:
         # logger.info(self.__str__())
 
     def __str__(self):
+        """Prints cluster related information in a human readable fashion.
+
+        Returns:
+            string: properties and state of the cluster.
+        """
         description = "\n-------------------\n"
         description += (f"Tier: {self.name} with capacity = {convert_size(self.capacity.capacity)}\n")
         description += ("{:<12} {:<12} {:<12}".format('Operation', 'Pattern', 'Bandwidth MB/s')+"\n")
@@ -290,6 +384,15 @@ class EphemeralTier(Tier):
     """
 
     def __init__(self, env, name, persistent_tier, bandwidth, capacity=80e9):
+        """Inits an EphemeralTier instance.
+
+        Args:
+            env (simpy.Environment): the simpy environment where all simulations happens.s
+            name (string): unique name
+            persistent_tier (Tier): a persistent tier the burst buffer is attached to. Will be automatically used for destaging purposes.
+            bandwidth (simpy.Resource): bandwidth as limited number of slots that can be consumed.  Default capacity is up to 10 concurrent I/O sharing the maximum value of the bandwidth.
+            capacity (simpy.Container, optional): storage capacity of the flavor of the datanode. Defaults to 80e9.
+        """
         # the non transient tier it is attached to
         self.persistent_tier = persistent_tier
         # self.cores = simpy.Resource(env, capacity=cores)
@@ -303,10 +406,26 @@ class EphemeralTier(Tier):
 
 
 def bandwidth_share_model(n_threads):
+    """Description of a bandwidth share model that could extend the behavior from storage services measurements.
+
+    Args:
+        n_threads (int): number of threads/processes processing I/O simultaneously.
+
+    Returns:
+        float: the bandwidth share of the last process.
+    """
     return np.sqrt(1 + n_threads)/np.sqrt(2)
 
 
 def compute_share_model(n_cores):
+    """Description of parallelizing compute resources for an application. The gain factor is considered for a reference duration when using a single unit of computing.
+
+    Args:
+        n_cores (int): number of cores (computing unit) the application is distributed on.
+
+    Returns:
+        float: the speedup factor in comparison when using a single compute unit.
+    """
     return np.sqrt(1 + n_cores)/np.sqrt(2)
 
 
@@ -317,9 +436,9 @@ def get_tier(cluster, tier_reference, use_bb=False):
     When use_bb is True, data will be placed in the ephemeral_tier which is attached to the indicated tier.
 
     Args:
-        cluster(Cluster): a cluster object that contains the tiers
-        tier_reference(string, int): tier name or index in the list of tiers
-        use_bb(bool): if True, data will be placed in the ephemeral_tier which is attached to the indicated tier.
+        cluster (Cluster): a cluster object that contains the tiers
+        tier_reference (string, int): tier name or index in the list of tiers
+        use_bb (bool): if True, data will be placed in the ephemeral_tier which is attached to the indicated tier.
 
     Returns:
         Tier or EphemeralTier: The storage tier that will be targeted for I/O operations.
@@ -339,12 +458,8 @@ def get_tier(cluster, tier_reference, use_bb=False):
         else:  # tier_reference is an instance of Tier
             # TODO: reactivate the None clause
             tier = tier_reference
-
         if tier is None:
-            # print("-----------oh-----")
-            # print(type(tier_reference))
-            # print(tier_reference.name)
-            raise Exception(f"Tier {tier} not found")
+            raise ValueError(f"Tier {tier} not found")
 
         return tier
     if not use_bb:

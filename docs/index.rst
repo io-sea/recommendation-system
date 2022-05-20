@@ -6,6 +6,7 @@
 Welcome to Cluster Simulator's documentation!
 =============================================
 .. automodule:: cluster_simulator.application
+.. automodule:: cluster_simulator.cluster
    :members:
 .. toctree::
    :maxdepth: 2
