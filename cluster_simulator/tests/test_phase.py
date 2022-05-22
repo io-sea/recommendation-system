@@ -4,7 +4,8 @@ import numpy as np
 import simpy
 from loguru import logger
 
-from cluster_simulator.cluster import Cluster, Tier, EphemeralTier, bandwidth_share_model, compute_share_model, get_tier, convert_size
+from cluster_simulator.cluster import Cluster, Tier, EphemeralTier, bandwidth_share_model, compute_share_model, get_tier
+from utils import convert_size
 from cluster_simulator.phase import DelayPhase, ComputePhase, IOPhase
 from analytics import display_run
 

@@ -16,40 +16,7 @@ from loguru import logger
 import numpy as np
 import math
 from monitor import MonitorResource
-
-
-def convert_size(size_bytes):
-    """Function to display a data volume in human readable way (B, KB, MB,...) instead of 1e3, 1e6, 1e9 bytes.
-
-    Args:
-        size_bytes (float): volume of data in bytes to convert.
-
-    Returns:
-        string: containing the volume expressed with a more convenient unit.
-    """
-    BYTE_UNIT = 1000  # replace 1000 by 1024 fir B, KiB, MiB, ...
-    if size_bytes == 0:
-        return "0B"
-    size_name = ("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
-    i = int(math.floor(math.log(size_bytes, BYTE_UNIT)))
-    p = math.pow(BYTE_UNIT, i)
-    s = round(size_bytes / p, 2)
-    return f"{s} {size_name[i]}"  # "%s %s" % (s, size_name[i])
-
-
-def monitor(data, lst):
-    """Monitoring function that feed a queue of records on phases events when an application is running on the cluster.
-
-    Args:
-        data (simpy.Store): a store object that queues elements of information useful for logging and analytics.
-        lst (dict): information element to add to the data store.
-    """
-    state = "\n | Monitoring"
-    for key, value in lst.items():
-        state += f"| {key}: {str(value)} "
-    logger.debug(state)
-    if isinstance(data, simpy.Store):
-        data.put(lst)
+from utils import convert_size, monitor_step
 
 
 class Cluster:
@@ -174,7 +141,7 @@ class Cluster:
                         monitoring_info.update({f"{self.ephemeral_tier.name}_level":
                                                 self.ephemeral_tier.capacity.level})
 
-                    monitor(self.data, monitoring_info)
+                    monitor_step(self.data, monitoring_info)
         return True
 
     def write_from_app_to_buffer(self, env, ephemeral_tier, target_tier,
@@ -234,7 +201,7 @@ class Cluster:
                                    "tier_level": {tier.name: tier.capacity.level for tier in self.tiers},
                                    f"{ephemeral_tier.name}_level": ephemeral_tier.capacity.level}
 
-                monitor(self.data, monitoring_info)
+                monitor_step(self.data, monitoring_info)
         return True
 
     def destage(self, env, ephemeral_tier, target_tier, total_volume, erase=False, data=None):
@@ -294,7 +261,7 @@ class Cluster:
                                        "tiers": [tier.name for tier in self.tiers],
                                        "tier_level": {tier.name: tier.capacity.level for tier in self.tiers},
                                        f"{ephemeral_tier.name}_level": ephemeral_tier.capacity.level}
-                    monitor(self.data, monitoring_info)
+                    monitor_step(self.data, monitoring_info)
         return True
 
     def monitor_ephemeral_tier(self, env, bb_tier):

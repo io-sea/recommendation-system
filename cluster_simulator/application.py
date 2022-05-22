@@ -16,9 +16,10 @@ from loguru import logger
 import numpy as np
 import pandas as pd
 import math
-from cluster import Cluster, Tier, bandwidth_share_model, compute_share_model, get_tier, convert_size
-from phase import DelayPhase, ComputePhase, IOPhase, name_app
+from cluster import Cluster, Tier, bandwidth_share_model, compute_share_model, get_tier
+from phase import DelayPhase, ComputePhase, IOPhase
 import copy
+from utils import name_app, convert_size
 from simpy.events import AnyOf, AllOf, Event
 from loguru import logger
 import math
