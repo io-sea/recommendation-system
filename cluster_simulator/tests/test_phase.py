@@ -4,10 +4,10 @@ import numpy as np
 import simpy
 from loguru import logger
 
-from cluster_simulator.cluster import Cluster, Tier, EphemeralTier, bandwidth_share_model, compute_share_model, get_tier
-from utils import convert_size
+from cluster_simulator.cluster import Cluster, Tier, EphemeralTier, bandwidth_share_model, compute_share_model
+from cluster_simulator.utils import convert_size, get_tier
 from cluster_simulator.phase import DelayPhase, ComputePhase, IOPhase
-from analytics import display_run
+from cluster_simulator.analytics import display_run
 
 
 class TestPhase(unittest.TestCase):
@@ -31,12 +31,53 @@ class TestPhase(unittest.TestCase):
         self.assertIsInstance(cluster.compute_nodes, simpy.Resource)
         self.assertIsInstance(cluster.compute_cores, simpy.Resource)
 
-    def test_update_tier(self):
+    def test_update_tier_write(self):
+        """Test that updating tier levels works well when operation is write."""
+        data = simpy.Store(self.env)
         cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
-        # read_io = Read_IOPhase(volume=9e9, pattern=0.2)
-        read_io = IOPhase(operation='read', volume=9e9)
-        self.env.process(read_io.run(self.env, cluster, placement=1))
-        self.env.run(until=10)
+        io = IOPhase(operation='write', volume=10e9, data=data)
+        io.env = self.env
+        io.update_tier(self.nvram_tier, 5e9)
+        self.assertTrue(self.nvram_tier.capacity.level == 5e9)
+
+    def test_update_tier_read(self):
+        """Test that updating tier levels works well when operation is read."""
+        data = simpy.Store(self.env)
+        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
+        io = IOPhase(operation='read', volume=10e9, data=data)
+        io.env = self.env
+        io.update_tier(self.nvram_tier, 5e9)
+        self.assertTrue(self.nvram_tier.capacity.level == 10e9)
+
+    def test_process_volume_write(self):
+        """Test the process volume method."""
+        data = simpy.Store(self.env)
+        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
+        read_io = IOPhase(operation='write', volume=9e9, data=data)
+        read_io.env = self.env
+        ret = self.env.process(read_io.process_volume(step_duration=1,
+                                                      volume=1e9,
+                                                      available_bandwidth=500,
+                                                      cluster=cluster, tier=self.ssd_tier))
+        self.env.run()
+        self.assertEqual(data.items[0]["volume"], 500)
+        self.assertEqual(self.ssd_tier.capacity.level, 500)
+        self.assertEqual(ret.value, 1e9 - 500)
+
+    def test_process_volume_read(self):
+        """Test the process volume method."""
+        data = simpy.Store(self.env)
+        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
+        read_io = IOPhase(operation='read', volume=9e9, data=data)
+        read_io.env = self.env
+        ret = self.env.process(read_io.process_volume(step_duration=1,
+                                                      volume=1e9,
+                                                      available_bandwidth=500,
+                                                      cluster=cluster, tier=self.ssd_tier))
+        self.env.run()
+        self.assertEqual(data.items[0]["volume"], 500)
+        self.assertEqual(self.ssd_tier.capacity.level, 9e9)
+        self.assertEqual(ret.value, 1e9 - 500)
 
     def test_compute_phase(self):
         cluster = Cluster(self.env, compute_nodes=3, cores_per_node=4)
@@ -46,17 +87,85 @@ class TestPhase(unittest.TestCase):
 
     def test_read_io_phase(self):
         cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
-        # read_io = Read_IOPhase(volume=9e9, pattern=0.2)
         read_io = IOPhase(operation='read', volume=9e9, pattern=0.2)
         self.env.process(read_io.run(self.env, cluster, placement=1))
         self.env.run(until=10)
 
     def test_write_io_phase(self):
         cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
-        # read_io = Read_IOPhase(volume=9e9, pattern=0.2)
         write_io = IOPhase(operation='write', volume=9e9, pattern=0.2)
         self.env.process(write_io.run(self.env, cluster, placement=1))
         self.env.run(until=10)
+
+
+class TestBandwidthShare(unittest.TestCase):
+    def setUp(self):
+        self.env = simpy.Environment()
+        self.data = simpy.Store(self.env)
+        nvram_bandwidth = {'read':  {'seq': 800, 'rand': 800},
+                           'write': {'seq': 400, 'rand': 400}}
+        ssd_bandwidth = {'read':  {'seq': 200, 'rand': 200},
+                         'write': {'seq': 100, 'rand': 100}}
+
+        # logger.remove()
+
+        self.ssd_tier = Tier(self.env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
+        self.nvram_tier = Tier(self.env, 'NVRAM', bandwidth=nvram_bandwidth, capacity=80e9)
+
+    def test_2_read_phases(self):
+        """Test 2 read phases simultaneously on the same tier, and ensure that bandwidth is /2."""
+        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
+        read_ios = [IOPhase(operation='read', volume=1e9, data=self.data) for _ in range(2)]
+        placement = 1
+        for io in read_ios:
+            self.env.process(io.run(self.env, cluster, placement=placement))  # nvram 200-100
+        self.env.run()
+        tier = get_tier(cluster, placement)
+        self.assertAlmostEqual(tier.max_bandwidth["read"]["seq"]/2,
+                               self.data.items[0]["bandwidth"])
+
+    def test_2_read_phases_2_placements(self):
+        """Test 2 read phases simultaneously on different tiers, and ensure that bandwidth is not /2."""
+        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
+        read_io_1 = IOPhase(operation='read', volume=1e9, data=self.data)
+        read_io_2 = IOPhase(operation='read', volume=1e9, data=self.data)
+        self.env.process(read_io_1.run(self.env, cluster, placement="SSD"))  # 200
+        self.env.process(read_io_2.run(self.env, cluster, placement="NVRAM"))  # 800
+        self.env.run()
+        self.assertEqual({item["bandwidth"] for item in self.data.items}, {200, 800})
+
+    def test_many_concurrent_read_phases(self):
+        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
+        number_of_apps = 3
+        read_ios = [IOPhase(operation='read', volume=1e9, data=self.data) for _ in range(number_of_apps)]
+        for i, io in enumerate(read_ios):
+            self.env.process(io.run(self.env, cluster, placement=1, delay=i*0))  # nvram 800
+
+        self.env.run()
+        conc = [item["bandwidth_concurrency"] for item in self.data.items]
+        self.assertEqual(max(conc), number_of_apps)
+
+    def test_many_concurrent_phases_with_delay(self):
+        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
+        number_of_apps = 2
+        read_ios = [IOPhase(appname=f"#{str(i)}", operation='read', volume=1e9, data=self.data) for i in range(number_of_apps)]
+        for i, io in enumerate(read_ios):
+            self.env.process(io.run(self.env, cluster, placement=1, delay=i))  # nvram 800
+
+        self.env.run()
+        conc = [item["bandwidth_concurrency"] for item in self.data.items]
+        self.assertEqual(max(conc), number_of_apps)
+
+    def test_many_concurrent_phases(self):
+        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
+        read_io = IOPhase(appname="#1", operation='read', volume=1e9, data=self.data)
+        write_io = IOPhase(appname="#2", operation='write', volume=1e9, data=self.data)
+        self.env.process(read_io.run(self.env, cluster, placement=1, delay=0))  # nvram 800
+        self.env.process(write_io.run(self.env, cluster, placement=1, delay=0.5))  # nvram 400
+
+        self.env.run()
+        conc = [item["bandwidth_concurrency"] for item in self.data.items]
+        self.assertEqual(max(conc), 2)
 
 
 class TestDataMovement(unittest.TestCase):
@@ -72,6 +181,8 @@ class TestDataMovement(unittest.TestCase):
 
 
 class TestPhaseEphemeralTier(unittest.TestCase):
+    """Test phases that happens on tier of type Ephemeral."""
+
     def setUp(self):
         self.env = simpy.Environment()
         self.data = simpy.Store(self.env)
@@ -85,6 +196,24 @@ class TestPhaseEphemeralTier(unittest.TestCase):
         self.ssd_tier = Tier(self.env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
         self.nvram_tier = Tier(self.env, 'NVRAM', bandwidth=self.nvram_bandwidth, capacity=10e9)
 
+    def test_process_volume_use_bb(self):
+        """Test running process volume phase on ephemeral tier."""
+        data = simpy.Store(self.env)
+        bb = EphemeralTier(self.env, name="BB", persistent_tier=self.hdd_tier,
+                           bandwidth=self.nvram_bandwidth, capacity=10e9)
+        cluster = Cluster(self.env, tiers=[self.hdd_tier, self.ssd_tier],
+                          ephemeral_tier=bb)
+        write_io = IOPhase(operation='write', volume=9e9, data=data)
+        write_io.env = self.env
+        ret = self.env.process(write_io.process_volume(step_duration=1,
+                                                       volume=1e9,
+                                                       available_bandwidth=500,
+                                                       cluster=cluster, tier=bb))
+        self.env.run()
+        self.assertEqual(data.items[0]["volume"], 500)
+        self.assertEqual(bb.capacity.level, 500)
+        self.assertEqual(ret.value, 1e9 - 500)
+
     def test_phase_use_bb(self):
         """Test running simple write phase on ephemeral tier."""
         # define an IO phase
@@ -97,10 +226,7 @@ class TestPhaseEphemeralTier(unittest.TestCase):
         # run the phase on the tier with placement = bb
         self.env.process(write_io.run(self.env, cluster, placement=0, use_bb=True))  # nvram 200-100
         self.env.run()
-        # ensure at last item that persistent/eph levels are correct
-        # item = self.data.items[-1]
-        # self.assertAlmostEqual((item["tier_level"]["HDD"]), 1e9)
-        # self.assertAlmostEqual((item["BB_level"]), 1e9)
+        self.assertEqual(bb.capacity.level, 1e9)
 
     def test_phase_use_bb_false(self):
         """Test running simple write phase on ephemeral tier."""
@@ -161,84 +287,6 @@ class TestPhaseEphemeralTier(unittest.TestCase):
         # self.data.items[-1]
         #self.assertAlmostEqual((item["tier_level"]["HDD"]), 2e9)
         #self.assertAlmostEqual((item["BB_level"]), 1e9)
-
-
-class TestBandwidthShare(unittest.TestCase):
-    def setUp(self):
-        self.env = simpy.Environment()
-        self.data = simpy.Store(self.env)
-        self.used_bandwidth = dict()
-        nvram_bandwidth = {'read':  {'seq': 800, 'rand': 800},
-                           'write': {'seq': 400, 'rand': 400}}
-        ssd_bandwidth = {'read':  {'seq': 200, 'rand': 200},
-                         'write': {'seq': 100, 'rand': 100}}
-
-        # logger.remove()
-
-        self.ssd_tier = Tier(self.env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
-        self.nvram_tier = Tier(self.env, 'NVRAM', bandwidth=nvram_bandwidth, capacity=80e9)
-
-    def test_2_read_phases(self):
-        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
-        # read_io = Read_IOPhase(volume=9e9, pattern=0.2)
-        read_ios = [IOPhase(operation='read', volume=1e9, data=self.data) for i in range(2)]
-        placement = 1
-        for io in read_ios:
-            self.env.process(io.run(self.env, cluster, placement=placement))  # nvram 200-100
-        self.env.run()
-        tier = get_tier(cluster, placement)
-        self.assertAlmostEqual(tier.max_bandwidth["read"]["seq"]/2,
-                               self.data.items[0]["bandwidth"])
-
-    def test_2_read_phases_2_placements(self):
-        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
-        # read_io = Read_IOPhase(volume=9e9, pattern=0.2)
-        read_io_1 = IOPhase(operation='read', volume=1e9, data=self.data)
-        read_io_2 = IOPhase(operation='read', volume=1e9, data=self.data)
-        self.env.process(read_io_1.run(self.env, cluster, placement="SSD"))  # 200
-        self.env.process(read_io_2.run(self.env, cluster, placement="NVRAM"))  # 800
-        self.env.run()
-        self.assertEqual(set([item["bandwidth"] for item in self.data.items]),
-                         {200, 800})
-
-    def test_many_concurrent_read_phases(self):
-        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
-        number_of_apps = 3
-        read_ios = [IOPhase(operation='read', volume=1e9, data=self.data) for i in range(number_of_apps)]
-        for i, io in enumerate(read_ios):
-            self.env.process(io.run(self.env, cluster, placement=1, delay=i*0))  # nvram 800
-
-        self.env.run()
-        conc = []
-        for item in self.data.items:
-            conc.append(item["bandwidth_concurrency"])
-        self.assertEqual(max(conc), number_of_apps)
-
-    def test_many_concurrent_phases_with_delay(self):
-        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
-        number_of_apps = 2
-        read_ios = [IOPhase(appname="#"+str(i), operation='read', volume=1e9, data=self.data) for i in range(number_of_apps)]
-        for i, io in enumerate(read_ios):
-            self.env.process(io.run(self.env, cluster, placement=1, delay=i))  # nvram 800
-
-        self.env.run()
-        conc = []
-        for item in self.data.items:
-            conc.append(item["bandwidth_concurrency"])
-        self.assertEqual(max(conc), number_of_apps)
-
-    def test_many_concurrent_phases(self):
-        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
-        read_io = IOPhase(appname="#1", operation='read', volume=1e9, data=self.data)
-        write_io = IOPhase(appname="#2", operation='write', volume=1e9, data=self.data)
-        self.env.process(read_io.run(self.env, cluster, placement=1, delay=0))  # nvram 800
-        self.env.process(write_io.run(self.env, cluster, placement=1, delay=0.5))  # nvram 400
-
-        self.env.run()
-        conc = []
-        for item in self.data.items:
-            conc.append(item["bandwidth_concurrency"])
-        self.assertEqual(max(conc), 2)
 
 
 if __name__ == '__main__':

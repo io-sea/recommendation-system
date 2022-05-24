@@ -15,8 +15,28 @@ import simpy
 from loguru import logger
 import numpy as np
 import math
-from monitor import MonitorResource
-from utils import convert_size, monitor_step
+#from monitor import MonitorResource
+from cluster_simulator.utils import convert_size, BandwidthResource
+#from cluster_simulator.phase import BandwidthResource
+
+
+def convert_size(size_bytes):
+    """Function to display a data volume in human readable way (B, KB, MB,...) instead of 1e3, 1e6, 1e9 bytes.
+
+    Args:
+        size_bytes (float): volume of data in bytes to convert.
+
+    Returns:
+        string: containing the volume expressed with a more convenient unit.
+    """
+    BYTE_UNIT = 1000  # replace 1000 by 1024 fir B, KiB, MiB, ...
+    if size_bytes == 0:
+        return "0B"
+    size_name = ("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
+    i = int(math.floor(math.log(size_bytes, BYTE_UNIT)))
+    p = math.pow(BYTE_UNIT, i)
+    s = round(size_bytes / p, 2)
+    return f"{s} {size_name[i]}"  # "%s %s" % (s, size_name[i])
 
 
 class Cluster:
@@ -76,11 +96,6 @@ class Cluster:
                 tier.max_bandwidth[operation]['rand'] * (1-pattern)) * cores*1e6
 
     def move_data(self, env, source_tier, target_tier, total_volume, erase=False, data=None):
-        """
-
-        Args:
-
-        """
         """Move data from source_tier to target_tier. Both are supposed to be persistent (will keep data).
 
         Args:
@@ -88,7 +103,7 @@ class Cluster:
             source_tier (Tier): the tier object where data is.
             target_tier (Tier): the tier where to move data to.
             total_volume (int, float): total volume of data to tranfer.
-            
+
         Returns:
             bool: True if I/O event succeed.
 
@@ -284,7 +299,7 @@ class Cluster:
                                  total_volume=excess, erase=True, data=self.data)
 
     def evict_ephemeral_tier(self, env, bb_tier, volume):
-        """Evict data with volume from ephemeral tier to its attached peristent tier.
+        """Evict data with volume from ephemeral tier to its attached persistent tier.
 
         Yields:
             simpy.Process: process a data movement.
@@ -321,7 +336,8 @@ class Tier:
         self.capacity = simpy.Container(self.env, init=0, capacity=capacity)
         self.max_bandwidth = bandwidth
         # modeling percent use of bandwidth
-        self.bandwidth = simpy.Resource(self.env, capacity=10)
+        #self.bandwidth = simpy.Resource(self.env, capacity=10)
+        self.bandwidth = BandwidthResource(self.env, capacity=10)
         self.bandwidth_concurrency = dict()
         # self.bandwidth = simpy.Container(env, init=100, capacity=100)
         # logger.info(self.__str__())

@@ -1,6 +1,6 @@
-from cluster import Cluster, Tier, bandwidth_share_model, compute_share_model, get_tier, convert_size
-from phase import DelayPhase, ComputePhase, IOPhase
-from application import Application
+from cluster_simulator.cluster import Cluster, Tier, bandwidth_share_model, compute_share_model, get_tier, convert_size
+from cluster_simulator.phase import DelayPhase, ComputePhase, IOPhase
+from cluster_simulator.application import Application
 import simpy
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots

@@ -15,14 +15,31 @@ from loguru import logger
 import numpy as np
 import pandas as pd
 import math
-from cluster import Cluster, Tier, bandwidth_share_model, compute_share_model, get_tier, convert_size
+#from cluster_simulator.cluster import Cluster, Tier, bandwidth_share_model, compute_share_model, get_tier, convert_size
+
+from cluster_simulator.utils import convert_size, get_tier, compute_share_model
+from cluster_simulator.cluster import Tier
 from cluster_simulator.cluster import EphemeralTier  # proper import for isinstance but causes import error for notebooks
 #from cluster import EphemeralTier
 import random
 import string
 import time
 from simpy.events import AnyOf, AllOf, Event
-from utils import monitor_step
+
+
+def monitor_step(data, lst):
+    """Monitoring function that feed a queue of records on phases events when an application is running on the cluster.
+
+    Args:
+        data (simpy.Store): a store object that queues elements of information useful for logging and analytics.
+        lst (dict): information element to add to the data store.
+    """
+    state = "\n | Monitoring"
+    for key, value in lst.items():
+        state += f"| {key}: {str(value)} "
+    logger.debug(state)
+    if isinstance(data, simpy.Store):
+        data.put(lst)
 
 
 class DelayPhase:
@@ -117,15 +134,20 @@ class ComputePhase:
 
 class IOPhase:
     """Defining an application I/O phase which consists on processing dominantly inputs/outputs during the application runtime.
-
+    Variables:
+        current_ios: list of IOPhase instances that are in running state so it is possible to update IOs following a change in bandwidth consumption.
     Attributes:
         cores: number of compute units involved or consumed during the operation.
         operation: specify if it is "read" operation (input data) or "write" operation (output data).
         volume: volume in bytes of the data to be operated during the phase.
         pattern: describes the pattern encoding with 1 if pure sequential, 0 if pure random, and a float in between.
+        last_event: float to keep the timestamp of the last I/O event.
+        next_event: float to keep the timestamp of the next I/O event.
         data: data store object where application records are kept.
         appname: a user specified application name the phase belongs to.
     """
+    #
+    current_ios = []
 
     def __init__(self, cores=1, operation='read', volume=1e9, pattern=1, data=None, appname=None):
         """Inits an instance of I/O phase."""
@@ -134,7 +156,8 @@ class IOPhase:
         assert self.operation in ['read', 'write']
         self.volume = volume
         self.pattern = pattern
-        self.bandwidth_usage = 1
+        self.last_event = 0
+        self.next_event = 0
         self.data = data or None
         self.appname = appname or ''
         # logger.info(self.__str__())
@@ -150,6 +173,59 @@ class IOPhase:
         description += (f"{self.operation.capitalize()} I/O Phase of volume {convert_size(self.volume)} with pattern: {io_pattern}\n")
         return description
 
+    def register_step(self, t_start, step_duration, available_bandwidth, cluster, tier):
+        """Registering a processing step in the data store with some logging.
+
+        Args:
+            t_start (float): timestamp of the start of the step.
+            step_duration (float): duration of the step.
+            available_bandwidth (float): available bandwidth in the step.
+            cluster (Cluster): the cluster on which the phase will run.
+            tier (Tier): the tier on which the step will run.
+        """
+        monitoring_info = {"app": self.appname, "type": self.operation,
+                           "cpu_usage": self.cores,
+                           "t_start": t_start, "t_end": t_start + step_duration,
+                           "bandwidth_concurrency": tier.bandwidth.count,
+                           "bandwidth": available_bandwidth/1e6,
+                           "phase_duration": step_duration,
+                           "volume": step_duration * available_bandwidth,
+                           "tiers": [tier.name for tier in cluster.tiers],
+                           "data_placement": {"placement": tier.name},
+                           "tier_level": {tier.name: tier.capacity.level for tier in cluster.tiers}}
+        # update info if using a burst buffer
+        if cluster.ephemeral_tier:
+            monitoring_info[cluster.ephemeral_tier.name + "_level"] = cluster.ephemeral_tier.capacity.level
+        monitor_step(self.data, monitoring_info)
+
+    def process_volume(self, step_duration, volume, available_bandwidth, cluster, tier):
+        """This method processes a small amount of I/O volume between two predictable events. If an event occurs in the meantime, I/O will be interrupted and bandwidth updated according.
+
+        Args:
+            step_duration (float): the expected duration between two predictible events.
+            volume (float): volume in bytes of the data to process.
+            cluster (Cluster): cluster facility where the I/O operation should take place.
+            available_bandwidth (float): available bandwidth in the step.
+            tier (Tier): storage tier concerned by the I/O operation. It could be reading from this tier or writing to it.
+        """
+        try:
+            t_start = self.env.now
+            yield self.env.timeout(step_duration)
+            self.last_event += step_duration
+            volume -= step_duration * available_bandwidth
+            self.update_tier(tier, step_duration * available_bandwidth)
+            self.register_step(t_start, step_duration, available_bandwidth, cluster, tier)
+
+        except simpy.exceptions.Interrupt as interrupt:
+            logger.info('interrupt')
+            t_end = self.env.now
+            step_duration = t_end - start
+            volume -= step_duration * available_bandwidth
+            self.update_tier(tier, step_duration * available_bandwidth)
+            self.register_step(t_start, step_duration, available_bandwidth, cluster, tier)
+
+        return volume
+
     def update_tier(self, tier, volume):
         """Update tier level with the algebric value of volume.
 
@@ -157,112 +233,96 @@ class IOPhase:
             tier (Tier): tier for which the level will be updated.
             volume (float): volume value (positive or negative) to adjust tier level.
         """
-        # assert isinstance(tier, Tier)
+        assert isinstance(tier, Tier)
         # reading operation suppose at least some volume in the tier
         if self.operation == "read" and tier.capacity.level < self.volume:
-            yield tier.capacity.put(self.volume - tier.capacity.level)
-        if self.operation == "write":
-            if volume > 0:
-                yield tier.capacity.put(volume)
-            elif volume < 0:
-                yield tier.capacity.get(abs(volume))
+            tier.capacity.put(self.volume - tier.capacity.level)
+        if self.operation == "write" and volume > 0:
+            tier.capacity.put(volume)
+        elif volume < 0:
+            tier.capacity.get(abs(volume))
 
-    def run_step(self, last_event, next_event, time_to_complete):
-        if 0 < next_event - last_event < time_to_complete:
-            step_duration = next_event - last_event
-        else:
-            step_duration = time_to_complete
-        # return step_duration
-        # yield self.env.timeout(step_duration)
-        return step_duration
+    def run_step(self, env, cluster, tier):
+        """Allows to run a step of I/O operation where bandwidth share is constant.
+
+        Args:
+            env (simpy.Environment()): environment variable where the I/O operation will take place.
+            cluster (Cluster): the cluster on which the application will run.
+            tier (Tier): the storage tier where the I/O will be processed.
+
+        Returns:
+            bool: True if the step is completed, False otherwise.
+
+        Yields:
+            simpy.Event: other events that can occur during the I/O operation.
+        """
+        volume = self.volume
+        self.env = env
+        # retry IO until its volume is consumed
+        while volume > 0:
+            with tier.bandwidth.request() as req:
+                yield req
+                max_bandwidth = cluster.get_max_bandwidth(tier, operation=self.operation, pattern=self.pattern)
+                available_bandwidth = max_bandwidth/tier.bandwidth.count
+                self.next_event = self.env.peek()
+                # take the smallest step, step_duration must be > 0
+                if 0 < self.next_event - self.last_event < volume/available_bandwidth:
+                    step_duration = self.next_event - self.last_event
+                else:
+                    step_duration = volume/available_bandwidth
+                step_event = self.env.process(self.process_volume(step_duration, volume, available_bandwidth, cluster, tier))
+                # register the step event to be able to update it
+                IOPhase.current_ios.append(step_event)
+                # process the step volume
+                volume = yield step_event
+
+        return True
 
     def run(self, env, cluster, placement, use_bb=False, delay=0):
+        self.env = env
+        if delay:
+            yield self.env.timeout(delay)
         # get the tier where the I/O will be performed
         tier = get_tier(cluster, placement, use_bb=use_bb)
         if isinstance(tier, EphemeralTier):
             # if target is ephemeral, buffer the I/O in tier
-            ret = yield env.process(self.run_stage(env, cluster, tier, delay=delay))
+            ret = yield self.env.process(self.run_step(self.env, cluster, tier))
             if ret is True:
                 # if I/O is successful, destage on persistent tier
-                ret2 = yield env.process(self.run_stage(env, cluster, tier.persistent_tier, delay=delay))
+                ret2 = yield self.env.process(self.run_step(self.env, cluster, tier.persistent_tier))
                 return ret2
         else:
-            ret = yield env.process(self.run_stage(env, cluster, tier, delay=delay))
+            ret = yield env.process(self.run_step(env, cluster, tier))
             return ret
 
-    def run_stage(self, env, cluster, tier, delay=0):
-        # TODO : known bug when async IO reproduced in test_many_concurrent_phases_with_delay
 
-        # get the max bandwidth available in the tier
-        # TODO make a method maybe in cluster class?
-        max_bandwidth = (tier.max_bandwidth[self.operation]['seq'] * self.pattern +
-                         tier.max_bandwidth[self.operation]['rand'] * (1-self.pattern)) * self.cores*1e6
-        # TODO, if switches are upper borne, we need to adjust the max_bandwidth
-        # max_bandwidth = max(max_bandwidth, switch_bandwidth)
-        # contention model : share equally available bandwidth
-        volume = self.volume
-        self.env = env
-        #last_event = 0
-        self.env.last_event = 0
-        # TODO : monitor bandwidth.count?
-        if delay:
-            yield self.env.timeout(delay)
-        # retry IO until its volume is consumed
-        # next_event = last_event  # self.env.peek()
-        self.env.next_event = self.env.last_event
-        end_event = self.env.event()
-        while volume > 0:
-            with tier.bandwidth.request() as req:
-                yield req
-                self.bandwidth_usage = tier.bandwidth.count
-                # Available bandiwidth should be f(max_bandwidth, count)
-                available_bandwidth = max_bandwidth/self.bandwidth_usage
-                #next_event = self.env.peek()
-                self.env.next_event = min(self.env.peek(), self.env.next_event) if self.env.next_event > 0 else self.env.peek()
+class BandwidthResource(simpy.Resource):
+    """Subclassing simpy Resource to introduce the ability to check_bandwidth when resource is requested or released."""
 
-                # print(f"{self.appname}(start) | last_event = {self.env.last_event} | next_event = {self.env.next_event} | peek event = {self.env.peek()}")
-                # take the smallest step, step_duration must be > 0
-                # print(f"at {self.env.now} | last_event = {last_event} | next_event {next_event} | peek={self.env.peek()} | conc={tier.bandwidth.count}")
-                #step_duration = self.run_step(last_event, next_event, volume/available_bandwidth)
-                step_duration = self.run_step(self.env.last_event, self.env.next_event, volume/available_bandwidth)
+    def __init__(self, *args, **kwargs):
+        """Init method using parent init method."""
+        super().__init__(*args, **kwargs)
+        self.env = args[0]
 
-                step_event = self.env.timeout(step_duration)
-                self.env.next_event = min(self.env.peek(), self.env.next_event) if self.env.next_event > 0 else self.env.peek()
-                # print(f"{self.appname}(mid, step_duration={step_duration}) | last_event = {self.env.last_event} | next_event = {self.env.next_event} | peek event = {self.env.peek()}")
-                # print(f"{self.appname}(mid, step_duration={step_duration}) | last_event = {last_event} | next_event = {next_event} | peek event = {self.env.peek()}")
-                t_start = self.env.now
-                self.env.last_event = t_start
-                yield step_event
-                t_end = self.env.now
-                #last_event = t_end
-                self.env.last_event = t_end
+    def request(self, *args, **kwargs):
+        """On request method, cehck_bandwidth using parent request method."""
+        self.check_bandwidth()
+        return super().request(*args, **kwargs)
 
-                yield self.env.process(self.update_tier(tier, step_duration * available_bandwidth))
-                volume -= step_duration * available_bandwidth
-                monitoring_info = {"app": self.appname, "type": self.operation,
-                                   "cpu_usage": self.cores,
-                                   "t_start": t_start, "t_end": t_end,
-                                   "bandwidth_concurrency": self.bandwidth_usage,
-                                   "bandwidth": available_bandwidth/1e6, "phase_duration": t_end-t_start,
-                                   "volume": step_duration * available_bandwidth,
-                                   "tiers": [tier.name for tier in cluster.tiers],
-                                   "data_placement": {"placement": tier.name},
-                                   "tier_level": {tier.name: tier.capacity.level for tier in cluster.tiers}}
-                # print(f"{self.appname}(end, step_duration={step_duration}) | last_event = {self.env.last_event} | next_event = {self.env.next_event} | peek event = {self.env.peek()}")
-                # print(f"{self.appname}(end, step_duration={step_duration}) | last_event = {last_event} | next_event = {next_event} | peek event = {self.env.peek()}")
-                # # when cluster include bb tier
-                if cluster.ephemeral_tier:
-                    monitoring_info.update({cluster.ephemeral_tier.name + "_level": cluster.ephemeral_tier.capacity.level})
-                monitor_step(self.data, monitoring_info)
+    def release(self, *args, **kwargs):
+        """On release method, check_bandwidth using parent release method."""
+        self.check_bandwidth()
+        return super().release(*args, **kwargs)
 
-                # if volume <= 0:
-                #     end_event.succeed()
-                #     print("Event finished")
-                #     next_event = self.env.peek()
-                # print(f"at {self.env.now} | last_event = {last_event} | next_event {next_event} | peek={self.env.peek()} | conc={tier.bandwidth.count} | step_duration = {self.run_step(last_event, next_event, volume/availble_bandwidth)}")
-                # next_event = self.env.peek()
-                # last_event += step_duration
-        return True
+    def check_bandwidth(self):
+        """Checks running IO when bandwidth occupation changes. IOs should be interrupted on release or request of a bandwidth slot.
+        """
+        for io_event in IOPhase.current_ios:
+            if not io_event.processed and io_event.triggered and io_event.is_alive:
+                # capture the IOs not finished, but triggered and alive
+                print(io_event.is_alive)
+                print(io_event.value)
+                io_event.interrupt('updating bandwidth')
 
 
 if __name__ == '__main__':
