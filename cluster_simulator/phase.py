@@ -285,9 +285,6 @@ class IOPhase:
                 logger.trace(f"appname: {self.appname}, now : {self.env.now} | last event: {self.last_event} | next event: {self.next_event}"
                              f" | full duration: {volume/available_bandwidth} | step duration: {step_duration}")
                 step_event = self.env.process(self.process_volume(step_duration, volume, available_bandwidth, cluster, tier))
-                #self.last_event += step_duration
-                #self.last_event = self.env.now
-                #self.next_event += step_duration
                 # register the step event to be able to update it
                 IOPhase.current_ios.append(step_event)
                 # process the step volume
