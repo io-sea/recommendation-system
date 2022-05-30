@@ -5,7 +5,7 @@ import simpy
 
 from cluster_simulator.cluster import Cluster, Tier, bandwidth_share_model, compute_share_model, get_tier, convert_size
 from cluster_simulator.phase import DelayPhase, ComputePhase, IOPhase
-from cluster_simulator.application import Application, process_io
+from cluster_simulator.application import Application
 from analytics import display_run
 
 
@@ -46,7 +46,7 @@ class TestAppInit(unittest.TestCase):
                           read=read,
                           write=write)
 
-        self.env.process(app.run(cluster, tiers=tiers))
+        self.env.process(app.run(cluster, placement=tiers))
         self.env.run()
         # self.env.run(until=25)
         # self.assertEqual(len(app.store.items), 3)
@@ -63,7 +63,7 @@ class TestAppInit(unittest.TestCase):
                           read=read,
                           write=write)
 
-        self.env.process(app.run(cluster, tiers=tiers))
+        self.env.process(app.run(cluster, placement=tiers))
         self.env.run()
         self.assertIsNone(app.get_fitness())
 
@@ -81,7 +81,7 @@ class TestAppInit(unittest.TestCase):
                           read=read,
                           write=write,
                           data=data)
-        self.env.process(app.run(cluster, tiers=tiers))
+        self.env.process(app.run(cluster, placement=tiers))
         self.env.run()
         self.assertAlmostEqual(app.get_fitness(), 24, places=0)
 
@@ -100,7 +100,7 @@ class TestAppInit(unittest.TestCase):
                           read=read,
                           write=write,
                           data=data)
-        self.env.process(app.run(cluster, tiers=tiers))
+        self.env.process(app.run(cluster, placement=tiers))
         self.env.run()
         self.assertAlmostEqual(app.get_fitness(app_name_filter="appname"), 24, places=0)
         self.assertEqual(app.get_fitness(app_name_filter="app_name"), 0)
@@ -123,7 +123,7 @@ class TestBasicApps(unittest.TestCase):
                           tiers=[self.ssd_tier, self.nvram_tier])
         app1 = Application(self.env, compute=[0, 10],
                            read=[1e9, 0], write=[0, 5e9], data=data)
-        self.env.process(app1.run(cluster, tiers=[0, 0]))
+        self.env.process(app1.run(cluster, placement=[0, 0]))
         self.env.run()
         for item in data.items:
             print(item)
@@ -134,11 +134,11 @@ class TestBasicApps(unittest.TestCase):
                           tiers=[self.ssd_tier, self.nvram_tier])
         app1 = Application(self.env, compute=[0, 10],
                            read=[1e9, 0], write=[0, 5e9], data=data)
-        self.env.process(app1.run(cluster, tiers=[0, 0]))
+        self.env.process(app1.run(cluster, placement=[0, 0]))
         self.env.run()
         print(app1.get_fitness())
         print(data.items)
-        self.env.process(app1.run(cluster, tiers=[1, 1]))
+        self.env.process(app1.run(cluster, placement=[1, 1]))
         self.env.run()
         print(app1.get_fitness())
         print(data.items)
@@ -151,7 +151,7 @@ class TestBasicApps(unittest.TestCase):
         app1 = Application(self.env, compute=[0],
                            read=[read_size], write=[0], data=data)
 
-        self.env.process(app1.run(cluster, tiers=[0]))
+        self.env.process(app1.run(cluster, placement=[0]))
         self.env.run()
         self.assertEqual(len(data.items), 1)
         tier_name = data.items[0]["data_placement"]["placement"]
@@ -164,7 +164,7 @@ class TestBasicApps(unittest.TestCase):
                           tiers=[self.ssd_tier, self.nvram_tier])
         app1 = Application(self.env, compute=[0],
                            read=[0], write=[write_size], data=data)
-        self.env.process(app1.run(cluster, tiers=[0]))
+        self.env.process(app1.run(cluster, placement=[0]))
         self.env.run()
         self.assertEqual(len(data.items), 1)
         tier_name = data.items[0]["data_placement"]["placement"]
@@ -177,7 +177,7 @@ class TestBasicApps(unittest.TestCase):
                           tiers=[self.ssd_tier, self.nvram_tier])
         app1 = Application(self.env, compute=[0, 10],
                            read=[0, 0], write=[0, 0], data=data, delay=5)
-        self.env.process(app1.run(cluster, tiers=[0]))
+        self.env.process(app1.run(cluster, placement=[0]))
         self.env.run()
         for item in data.items:
             print(item)
@@ -204,8 +204,8 @@ class TestPhaseSuperposition(unittest.TestCase):
                            read=[0, 0], write=[0, 0], data=data)
         app2 = Application(self.env, compute=[0, 15],
                            read=[0, 0], write=[0, 0], data=data)
-        self.env.process(app1.run(cluster, tiers=[0, 0]))
-        self.env.process(app2.run(cluster, tiers=[0, 0]))
+        self.env.process(app1.run(cluster, placement=[0, 0]))
+        self.env.process(app2.run(cluster, placement=[0, 0]))
         self.env.run()
         timespan = 0.0
         for item in data.items:
@@ -224,8 +224,8 @@ class TestPhaseSuperposition(unittest.TestCase):
                            read=[0, 0], write=[0, 0], data=data)
         app2 = Application(self.env, compute=[0, 1],
                            read=[0, 0], write=[0, 0], data=data)
-        self.env.process(app1.run(cluster, tiers=[0, 0]))
-        self.env.process(app2.run(cluster, tiers=[0, 0]))
+        self.env.process(app1.run(cluster, placement=[0, 0]))
+        self.env.process(app2.run(cluster, placement=[0, 0]))
         self.env.run()
         timespan = 0.0
         for item in data.items:
@@ -242,8 +242,8 @@ class TestPhaseSuperposition(unittest.TestCase):
                            read=[1e9], write=[0], data=data)
         app2 = Application(self.env, compute=[0],
                            read=[2e9], write=[0], data=data)
-        self.env.process(app1.run(cluster, tiers=[0, 0]))
-        self.env.process(app2.run(cluster, tiers=[0, 0]))
+        self.env.process(app1.run(cluster, placement=[0, 0]))
+        self.env.process(app2.run(cluster, placement=[0, 0]))
         self.env.run()
         self.assertEqual(data.items[0]["t_end"], data.items[1]["t_start"])
 
@@ -257,11 +257,11 @@ class TestPhaseSuperposition(unittest.TestCase):
                            read=[1e9], write=[0], data=data)
         app2 = Application(self.env, name="#2", compute=[0, 1],
                            read=[0, 0], write=[0, 2e9], data=data)
-        self.env.process(app1.run(cluster, tiers=[0, 0]))
-        self.env.process(app2.run(cluster, tiers=[0, 0]))
+        self.env.process(app1.run(cluster, placement=[0, 0]))
+        self.env.process(app2.run(cluster, placement=[0, 0]))
         self.env.run()
-        fig = display_run(data, cluster, width=800, height=900)
-        fig.show()
+        # fig = display_run(data, cluster, width=800, height=900)
+        # fig.show()
         self.assertEqual(data.items[0]["t_start"], data.items[1]["t_start"])
 
     def test_2_IO_parallel_1(self):
@@ -274,8 +274,8 @@ class TestPhaseSuperposition(unittest.TestCase):
                            read=[1e9, 0], write=[0, 0], data=data)
         app2 = Application(self.env, name="#comp1s->write2G", compute=[0, 1],
                            read=[0, 0], write=[0, 2e9], data=data)
-        self.env.process(app2.run(cluster, tiers=[0, 0]))
-        self.env.process(app1.run(cluster, tiers=[0, 0]))
+        self.env.process(app2.run(cluster, placement=[0, 0]))
+        self.env.process(app1.run(cluster, placement=[0, 0]))
 
         self.env.run()
         fig = display_run(data, cluster, width=800, height=900)
@@ -293,8 +293,8 @@ class TestPhaseSuperposition(unittest.TestCase):
         app2 = Application(self.env, name="read1G->comp10s", compute=[0, 10], read=[1e9, 0],
                            write=[0, 0], data=data)
 
-        self.env.process(app1.run(cluster, tiers=[1, 1]))
-        self.env.process(app2.run(cluster, tiers=[1, 1]))
+        self.env.process(app1.run(cluster, placement=[1, 1]))
+        self.env.process(app2.run(cluster, placement=[1, 1]))
         self.env.run()
         #self.assertEqual(data.items[0]["t_start"], data.items[1]["t_start"])
         fig = display_run(data, cluster, width=800, height=900)
@@ -310,13 +310,6 @@ class TestProcessIOFunction(unittest.TestCase):
                          'write': {'seq': 100, 'rand': 100}}
         self.ssd_tier = Tier(self.env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
         self.nvram_tier = Tier(self.env, 'NVRAM', bandwidth=nvram_bandwidth, capacity=80e9)
-
-    def test_process_io(self):
-        """Test process_io routine that might be shared as a standard function to process I/O from apps."""
-        ios = [process_io(self.env, name=f"app#{i}", tier=self.nvram_tier, volume=(i+1)*1e9, delay=i) for i in range(2)]
-        for io in ios:
-            self.env.process(io)
-        self.env.run()
 
 
 if __name__ == '__main__':

@@ -4,55 +4,47 @@ from loguru import logger
 
 
 class MonitorResource(simpy.Resource):
+    """Subclassing simpy Resource to introduce the ability to check_bandwidth when resource is requested or released."""
+
     def __init__(self, *args, **kwargs):
+        """Init method using parent init method."""
         super().__init__(*args, **kwargs)
         self.env = args[0]
 
-        #self.data = []
-
     def request(self, *args, **kwargs):
-        check_bandwidth(self.env, self)
-        ret = super().request(*args, **kwargs)
-
-        # logger.info(f"[req]Currently used resources at {self.env.now}: {self.count} out of {self.capacity}")
-        #self.data.append((self._env.now, self.count))
-        return ret
+        """On request method, cehck_bandwidth using parent request method."""
+        self.check_bandwidth()
+        return super().request(*args, **kwargs)
 
     def release(self, *args, **kwargs):
-        check_bandwidth(self.env, self)
-        ret = super().release(*args, **kwargs)
-        # logger.info(f"[release]Currently used resources at {self.env.now}: {self.count} out of {self.capacity}")
-        # for user in self.users:
-        #     logger.info(f"User: {user} using resource since {user.usage_since}")
-        #self.data.append((self._env.now, self.count))
+        """On release method, cehck_bandwidth using parent release method."""
+        self.check_bandwidth()
+        return super().release(*args, **kwargs)
 
-        return ret
-
-
-def check_bandwidth(env, bandwidth):
-    """Checks running IO when bandwidth occupation changes. IOs should be interrupted on release or request of a bandwidth slot.
-    """
-    for io_event in IO.current_ios:
-        if not io_event.processed and io_event.triggered and io_event.is_alive:
-            # capture the IOs not finished, but triggered and alive
-            print(io_event.is_alive)
-            print(io_event.value)
-            io_event.interrupt('updating bandwidth')
+    def check_bandwidth(self):
+        """Checks running IO when bandwidth occupation changes. IOs should be interrupted on release or request of a bandwidth slot.
+        """
+        for io_event in IO.current_ios:
+            if not io_event.processed and io_event.triggered and io_event.is_alive:
+                # capture the IOs not finished, but triggered and alive
+                print(io_event.is_alive)
+                print(io_event.value)
+                logger.info("interrupt")
+                io_event.interrupt('updating bandwidth')
 
 
 class IO:
+    """Class I/O that manages the IO properties and processing."""
     current_ios = []
 
     def __init__(self, env, name, volume, bandwidth, delay=0):
         self.env = env
         self.name = name
         self.volume = volume
-        self.bandwidth = bandwidth
+        self.bandwidth = bandwidth  # a monitored resource
         self.delay = delay
-        self.b_usage = {}
         self.last_event = 0
         self.next_event = 0
-
         self.process = env.process(self.run())
 
     def process_volume(self, step_duration, volume):
@@ -88,7 +80,7 @@ class IO:
         while volume > 0:
             with self.bandwidth.request() as req:
                 yield req
-                self.b_usage[self.env.now] = round(100/self.bandwidth.count, 2)
+
                 # try exhausting IO volume
                 # update bandwidth usage
                 #available_bandwidth = 1/(self.bandwidth.count+len(self.bandwidth.queue))
@@ -117,9 +109,10 @@ if __name__ == '__main__':
     bandwidth = MonitorResource(env, capacity=10)
     # IOs = [IO(env, name=str(i+1), volume=2-i,
     #           bandwidth=bandwidth, delay=i*0) for i in range(2)]
+    # IOs = [IO(env, name=str(i+1), volume=1+i,
+    #           bandwidth=bandwidth, delay=i*0) for i in range(2)]
+    # io1 = IO(env, name="#1", volume=2e9, bandwidth=bandwidth, delay=0)
+    # io2 = IO(env, name="#2", volume=2e9, bandwidth=bandwidth, delay=1.5)
     IOs = [IO(env, name=str(i+1), volume=1+i,
-              bandwidth=bandwidth, delay=i*0) for i in range(2)]
-
+              bandwidth=bandwidth, delay=i*0.5) for i in range(2)]
     env.run()
-    for io in IOs:
-        print(f"app: {io.name} | initial_volume: {io.volume} | bandwidth usage: {io.b_usage}")
