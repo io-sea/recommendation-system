@@ -15,9 +15,7 @@ import simpy
 from loguru import logger
 import numpy as np
 import math
-#from monitor import MonitorResource
 from cluster_simulator.utils import convert_size, BandwidthResource
-#from cluster_simulator.phase import BandwidthResource
 
 
 def convert_size(size_bytes):

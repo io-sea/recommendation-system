@@ -124,8 +124,6 @@ class TestBandwidthShare(unittest.TestCase):
         tier = get_tier(cluster, placement)
         self.assertAlmostEqual(tier.max_bandwidth["read"]["seq"]/2,
                                self.data.items[0]["bandwidth"])
-        fig = display_run(self.data, cluster, width=800, height=900)
-        fig.show()
 
     def test_2_shifted_read_phases(self):
         """Test 2 read phases simultaneously on the same tier, and ensure that bandwidth is /2."""
@@ -137,8 +135,9 @@ class TestBandwidthShare(unittest.TestCase):
         self.env.process(read_io_2.run(self.env, cluster, placement=placement, delay=2))  # shifted
         self.env.run()
         tier = get_tier(cluster, placement)
-        fig = display_run(self.data, cluster, width=800, height=900)
-        fig.show()
+        concurrency = [item["bandwidth_concurrency"] for item in self.data.items]
+        self.assertListEqual(concurrency, [1, 2, 2, 1])
+        self.assertAlmostEqual(tier.capacity.level, max(2e9, 3e9))
 
     def test_3_shifted_read_phases(self):
         """Test 2 read phases simultaneously on the same tier, and ensure that bandwidth is /2."""
@@ -152,8 +151,11 @@ class TestBandwidthShare(unittest.TestCase):
         self.env.process(read_io_3.run(self.env, cluster, placement=placement, delay=3))  # shifted
         self.env.run()
         tier = get_tier(cluster, placement)
-        fig = display_run(self.data, cluster, width=800, height=900)
-        fig.show()
+        # fig = display_run(self.data, cluster, width=800, height=900)
+        # fig.show()
+        concurrency = [item["bandwidth_concurrency"] for item in self.data.items]
+        self.assertListEqual(concurrency, [1, 2, 2, 3, 3, 3, 3, 3, 3, 2, 2, 2, 2, 1])
+        self.assertAlmostEqual(tier.capacity.level, max(2e9, 2e9))
 
     def test_2_shifted_write_phases(self):
         """Test 2 read phases simultaneously on the same tier, and ensure that bandwidth is /2."""
@@ -165,20 +167,43 @@ class TestBandwidthShare(unittest.TestCase):
         self.env.process(write_io_2.run(self.env, cluster, placement=placement, delay=1))  # shifted
         self.env.run()
         tier = get_tier(cluster, placement)
-        fig = display_run(self.data, cluster, width=800, height=900)
-        fig.show()
+        concurrency = [item["bandwidth_concurrency"] for item in self.data.items]
+        self.assertListEqual(concurrency, [1, 2, 2, 1])
+        self.assertAlmostEqual(tier.capacity.level, 4e9)
 
-    def test_many_shifted_write_phases(self):
+    def test_3_shifted_write_phases(self):
         """Test 2 read phases simultaneously on the same tier, and ensure that bandwidth is /2."""
-        cluster = Cluster(self.env, cores_per_node=6, tiers=[self.ssd_tier, self.nvram_tier])
-        write_ios = [IOPhase(appname=f"#{i+1}", operation='write', volume=(i+1)*1e9, data=self.data) for i in range(3)]
+        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
+        read_io_1 = IOPhase(appname="#1", operation='write', volume=2e9, data=self.data)
+        read_io_2 = IOPhase(appname="#2", operation='write', volume=2e9, data=self.data)
+        read_io_3 = IOPhase(appname="#3", operation='write', volume=2e9, data=self.data)
         placement = 1  # place data in the same tier
-        for i, io in enumerate(write_ios):
-            self.env.process(io.run(self.env, cluster, placement=placement, delay=1*i))
+        self.env.process(read_io_1.run(self.env, cluster, placement=placement))  # nvram 200-100
+        self.env.process(read_io_2.run(self.env, cluster, placement=placement, delay=1))  # shifted
+        self.env.process(read_io_3.run(self.env, cluster, placement=placement, delay=3))  # shifted
         self.env.run()
+        tier = get_tier(cluster, placement)
+        concurrency = [item["bandwidth_concurrency"] for item in self.data.items]
+        self.assertListEqual(concurrency, [1, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 2, 1])
+        self.assertAlmostEqual(tier.capacity.level, 6e9, places=5)
 
-        fig = display_run(self.data, cluster, width=800, height=900)
-        fig.show()
+    def test_3_shifted_write_phases_diff_placement(self):
+        """Test 2 read phases simultaneously on the same tier, and ensure that bandwidth is /2."""
+        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
+        read_io_1 = IOPhase(appname="#1", operation='write', volume=2e9, data=self.data)
+        read_io_2 = IOPhase(appname="#2", operation='write', volume=2e9, data=self.data)
+        read_io_3 = IOPhase(appname="#3", operation='write', volume=2e9, data=self.data)
+
+        self.env.process(read_io_1.run(self.env, cluster, placement=1))  # nvram 200-100
+        self.env.process(read_io_2.run(self.env, cluster, placement=1, delay=1))  # shifted
+        self.env.process(read_io_3.run(self.env, cluster, placement=0, delay=3))  # shifted
+        self.env.run()
+        tier1 = get_tier(cluster, 1)
+        tier0 = get_tier(cluster, 0)
+        concurrency = [item["bandwidth_concurrency"] for item in self.data.items]
+        self.assertListEqual(concurrency, [1, 2, 2, 2, 2, 1, 1, 1, 1])
+        self.assertAlmostEqual(tier1.capacity.level, 4e9, places=5)
+        self.assertAlmostEqual(tier0.capacity.level, 2e9, places=5)
 
     def test_2_decimal_shifted_read_phases(self):
         """Test 2 read phases simultaneously on the same tier, and ensure that bandwidth is /2."""
@@ -190,6 +215,9 @@ class TestBandwidthShare(unittest.TestCase):
         self.env.process(read_io_2.run(self.env, cluster, placement=placement, delay=1.2))  # shifted
         self.env.run()
         tier = get_tier(cluster, placement)
+        concurrency = [item["bandwidth_concurrency"] for item in self.data.items]
+        self.assertListEqual(concurrency, [1, 2, 2, 2, 2, 1])
+        self.assertAlmostEqual(tier.capacity.level, 2e9, places=5)
 
     def test_2_read_phases_2_placements(self):
         """Test 2 read phases simultaneously on different tiers, and ensure that bandwidth is not /2."""
@@ -202,17 +230,18 @@ class TestBandwidthShare(unittest.TestCase):
         self.assertEqual({item["bandwidth"] for item in self.data.items}, {200, 800})
 
     def test_many_concurrent_read_phases(self):
+        """Test the max number of bandiwdth concurrency is equal to the number of completely overlapping apps"""
         cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
         number_of_apps = 3
         read_ios = [IOPhase(operation='read', volume=1e9, data=self.data) for _ in range(number_of_apps)]
         for i, io in enumerate(read_ios):
             self.env.process(io.run(self.env, cluster, placement=1, delay=i*0))  # nvram 800
-
         self.env.run()
         conc = [item["bandwidth_concurrency"] for item in self.data.items]
         self.assertEqual(max(conc), number_of_apps)
 
     def test_many_concurrent_phases_with_delay(self):
+        """Test the max number of bandiwdth concurrency is equal to the number of partially overlapping apps"""
         cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
         number_of_apps = 2
         read_ios = [IOPhase(appname=f"#{str(i)}", operation='read', volume=1e9, data=self.data) for i in range(number_of_apps)]
@@ -223,7 +252,8 @@ class TestBandwidthShare(unittest.TestCase):
         conc = [item["bandwidth_concurrency"] for item in self.data.items]
         self.assertEqual(max(conc), number_of_apps)
 
-    def test_many_concurrent_phases(self):
+    def test_mix_read_write_concurrent_phases(self):
+        """Tests concurrency with mix of read an write phases"""
         cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
         read_io = IOPhase(appname="#1", operation='read', volume=1e9, data=self.data)
         write_io = IOPhase(appname="#2", operation='write', volume=1e9, data=self.data)
@@ -233,6 +263,7 @@ class TestBandwidthShare(unittest.TestCase):
         self.env.run()
         conc = [item["bandwidth_concurrency"] for item in self.data.items]
         self.assertEqual(max(conc), 2)
+        self.assertListEqual(conc, [1, 2, 2, 1])
 
 
 class TestDataMovement(unittest.TestCase):
@@ -264,7 +295,7 @@ class TestPhaseEphemeralTier(unittest.TestCase):
         self.nvram_tier = Tier(self.env, 'NVRAM', bandwidth=self.nvram_bandwidth, capacity=10e9)
 
     def test_process_volume_use_bb(self):
-        """Test running process volume phase on ephemeral tier."""
+        """Test running process volume phase on ephemeral tier and checks buffer level."""
         data = simpy.Store(self.env)
         bb = EphemeralTier(self.env, name="BB", persistent_tier=self.hdd_tier,
                            bandwidth=self.nvram_bandwidth, capacity=10e9)
@@ -274,15 +305,15 @@ class TestPhaseEphemeralTier(unittest.TestCase):
         write_io.env = self.env
         ret = self.env.process(write_io.process_volume(step_duration=1,
                                                        volume=1e9,
-                                                       available_bandwidth=500,
+                                                       available_bandwidth=500e6,
                                                        cluster=cluster, tier=bb))
         self.env.run()
-        self.assertEqual(data.items[0]["volume"], 500)
-        self.assertEqual(bb.capacity.level, 500)
-        self.assertEqual(ret.value, 1e9 - 500)
+        self.assertEqual(data.items[0]["volume"], 500e6)
+        self.assertEqual(bb.capacity.level, 500e6)
+        self.assertEqual(ret.value, 1e9 - 500e6)
 
     def test_phase_use_bb(self):
-        """Test running simple write phase on ephemeral tier."""
+        """Test running complete write phase on ephemeral tier and checks destaging buffered data on persistent tier."""
         # define an IO phase
         write_io = IOPhase(operation='write', volume=1e9, data=self.data)
         # define burst buffer with its backend PFS
@@ -293,10 +324,13 @@ class TestPhaseEphemeralTier(unittest.TestCase):
         # run the phase on the tier with placement = bb
         self.env.process(write_io.run(self.env, cluster, placement=0, use_bb=True))  # nvram 200-100
         self.env.run()
+        self.assertEqual(self.data.items[0]["volume"], 1e9)
+        self.assertEqual(self.data.items[-1]["volume"], 1e9)
         self.assertEqual(bb.capacity.level, 1e9)
+        self.assertEqual(bb.persistent_tier.capacity.level, 1e9)
 
     def test_phase_use_bb_false(self):
-        """Test running simple write phase on ephemeral tier."""
+        """Test running simple write phase on ephemeral tier with False option and checks if it runs without buffering."""
         # define an IO phase
         write_io = IOPhase(operation='write', volume=1e9, data=self.data)
         # define burst buffer with its backend PFS
@@ -313,7 +347,7 @@ class TestPhaseEphemeralTier(unittest.TestCase):
         self.assertAlmostEqual((item["BB_level"]), 0)
 
     def test_phase_use_bb_concurrency(self):
-        """Test running simple write phase on ephemeral tier."""
+        """Test two writing phases, one has burst buffer usage and the other not. The two phases are happening concurrently."""
         # define an IO phase
         write_io = IOPhase(operation='write', volume=1e9, data=self.data, appname="Buffered")
         write_io_2 = IOPhase(operation='write', volume=1e9, data=self.data, appname="Concurrent")
@@ -330,6 +364,8 @@ class TestPhaseEphemeralTier(unittest.TestCase):
         item = self.data.items[-1]
         self.assertAlmostEqual((item["tier_level"]["HDD"]), 2e9)
         self.assertAlmostEqual((item["BB_level"]), 1e9)
+        fig = display_run(self.data, cluster, width=800, height=900)
+        fig.show()
 
     def test_phase_use_bb_contention(self):
         """Test running simple write phase on ephemeral tier."""

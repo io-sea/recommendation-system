@@ -242,14 +242,10 @@ class IOPhase:
             logger.trace(f'{self.appname} interrupt at {self.env.now}')
             step_duration = self.env.now - t_start
             if step_duration:
-                #self.last_event += step_duration
+                self.last_event += step_duration
                 volume -= step_duration * available_bandwidth
                 self.update_tier(tier, step_duration * available_bandwidth)
                 self.register_step(t_start, step_duration, available_bandwidth, cluster, tier)
-            # else:
-            #     logger.info("BIG WARNING")
-            #     volume_event.succeed()
-            #     #self.last_event += min(step_duration, volume/available_bandwidth)
 
         return volume
 
@@ -309,43 +305,9 @@ class IOPhase:
             # if target is ephemeral, buffer the I/O in tier
             ret = yield self.env.process(self.run_step(self.env, cluster, tier))
             if ret is True:
-                # if I/O is successful, destage on persistent tier
+                # if I/O is successful, destage on persistent tier in sequential way
                 ret2 = yield self.env.process(self.run_step(self.env, cluster, tier.persistent_tier))
                 return ret2
         else:
             ret = yield env.process(self.run_step(env, cluster, tier))
             return ret
-
-
-# class BandwidthResource(simpy.Resource):
-#     """Subclassing simpy Resource to introduce the ability to check_bandwidth when resource is requested or released."""
-
-#     def __init__(self, *args, **kwargs):
-#         """Init method using parent init method."""
-#         super().__init__(*args, **kwargs)
-#         self.env = args[0]
-
-#     def request(self, *args, **kwargs):
-#         """On request method, cehck_bandwidth using parent request method."""
-#         self.check_bandwidth()
-#         return super().request(*args, **kwargs)
-
-#     def release(self, *args, **kwargs):
-#         """On release method, check_bandwidth using parent release method."""
-#         self.check_bandwidth()
-#         return super().release(*args, **kwargs)
-
-#     def check_bandwidth(self):
-#         """Checks running IO when bandwidth occupation changes. IOs should be interrupted on release or request of a bandwidth slot.
-#         """
-#         print("-----------------BANDWIDTH CONTROL-----------")
-#         for io_event in IOPhase.current_ios:
-#             if not io_event.processed and io_event.triggered and io_event.is_alive:
-#                 # capture the IOs not finished, but triggered and alive
-#                 print(io_event.is_alive)
-#                 print(io_event.value)
-#                 io_event.interrupt('updating bandwidth')
-
-
-if __name__ == '__main__':
-    print("coco")

@@ -43,7 +43,7 @@ def display_apps(data, width=800, height=600):
     i = 0
     for app, app_elements in groupby(items,  key=itemgetter('app')):
         # print(f"----------{app}----------")
-        #app_color = DEFAULT_COLORS[i]
+        # app_color = DEFAULT_COLORS[i]
         offset = 0
         x_app = []
         y_app = []
@@ -98,6 +98,7 @@ def display_cluster(data, cluster, width=800, height=600):
     text = []
     cpu_phase = []
     storage = dict()
+    buffer_storage = dict()
     for phase in data.items:
         # sample_item = {'app': 'B8', 'type': 'read', 'cpu_usage': 1, 't_start': 0, 't_end': 4.761904761904762, 'bandwidth': 210.0, 'phase_duration': 4.761904761904762, 'volume': 1000000000.0, 'tiers': ['SSD', 'NVRAM'], 'data_placement': {'placement': 'SSD'}, 'tier_level': {'SSD': 1000000000.0, 'NVRAM': 0}}
 
@@ -115,6 +116,7 @@ def display_cluster(data, cluster, width=800, height=600):
             storage.setdefault(tier, []).append(phase["tier_level"][tier])
             storage.setdefault(tier, []).append(phase["tier_level"][tier])
 
+    # trace CPU usage
     points, values = accumulate_intervals(x_phase, y_phase)
     fig.append_trace(go.Scatter(x=np.array(points), y=np.array(values),
                                 line_shape='hv', showlegend=False), row=1, col=1)
@@ -149,8 +151,8 @@ def display_cluster(data, cluster, width=800, height=600):
     fig.append_trace(go.Scatter(x=np.array([points[0], points[-1]]), y=np.array([cluster.compute_cores.capacity]*2), text=["Maximum available cores in cluster=" +
                                                                                                                            str(cluster.compute_cores.capacity)]*2, line_shape='hv', showlegend=False, line=dict(color='red', width=3, dash='dot')), row=1, col=1)
 
-    #fig.update_xaxes(title_text="time in s")
-    #fig.update_yaxes(title_text="Units of used cores")
+    # fig.update_xaxes(title_text="time in s")
+    # fig.update_yaxes(title_text="Units of used cores")
 
     fig.update_layout(height=height, width=width, title_text="State of the Cluster")
     return fig
@@ -163,17 +165,20 @@ def display_run(data, cluster, width=800, height=600):
     items = sorted(data.items, key=itemgetter('app'))
     # list of apps
     list_apps = [app for app, _ in groupby(items,  key=itemgetter('app'))]
+    # list Burst Buffers
+    bb_tier = [cluster.ephemeral_tier.name + " ("+convert_size(cluster.ephemeral_tier.capacity.capacity)+")"] if cluster.ephemeral_tier else []
 
-    fig = make_subplots(rows=len(apps)+len(cluster.tiers)+1, cols=1, shared_xaxes=True,
+    subplots_list = list_apps + bb_tier + [tier.name + " ("+convert_size(tier.capacity.capacity)+")" for tier in cluster.tiers] + ["CPU Cores"]
+
+    fig = make_subplots(rows=len(subplots_list), cols=1, shared_xaxes=True,
                         # vertical_spacing=0.2,
-                        subplot_titles=list_apps + ["CPU Cores"] +
-                        [tier.name + " ("+convert_size(tier.capacity.capacity)+")" for tier in cluster.tiers])
+                        subplot_titles=subplots_list)
 
-    # iterate on apps
-    i = 0
+    # iterate on apps to plot their dataflows
+    i = 1
     for app, app_elements in groupby(items,  key=itemgetter('app')):
         # print(f"----------{app}----------")
-        #app_color = DEFAULT_COLORS[i]
+        # app_color = DEFAULT_COLORS[i]
         offset = 0
 
         x_app = []
@@ -193,10 +198,10 @@ def display_run(data, cluster, width=800, height=600):
         fig.append_trace(go.Scatter(x=np.array(x_app), y=np.array(y_app),
                                     text=text,
                                     textposition="top center",
-                                    name=app, line_shape='hvh', showlegend=False), row=i+1, col=1)
-        fig['layout']['yaxis'+str(i+1)]['title'] = 'dataflow in MB/s'
-        i += 1
+                                    name=app, line_shape='hvh', showlegend=False), row=i, col=1)
+        fig['layout']['yaxis'+str(i)]['title'] = 'dataflow in MB/s'
         fig.update_xaxes(title_text="time in s")
+        i += 1
 
     x_phase = []
     y_phase = []
@@ -204,6 +209,7 @@ def display_run(data, cluster, width=800, height=600):
     capacities = dict()
     text = []
     cpu_phase = []
+    buffer_storage = dict()
     storage = dict()
     for phase in data.items:
 
@@ -215,28 +221,48 @@ def display_run(data, cluster, width=800, height=600):
 
         text.append(phase["app"] + "|" + phase["type"].capitalize() + tier_indication + " | +volume="+convert_size(phase["volume"]))
 
+        # feeding tiers level
         for tier in phase["tiers"]:
             storage.setdefault(tier, [0]).append(phase["tier_level"][tier])
-    # CPU tracing
 
-    points, values = accumulate_intervals(x_phase, y_phase)
-    fig.append_trace(go.Scatter(x=np.array(points), y=np.array(values),
-                                line_shape='hv', showlegend=False), row=1+i, col=1)
-    fig.append_trace(go.Scatter(x=np.array([points[0], points[-1]]), y=np.array([cluster.compute_cores.capacity]*2), text=["Maximum available cores in cluster=" +
-                                                                                                                           str(cluster.compute_cores.capacity)]*2, line_shape='hv', showlegend=False, line=dict(color='red', width=3, dash='dot')), row=1+i, col=1)
-    fig['layout']['yaxis'+str(i+1)]['title'] = 'CPU usage'
+        # feeding buffer level
+        if cluster.ephemeral_tier:
+            bb_tier = cluster.ephemeral_tier.name
+            buffer_storage.setdefault(bb_tier, []).append(phase[bb_tier+"_level"])
+
+    # Burst Buffer level tracing
+    for bb in buffer_storage.keys():
+        bb_capacity = cluster.ephemeral_tier.capacity.capacity
+        fig.append_trace(go.Scatter(x=np.array(x_tiers),
+                                    y=100*np.array(buffer_storage[bb])/bb_capacity,
+                                    text=text,
+                                    textposition="top center",
+                                    name=bb, line_shape='vh', showlegend=False), row=i, col=1)
+        fig['layout']['yaxis' + str(i)]['title'] = bb + ' usage in %'
+        i += 1
 
     for tier in storage.keys():
-        i += 1
         # retrieve capacities
         tier_capacity = [cluster.tiers[j].capacity.capacity for j, ctier in enumerate(cluster.tiers) if ctier.name == tier][0]
-
         fig.append_trace(go.Scatter(x=np.array(x_tiers),
                                     y=100*np.array(storage[tier])/tier_capacity,
                                     text=text,
                                     textposition="top center",
-                                    name=tier, line_shape='vh', showlegend=False), row=i+1, col=1)
-        fig['layout']['yaxis' + str(i+1)]['title'] = tier + ' usage in %'
+                                    name=tier, line_shape='vh', showlegend=False), row=i, col=1)
+        fig['layout']['yaxis' + str(i)]['title'] = tier + ' usage in %'
+
+        i += 1
+
+    # CPU tracing
+
+    points, values = accumulate_intervals(x_phase, y_phase)
+    fig.append_trace(go.Scatter(x=np.array(points), y=np.array(values),
+                                line_shape='hv', showlegend=False), row=i, col=1)
+    fig.append_trace(go.Scatter(x=np.array([points[0], points[-1]]), y=np.array([cluster.compute_cores.capacity]*2), text=["Maximum available cores in cluster=" +
+                                                                                                                           str(cluster.compute_cores.capacity)]*2, line_shape='hv', showlegend=False,
+                                line=dict(color='red', width=3, dash='dot')), row=i, col=1)
+    fig['layout']['yaxis'+str(i)]['title'] = 'CPU usage'
+    i += 1
 
     fig.update_layout(width=width, height=height, title_text="State of the Cluster")
 
@@ -273,23 +299,23 @@ for app, app_elements in groupby(items,  key=itemgetter('app')):
     print(f"----------{app}----------")
     app_color = DEFAULT_COLORS[i]
     offset = 0
-    
-    
+
+
     x_app = []
     y_app = []
     text = []
-    
+
     for phase in app_elements:
         x_app.append(phase["t_start"])
         x_app.append(phase["t_end"])
         y_app.append(phase["bandwidth"])
         y_app.append(phase["bandwidth"])
         placement = " | to/from:"+phase["data_placement"]["placement"] if phase["data_placement"] else ''
-        
+
         text.append(phase["type"].capitalize() + " | "+ str(phase["cpu_usage"])+"cores" + placement + " | volume="+convert_size(phase["volume"]))
         text.append(phase["type"].capitalize() + " | "+ str(phase["cpu_usage"])+"cores" + placement + " | volume="+convert_size(phase["volume"]))
-   
-        
+
+
     fig.append_trace(go.Scatter(x=np.array(x_app), y=np.array(y_app),
                                 text=text,
                                 textposition="top center",
@@ -300,8 +326,8 @@ for app, app_elements in groupby(items,  key=itemgetter('app')):
     fig.update_layout(title_text=f"Stacked Volume Time Series for apps:{apps}")
 fig.show()
 
-#text=[phase["type"] + "from/to" + phase["data_placement"]["placement"] + "volume="+convert_size(phase["volume"])],
-    
-    
-    
+# text=[phase["type"] + "from/to" + phase["data_placement"]["placement"] + "volume="+convert_size(phase["volume"])],
+
+
+
     """
