@@ -86,6 +86,7 @@ class TestPhase(unittest.TestCase):
         self.env.run()
 
     def test_read_io_phase(self):
+        data = simpy.Store(self.env)
         cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
         read_io = IOPhase(operation='read', volume=9e9, pattern=0.2)
         self.env.process(read_io.run(self.env, cluster, placement=1))
@@ -123,6 +124,72 @@ class TestBandwidthShare(unittest.TestCase):
         tier = get_tier(cluster, placement)
         self.assertAlmostEqual(tier.max_bandwidth["read"]["seq"]/2,
                                self.data.items[0]["bandwidth"])
+        fig = display_run(self.data, cluster, width=800, height=900)
+        fig.show()
+
+    def test_2_shifted_read_phases(self):
+        """Test 2 read phases simultaneously on the same tier, and ensure that bandwidth is /2."""
+        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
+        read_io_1 = IOPhase(appname="#1", operation='read', volume=3e9, data=self.data)
+        read_io_2 = IOPhase(appname="#2", operation='read', volume=2e9, data=self.data)
+        placement = 1  # place data in the same tier
+        self.env.process(read_io_1.run(self.env, cluster, placement=placement))  # nvram 200-100
+        self.env.process(read_io_2.run(self.env, cluster, placement=placement, delay=2))  # shifted
+        self.env.run()
+        tier = get_tier(cluster, placement)
+        fig = display_run(self.data, cluster, width=800, height=900)
+        fig.show()
+
+    def test_3_shifted_read_phases(self):
+        """Test 2 read phases simultaneously on the same tier, and ensure that bandwidth is /2."""
+        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
+        read_io_1 = IOPhase(appname="#1", operation='read', volume=2e9, data=self.data)
+        read_io_2 = IOPhase(appname="#2", operation='read', volume=2e9, data=self.data)
+        read_io_3 = IOPhase(appname="#3", operation='read', volume=2e9, data=self.data)
+        placement = 1  # place data in the same tier
+        self.env.process(read_io_1.run(self.env, cluster, placement=placement))  # nvram 200-100
+        self.env.process(read_io_2.run(self.env, cluster, placement=placement, delay=1))  # shifted
+        self.env.process(read_io_3.run(self.env, cluster, placement=placement, delay=3))  # shifted
+        self.env.run()
+        tier = get_tier(cluster, placement)
+        fig = display_run(self.data, cluster, width=800, height=900)
+        fig.show()
+
+    def test_2_shifted_write_phases(self):
+        """Test 2 read phases simultaneously on the same tier, and ensure that bandwidth is /2."""
+        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
+        write_io_1 = IOPhase(appname="#1", operation='write', volume=2e9, data=self.data)
+        write_io_2 = IOPhase(appname="#2", operation='write', volume=2e9, data=self.data)
+        placement = 1  # place data in the same tier
+        self.env.process(write_io_1.run(self.env, cluster, placement=placement))  # nvram 200-100
+        self.env.process(write_io_2.run(self.env, cluster, placement=placement, delay=1))  # shifted
+        self.env.run()
+        tier = get_tier(cluster, placement)
+        fig = display_run(self.data, cluster, width=800, height=900)
+        fig.show()
+
+    def test_many_shifted_write_phases(self):
+        """Test 2 read phases simultaneously on the same tier, and ensure that bandwidth is /2."""
+        cluster = Cluster(self.env, cores_per_node=6, tiers=[self.ssd_tier, self.nvram_tier])
+        write_ios = [IOPhase(appname=f"#{i+1}", operation='write', volume=(i+1)*1e9, data=self.data) for i in range(3)]
+        placement = 1  # place data in the same tier
+        for i, io in enumerate(write_ios):
+            self.env.process(io.run(self.env, cluster, placement=placement, delay=1*i))
+        self.env.run()
+
+        fig = display_run(self.data, cluster, width=800, height=900)
+        fig.show()
+
+    def test_2_decimal_shifted_read_phases(self):
+        """Test 2 read phases simultaneously on the same tier, and ensure that bandwidth is /2."""
+        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
+        read_io_1 = IOPhase(appname="#1", operation='read', volume=2e9, data=self.data)
+        read_io_2 = IOPhase(appname="#2", operation='read', volume=2e9, data=self.data)
+        placement = 1  # place data in the same tier
+        self.env.process(read_io_1.run(self.env, cluster, placement=placement))  # nvram 200-100
+        self.env.process(read_io_2.run(self.env, cluster, placement=placement, delay=1.2))  # shifted
+        self.env.run()
+        tier = get_tier(cluster, placement)
 
     def test_2_read_phases_2_placements(self):
         """Test 2 read phases simultaneously on different tiers, and ensure that bandwidth is not /2."""

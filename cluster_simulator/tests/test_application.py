@@ -260,8 +260,8 @@ class TestPhaseSuperposition(unittest.TestCase):
         self.env.process(app1.run(cluster, placement=[0, 0]))
         self.env.process(app2.run(cluster, placement=[0, 0]))
         self.env.run()
-        fig = display_run(data, cluster, width=800, height=900)
-        fig.show()
+        # fig = display_run(data, cluster, width=800, height=900)
+        # fig.show()
         self.assertEqual(data.items[0]["t_start"], data.items[1]["t_start"])
 
     def test_2_IO_parallel_1(self):

@@ -39,6 +39,21 @@ def convert_size(size_bytes):
     return f"{s} {size_name[i]}"  # "%s %s" % (s, size_name[i])
 
 
+def monitor_step(data, lst):
+    """Monitoring function that feed a queue of records on phases events when an application is running on the cluster.
+
+    Args:
+        data (simpy.Store): a store object that queues elements of information useful for logging and analytics.
+        lst (dict): information element to add to the data store.
+    """
+    state = "\n | Monitoring"
+    for key, value in lst.items():
+        state += f"| {key}: {str(value)} "
+    logger.debug(state)
+    if isinstance(data, simpy.Store):
+        data.put(lst)
+
+
 class Cluster:
     """A cluster is a set of compute nodes each node having a fixed number of cores. The storage system is heterogenous and consists on a set of tiers. Each tier has its own capacity and performances.
     Generally speaking, these tiers are referenced as persistent storage, which means that data conveyed through tiers is kept persistently and can be retrieved anytime by an application, unless it is explicitly removed as in data movers methods.
@@ -337,7 +352,8 @@ class Tier:
         self.max_bandwidth = bandwidth
         # modeling percent use of bandwidth
         #self.bandwidth = simpy.Resource(self.env, capacity=10)
-        self.bandwidth = BandwidthResource(self.env, capacity=10)
+        #self.bandwidth = BandwidthResource(self.env, event_list=None, capacity=10)
+        self.bandwidth = None
         self.bandwidth_concurrency = dict()
         # self.bandwidth = simpy.Container(env, init=100, capacity=100)
         # logger.info(self.__str__())

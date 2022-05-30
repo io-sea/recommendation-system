@@ -17,7 +17,7 @@ import math
 import string
 import random
 
-#from phase import IOPhase
+# from phase import IOPhase
 
 
 def monitor_step(data, lst):
@@ -214,29 +214,47 @@ class IOPhase:
 class BandwidthResource(simpy.Resource):
     """Subclassing simpy Resource to introduce the ability to check_bandwidth when resource is requested or released."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, event_list, *args, **kwargs):
         """Init method using parent init method."""
         super().__init__(*args, **kwargs)
         self.env = args[0]
+        self.event_list = event_list
+        self.request_counter = {}
+        self.release_counter = {}
 
     def request(self, *args, **kwargs):
-        """On request method, cehck_bandwidth using parent request method."""
-        self.check_bandwidth()
-        return super().request(*args, **kwargs)
+        """On request method, check_bandwidth using parent request method."""
+        logger.trace(f"bandwidth request at : {self.env.now}")
+        self.request_counter[self.env.now] = self.request_counter.get(self.env.now, 0) + 1
+        logger.trace(f"bandwidth request counter : {self.request_counter}")
+        if self.request_counter[self.env.now] <= 2:
+            self.check_bandwidth()
+        ret = super().request(*args, **kwargs)
+        # self.check_bandwidth()
+        return ret
 
     def release(self, *args, **kwargs):
-        """On release method, cehck_bandwidth using parent release method."""
-        self.check_bandwidth()
-        return super().release(*args, **kwargs)
+        """On release method, check_bandwidth using parent release method."""
+        logger.trace(f"bandwidth release at : {self.env.now}")
+        self.release_counter[self.env.now] = self.release_counter.get(self.env.now, 0) + 1
+        logger.trace(f"bandwidth release counter : {self.release_counter}")
+        if self.release_counter[self.env.now] <= 2:
+            self.check_bandwidth()
+        ret = super().release(*args, **kwargs)
+        # self.check_bandwidth()
+        return ret
 
     def check_bandwidth(self):
         """Checks running IO when bandwidth occupation changes. IOs should be interrupted on release or request of a bandwidth slot.
         """
-        for io_event in IOPhase.current_ios:
-            if not io_event.processed and io_event.triggered and io_event.is_alive:
+        for io_event in self.event_list:
+            # if not io_event.processed and io_event.triggered and io_event.is_alive:
+            # if io_event.triggered and io_event.is_alive:
+            if io_event.is_alive:
+
                 # capture the IOs not finished, but triggered and alive
-                print(io_event.is_alive)
-                print(io_event.value)
+                logger.trace(f"({len(self.event_list)} events in queue |"
+                             f"Event: {io_event.target}(trigg: {io_event.triggered} | live: {io_event.is_alive} | processed: {io_event.processed}) got interrupted at {self.env.now}")
                 io_event.interrupt('updating bandwidth')
 
 

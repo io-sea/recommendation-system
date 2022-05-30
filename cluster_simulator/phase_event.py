@@ -29,6 +29,7 @@ class MonitorResource(simpy.Resource):
                 # capture the IOs not finished, but triggered and alive
                 print(io_event.is_alive)
                 print(io_event.value)
+                logger.info("interrupt")
                 io_event.interrupt('updating bandwidth')
 
 
@@ -108,7 +109,10 @@ if __name__ == '__main__':
     bandwidth = MonitorResource(env, capacity=10)
     # IOs = [IO(env, name=str(i+1), volume=2-i,
     #           bandwidth=bandwidth, delay=i*0) for i in range(2)]
+    # IOs = [IO(env, name=str(i+1), volume=1+i,
+    #           bandwidth=bandwidth, delay=i*0) for i in range(2)]
+    # io1 = IO(env, name="#1", volume=2e9, bandwidth=bandwidth, delay=0)
+    # io2 = IO(env, name="#2", volume=2e9, bandwidth=bandwidth, delay=1.5)
     IOs = [IO(env, name=str(i+1), volume=1+i,
-              bandwidth=bandwidth, delay=i*0) for i in range(2)]
-
+              bandwidth=bandwidth, delay=i*0.5) for i in range(2)]
     env.run()

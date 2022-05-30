@@ -17,7 +17,7 @@ import pandas as pd
 import math
 #from cluster_simulator.cluster import Cluster, Tier, bandwidth_share_model, compute_share_model, get_tier, convert_size
 
-from cluster_simulator.utils import convert_size, get_tier, compute_share_model
+from cluster_simulator.utils import convert_size, get_tier, compute_share_model, BandwidthResource
 from cluster_simulator.cluster import Tier
 from cluster_simulator.cluster import EphemeralTier  # proper import for isinstance but causes import error for notebooks
 #from cluster import EphemeralTier
@@ -34,9 +34,13 @@ def monitor_step(data, lst):
         data (simpy.Store): a store object that queues elements of information useful for logging and analytics.
         lst (dict): information element to add to the data store.
     """
+    callable_dict = {"bandwidth": lambda x: f"{str(x)} MB/s", "volume": lambda x: convert_size(x)}
     state = "\n | Monitoring"
     for key, value in lst.items():
-        state += f"| {key}: {str(value)} "
+        if key in callable_dict:
+            state += f"| {key}: {callable_dict[key](value)} "
+        else:
+            state += f"| {key}: {str(value)} "
     logger.debug(state)
     if isinstance(data, simpy.Store):
         data.put(lst)
@@ -143,6 +147,7 @@ class IOPhase:
         pattern: describes the pattern encoding with 1 if pure sequential, 0 if pure random, and a float in between.
         last_event: float to keep the timestamp of the last I/O event.
         next_event: float to keep the timestamp of the next I/O event.
+        bandwidth_concurrency! int to indicate how many processes are doing I/O.
         data: data store object where application records are kept.
         appname: a user specified application name the phase belongs to.
     """
@@ -158,6 +163,7 @@ class IOPhase:
         self.pattern = pattern
         self.last_event = 0
         self.next_event = 0
+        self.bandwidth_concurrency = 1
         self.data = data or None
         self.appname = appname or ''
         # logger.info(self.__str__())
@@ -186,7 +192,7 @@ class IOPhase:
         monitoring_info = {"app": self.appname, "type": self.operation,
                            "cpu_usage": self.cores,
                            "t_start": t_start, "t_end": t_start + step_duration,
-                           "bandwidth_concurrency": tier.bandwidth.count,
+                           "bandwidth_concurrency": self.bandwidth_concurrency,
                            "bandwidth": available_bandwidth/1e6,
                            "phase_duration": step_duration,
                            "volume": step_duration * available_bandwidth,
@@ -197,34 +203,6 @@ class IOPhase:
         if cluster.ephemeral_tier:
             monitoring_info[cluster.ephemeral_tier.name + "_level"] = cluster.ephemeral_tier.capacity.level
         monitor_step(self.data, monitoring_info)
-
-    def process_volume(self, step_duration, volume, available_bandwidth, cluster, tier):
-        """This method processes a small amount of I/O volume between two predictable events. If an event occurs in the meantime, I/O will be interrupted and bandwidth updated according.
-
-        Args:
-            step_duration (float): the expected duration between two predictible events.
-            volume (float): volume in bytes of the data to process.
-            cluster (Cluster): cluster facility where the I/O operation should take place.
-            available_bandwidth (float): available bandwidth in the step.
-            tier (Tier): storage tier concerned by the I/O operation. It could be reading from this tier or writing to it.
-        """
-        try:
-            t_start = self.env.now
-            yield self.env.timeout(step_duration)
-            self.last_event += step_duration
-            volume -= step_duration * available_bandwidth
-            self.update_tier(tier, step_duration * available_bandwidth)
-            self.register_step(t_start, step_duration, available_bandwidth, cluster, tier)
-
-        except simpy.exceptions.Interrupt as interrupt:
-            logger.info('interrupt')
-            t_end = self.env.now
-            step_duration = t_end - start
-            volume -= step_duration * available_bandwidth
-            self.update_tier(tier, step_duration * available_bandwidth)
-            self.register_step(t_start, step_duration, available_bandwidth, cluster, tier)
-
-        return volume
 
     def update_tier(self, tier, volume):
         """Update tier level with the algebric value of volume.
@@ -242,6 +220,39 @@ class IOPhase:
         elif volume < 0:
             tier.capacity.get(abs(volume))
 
+    def process_volume(self, step_duration, volume, available_bandwidth, cluster, tier):
+        """This method processes a small amount of I/O volume between two predictable events. If an event occurs in the meantime, I/O will be interrupted and bandwidth updated according.
+
+        Args:
+            step_duration (float): the expected duration between two predictible events.
+            volume (float): volume in bytes of the data to process.
+            cluster (Cluster): cluster facility where the I/O operation should take place.
+            available_bandwidth (float): available bandwidth in the step.
+            tier (Tier): storage tier concerned by the I/O operation. It could be reading from this tier or writing to it.
+        """
+        try:
+            t_start = self.env.now
+            volume_event = self.env.timeout(step_duration)
+            yield volume_event
+            volume -= step_duration * available_bandwidth
+            self.update_tier(tier, step_duration * available_bandwidth)
+            self.register_step(t_start, step_duration, available_bandwidth, cluster, tier)
+
+        except simpy.exceptions.Interrupt as interrupt:
+            logger.trace(f'{self.appname} interrupt at {self.env.now}')
+            step_duration = self.env.now - t_start
+            if step_duration:
+                #self.last_event += step_duration
+                volume -= step_duration * available_bandwidth
+                self.update_tier(tier, step_duration * available_bandwidth)
+                self.register_step(t_start, step_duration, available_bandwidth, cluster, tier)
+            # else:
+            #     logger.info("BIG WARNING")
+            #     volume_event.succeed()
+            #     #self.last_event += min(step_duration, volume/available_bandwidth)
+
+        return volume
+
     def run_step(self, env, cluster, tier):
         """Allows to run a step of I/O operation where bandwidth share is constant.
 
@@ -256,21 +267,31 @@ class IOPhase:
         Yields:
             simpy.Event: other events that can occur during the I/O operation.
         """
-        volume = self.volume
         self.env = env
+        if not tier.bandwidth:
+            tier.bandwidth = BandwidthResource(IOPhase.current_ios, self.env, 10)
+        volume = self.volume
         # retry IO until its volume is consumed
         while volume > 0:
             with tier.bandwidth.request() as req:
                 yield req
                 max_bandwidth = cluster.get_max_bandwidth(tier, operation=self.operation, pattern=self.pattern)
-                available_bandwidth = max_bandwidth/tier.bandwidth.count
+                self.bandwidth_concurrency = tier.bandwidth.count
+                available_bandwidth = max_bandwidth/self.bandwidth_concurrency
+                self.last_event = self.env.now
                 self.next_event = self.env.peek()
                 # take the smallest step, step_duration must be > 0
+
                 if 0 < self.next_event - self.last_event < volume/available_bandwidth:
                     step_duration = self.next_event - self.last_event
                 else:
                     step_duration = volume/available_bandwidth
+                logger.trace(f"appname: {self.appname}, now : {self.env.now} | last event: {self.last_event} | next event: {self.next_event}"
+                             f" | full duration: {volume/available_bandwidth} | step duration: {step_duration}")
                 step_event = self.env.process(self.process_volume(step_duration, volume, available_bandwidth, cluster, tier))
+                #self.last_event += step_duration
+                #self.last_event = self.env.now
+                #self.next_event += step_duration
                 # register the step event to be able to update it
                 IOPhase.current_ios.append(step_event)
                 # process the step volume
@@ -296,33 +317,34 @@ class IOPhase:
             return ret
 
 
-class BandwidthResource(simpy.Resource):
-    """Subclassing simpy Resource to introduce the ability to check_bandwidth when resource is requested or released."""
+# class BandwidthResource(simpy.Resource):
+#     """Subclassing simpy Resource to introduce the ability to check_bandwidth when resource is requested or released."""
 
-    def __init__(self, *args, **kwargs):
-        """Init method using parent init method."""
-        super().__init__(*args, **kwargs)
-        self.env = args[0]
+#     def __init__(self, *args, **kwargs):
+#         """Init method using parent init method."""
+#         super().__init__(*args, **kwargs)
+#         self.env = args[0]
 
-    def request(self, *args, **kwargs):
-        """On request method, cehck_bandwidth using parent request method."""
-        self.check_bandwidth()
-        return super().request(*args, **kwargs)
+#     def request(self, *args, **kwargs):
+#         """On request method, cehck_bandwidth using parent request method."""
+#         self.check_bandwidth()
+#         return super().request(*args, **kwargs)
 
-    def release(self, *args, **kwargs):
-        """On release method, check_bandwidth using parent release method."""
-        self.check_bandwidth()
-        return super().release(*args, **kwargs)
+#     def release(self, *args, **kwargs):
+#         """On release method, check_bandwidth using parent release method."""
+#         self.check_bandwidth()
+#         return super().release(*args, **kwargs)
 
-    def check_bandwidth(self):
-        """Checks running IO when bandwidth occupation changes. IOs should be interrupted on release or request of a bandwidth slot.
-        """
-        for io_event in IOPhase.current_ios:
-            if not io_event.processed and io_event.triggered and io_event.is_alive:
-                # capture the IOs not finished, but triggered and alive
-                print(io_event.is_alive)
-                print(io_event.value)
-                io_event.interrupt('updating bandwidth')
+#     def check_bandwidth(self):
+#         """Checks running IO when bandwidth occupation changes. IOs should be interrupted on release or request of a bandwidth slot.
+#         """
+#         print("-----------------BANDWIDTH CONTROL-----------")
+#         for io_event in IOPhase.current_ios:
+#             if not io_event.processed and io_event.triggered and io_event.is_alive:
+#                 # capture the IOs not finished, but triggered and alive
+#                 print(io_event.is_alive)
+#                 print(io_event.value)
+#                 io_event.interrupt('updating bandwidth')
 
 
 if __name__ == '__main__':
