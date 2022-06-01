@@ -456,14 +456,8 @@ class IOPhase:
             yield self.env.timeout(delay)
         # get the tier where the I/O will be performed
         tier = get_tier(cluster, placement, use_bb=use_bb)
+        self.env.process(self.run_step(self.env, cluster, tier))
         if isinstance(tier, EphemeralTier):
-            # if target is ephemeral, buffer the I/O in tier
-            ret = yield self.env.process(self.run_step(self.env, cluster, tier))
-            if ret is True:
-                # if I/O is successful, destage on persistent tier in sequential way
-                # ret2 = yield self.env.process(self.run_step(self.env, cluster, tier.persistent_tier))
-                ret2 = yield self.env.process(self.move_step(self.env, cluster, tier, tier.persistent_tier))
-                return ret2
-        else:
-            ret = yield env.process(self.run_step(env, cluster, tier))
-            return ret
+            # destage
+            self.env.process(self.move_step(self.env, cluster, tier,
+                                            tier.persistent_tier, erase=False))

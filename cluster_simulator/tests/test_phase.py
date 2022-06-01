@@ -201,7 +201,7 @@ class TestBandwidthShare(unittest.TestCase):
         tier1 = get_tier(cluster, 1)
         tier0 = get_tier(cluster, 0)
         concurrency = [item["bandwidth_concurrency"] for item in self.data.items]
-        self.assertListEqual(concurrency, [1, 2, 2, 2, 2, 1, 1, 1, 1])
+        self.assertListEqual(concurrency, [1, 2, 2, 2, 2, 1, 1, 1, 1, 1])
         self.assertAlmostEqual(tier1.capacity.level, 4e9, places=5)
         self.assertAlmostEqual(tier0.capacity.level, 2e9, places=5)
 
@@ -446,7 +446,7 @@ class TestPhaseEphemeralTier(unittest.TestCase):
                                                     available_bandwidth=500e6,
                                                     cluster=cluster,
                                                     source_tier=self.hdd_tier,
-                                                    target_tier=self.ssd_tier))
+                                                    target_tier=bb))
         self.env.run()
         self.assertEqual(data.items[0]["volume"], 500e6)
         self.assertEqual(bb.capacity.level, 500e6)
@@ -464,10 +464,8 @@ class TestPhaseEphemeralTier(unittest.TestCase):
         # run the phase on the tier with placement = bb
         self.env.process(write_io.run(self.env, cluster, placement=0, use_bb=True))  # nvram 200-100
         self.env.run()
-        self.assertEqual(self.data.items[0]["volume"], 1e9)
-        self.assertEqual(self.data.items[-1]["volume"], 1e9)
-        self.assertEqual(bb.capacity.level, 1e9)
-        self.assertEqual(bb.persistent_tier.capacity.level, 1e9)
+        self.assertEqual(bb.capacity.level, write_io.volume)
+        self.assertEqual(bb.persistent_tier.capacity.level, write_io.volume)
 
     def test_phase_use_bb_false(self):
         """Test running simple write phase on ephemeral tier with False option and checks if it runs without buffering."""
@@ -481,10 +479,8 @@ class TestPhaseEphemeralTier(unittest.TestCase):
         # run the phase on the tier with placement = bb
         self.env.process(write_io.run(self.env, cluster, placement=0, use_bb=False))  # nvram 200-100
         self.env.run()
-        # ensure at last item that persistent/eph levels are correct
-        item = self.data.items[-1]
-        self.assertAlmostEqual((item["tier_level"]["HDD"]), 1e9)
-        self.assertAlmostEqual((item["BB_level"]), 0)
+        self.assertEqual(bb.capacity.level, 0)
+        self.assertEqual(bb.persistent_tier.capacity.level, write_io.volume)
 
     def test_phase_use_bb_concurrency(self):
         """Test two writing phases, one has burst buffer usage and the other not. The two phases are happening concurrently."""
@@ -504,8 +500,8 @@ class TestPhaseEphemeralTier(unittest.TestCase):
         item = self.data.items[-1]
         self.assertAlmostEqual((item["tier_level"]["HDD"]), 2e9)
         self.assertAlmostEqual((item["BB_level"]), 1e9)
-        # fig = display_run(self.data, cluster, width=800, height=900)
-        # fig.show()
+        fig = display_run(self.data, cluster, width=800, height=900)
+        fig.show()
 
     def test_phase_use_bb_contention(self):
         """Test two writing phases, one has burst buffer usage and the other not. The two phases are happening concurrently. The one writing in BB will overlfow data"""
