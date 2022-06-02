@@ -147,7 +147,8 @@ class IOPhase:
         pattern: describes the pattern encoding with 1 if pure sequential, 0 if pure random, and a float in between.
         last_event: float to keep the timestamp of the last I/O event.
         next_event: float to keep the timestamp of the next I/O event.
-        bandwidth_concurrency! int to indicate how many processes are doing I/O.
+        bandwidth_concurrency: int to indicate how many processes are doing I/O.
+        dirty: int to indicate the amount of data that is dirty in ephemeral tier/RAM (does not have a copy in persistent tier).
         data: data store object where application records are kept.
         appname: a user specified application name the phase belongs to.
     """
@@ -216,12 +217,13 @@ class IOPhase:
             tier (Tier): tier for which the level will be updated.
             volume (float): volume value (positive or negative) to adjust tier level.
         """
-        assert isinstance(tier, Tier)
+        assert isinstance(tier, Tier)  # check if tier is a Tier/EphemeralTier instance
         # reading operation suppose at least some volume in the tier
         if self.operation == "read" and tier.capacity.level < self.volume:
             tier.capacity.put(self.volume - tier.capacity.level)
         if self.operation == "write" and volume > 0:
             tier.capacity.put(volume)
+            tier.dirty += volume if isinstance(tier, EphemeralTier) else 0
         elif volume < 0:
             tier.capacity.get(abs(volume))
 
@@ -229,14 +231,20 @@ class IOPhase:
         """Update tier level following a volume move.
 
         Args:
-            tier (Tier): tier for which the level will be updated.
+            source_tier (Tier): tier from which the data will be moved.
+            target_tier (Tier): tier for which the level will be updated.
             volume (float): volume value (positive or negative) to adjust tier level.
         """
 
         assert isinstance(source_tier, Tier)
         assert isinstance(target_tier, Tier)
         # reading operation suppose at least some volume in the tier
-        target_tier.capacity.put(volume)
+        if source_tier.capacity.level < volume:
+            source_tier.capacity.put(volume - source_tier.capacity.level)
+        # destaging operation decreases the amount of dirty data
+        if isinstance(source_tier, EphemeralTier) and type(target_tier) == Tier:
+            source_tier.dirty -= volume
+            source_tier.dirty = max(0, self.dirty)
         if erase:
             source_tier.capacity.get(volume)
 
@@ -302,7 +310,7 @@ class IOPhase:
 
         return volume
 
-    def move_step(self, env, cluster, source_tier, target_tier, erase=True):
+    def move_step(self, env, cluster, source_tier, target_tier, erase=False):
         """Allows to run a movement of data in an interval where available bandwidth is constant.
 
         Args:
@@ -358,11 +366,10 @@ class IOPhase:
         Returns:
             tuple: _description_
         """
-
         max_bandwidth = cluster.get_max_bandwidth(tier, operation=self.operation, pattern=self.pattern)
         self.bandwidth_concurrency = tier.bandwidth.count
         available_bandwidth = max_bandwidth/self.bandwidth_concurrency
-        # limit the volume to
+        # limit the volume to maximum available
         max_volume = min(volume, tier.capacity.capacity - tier.capacity.level)
         # take the smallest step, step_duration must be > 0
         if 0 < self.next_event - self.last_event < max_volume/available_bandwidth:
@@ -437,13 +444,6 @@ class IOPhase:
                              f" | full duration: {volume/available_bandwidth} | step duration: {step_duration}")
                 step_event = self.env.process(self.process_volume(step_duration, volume,
                                                                   available_bandwidth, cluster, tier))
-                # if isinstance(tier, EphemeralTier) and tier.capacity.level >= 0.9*tier.capacity.capacity:
-                #     excess_volume = tier.capacity.level - 0.9*tier.capacity.capacity
-                #     step_duration, available_bandwidth = self.get_step_duration(cluster, tier, excess_volume)
-                #     destage_event = self.env.process(self.process_volume(step_duration, excess_volume, available_bandwidth, cluster, tier))
-                #     IOPhase.current_ios.append(destage_event)
-                #     yield destage_event
-                # register the step event to be able to update it
                 IOPhase.current_ios.append(step_event)
                 # process the step volume
                 volume = yield step_event
@@ -456,8 +456,9 @@ class IOPhase:
             yield self.env.timeout(delay)
         # get the tier where the I/O will be performed
         tier = get_tier(cluster, placement, use_bb=use_bb)
-        self.env.process(self.run_step(self.env, cluster, tier))
+        ret = yield self.env.process(self.run_step(self.env, cluster, tier))
         if isinstance(tier, EphemeralTier):
             # destage
             self.env.process(self.move_step(self.env, cluster, tier,
                                             tier.persistent_tier, erase=False))
+        return ret

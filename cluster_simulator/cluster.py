@@ -15,6 +15,7 @@ import simpy
 from loguru import logger
 import numpy as np
 import math
+from utils import convert_size
 from cluster_simulator.utils import convert_size, BandwidthResource
 
 
@@ -108,220 +109,6 @@ class Cluster:
         return (tier.max_bandwidth[operation]['seq'] * pattern +
                 tier.max_bandwidth[operation]['rand'] * (1-pattern)) * cores*1e6
 
-    def move_data(self, env, source_tier, target_tier, total_volume, erase=False, data=None):
-        """Move data from source_tier to target_tier. Both are supposed to be persistent (will keep data).
-
-        Args:
-            env (Simpy.Environment): simulation environment.
-            source_tier (Tier): the tier object where data is.
-            target_tier (Tier): the tier where to move data to.
-            total_volume (int, float): total volume of data to tranfer.
-
-        Returns:
-            bool: True if I/O event succeed.
-
-        Yields:
-            simpy.Process: yielding to resources consumption and I/O processing.
-        """
-        # TODO : refactor this mess
-        self.env = env
-        self.data = data or None
-        # adjust source_tier level if necessary to be consistent
-        if source_tier.capacity.level < total_volume:
-            source_tier.capacity.put(total_volume - source_tier.capacity.level)
-        target_free_space = (target_tier.capacity.capacity - target_tier.capacity.level)
-
-        last_event = 0
-        volume = total_volume
-        while volume > 0:
-            with source_tier.bandwidth.request() as source_req:
-                with target_tier.bandwidth.request() as target_req:
-                    # ensure both bw tokens are available
-                    yield source_req & target_req
-                    read_from_source_bandwidth = self.get_max_bandwidth(source_tier, operation='read')/source_tier.bandwidth.count
-                    write_to_target_bandwidth = self.get_max_bandwidth(target_tier, operation='write')/target_tier.bandwidth.count
-                    available_bandwidth = min(read_from_source_bandwidth, write_to_target_bandwidth)
-                    time_to_complete = volume / available_bandwidth
-                    next_event = self.env.peek()
-                    step_duration = next_event - last_event if 0 < next_event - last_event < time_to_complete else time_to_complete
-                    # define the duration event will take
-                    logger.info(f"step duration is {step_duration}")
-                    step_event = self.env.timeout(step_duration)
-                    t_start = self.env.now
-                    yield step_event
-                    t_end = self.env.now
-                    last_event += step_duration
-                    volume -= step_duration * available_bandwidth
-                    # update target_tier level
-                    target_tier.capacity.put(step_duration * available_bandwidth)
-                    if erase:
-                        source_tier.capacity.get(step_duration * available_bandwidth)
-
-                    monitoring_info = {"data_movement": {"source": source_tier.name, "target": target_tier.name},
-                                       "t_start": t_start, "t_end": t_end,
-                                       "bandwidth": available_bandwidth/1e6,
-                                       "phase_duration": t_end-t_start,
-                                       "volume": step_duration * available_bandwidth,
-                                       "tiers": [tier.name for tier in self.tiers],
-                                       "tier_level": {tier.name: tier.capacity.level for tier in self.tiers}}
-                    # when cluster include bb tier
-                    if self.ephemeral_tier:
-                        monitoring_info.update({f"{self.ephemeral_tier.name}_level":
-                                                self.ephemeral_tier.capacity.level})
-
-                    monitor_step(self.data, monitoring_info)
-        return True
-
-    def write_from_app_to_buffer(self, env, ephemeral_tier, target_tier,
-                                 total_volume, erase=False, data=None):
-        """Move data generate from an application to a datanode (ephemeral_tier).
-        Args:
-            env (Simpy.Environment): simulation environment.
-            ephemeral_tier (EphemeralTier): the cache tier buffer the burst before moving to target_tier.
-            target_tier (Tier): the tier where to move data to.
-            total_volume (int, float): total volume of data to tranfer.
-        Returns:
-            bool: True if I/O event succeed.
-
-        Yields:
-            simpy.Process: yielding to resources consumption and I/O processing.
-        """
-        # TODO : refactor this mess
-        self.env = env
-        self.data = data or None
-        last_event = 0
-        volume = total_volume
-        # dirty volume is volume put on buffer but not yet moved to target_tier
-        dirty_volume = 0
-        while volume > 0:
-            with ephemeral_tier.bandwidth.request() as ephemeral_req:
-                # ensure buffering bw token are available
-                yield ephemeral_req
-                # when coming from app, read bandwidth is not relevant
-                available_bandwidth = self.get_max_bandwidth(ephemeral_tier, operation='write')/ephemeral_tier.bandwidth.count
-                # estimating time to next event
-                time_to_full_buffer = (ephemeral_tier.capacity.capacity - ephemeral_tier.capacity.level) / available_bandwidth
-                time_to_complete = volume / available_bandwidth
-                reference_time = min(time_to_complete, time_to_full_buffer)
-                next_event = self.env.peek()
-                # take the smallest step duration to next closest event
-                step_duration = next_event - last_event if 0 < next_event - last_event < reference_time else reference_time
-                # define the duration event will take
-                logger.info(f"step duration is {step_duration}")
-                step_event = self.env.timeout(step_duration)
-                t_start = self.env.now
-                yield step_event
-                last_event += step_duration
-                t_end = self.env.now
-                volume -= step_duration * available_bandwidth
-                dirty_volume = step_duration * available_bandwidth
-                # update ephemeral_tier level
-                yield ephemeral_tier.capacity.put(dirty_volume)
-                yield self.destage(ephemeral_tier, target_tier, dirty_volume)
-                # destage dirty data from ephemeral_tier to source_tier
-
-                monitoring_info = {"data_movement": {"source": source_tier.name, "target": target_tier.name},
-                                   "t_start": t_start, "t_end": t_end,
-                                   "bandwidth": available_bandwidth/1e6,
-                                   "phase_duration": t_end-t_start,
-                                   "volume": step_duration * available_bandwidth,
-                                   "tiers": [tier.name for tier in self.tiers],
-                                   "tier_level": {tier.name: tier.capacity.level for tier in self.tiers},
-                                   f"{ephemeral_tier.name}_level": ephemeral_tier.capacity.level}
-
-                monitor_step(self.data, monitoring_info)
-        return True
-
-    def destage(self, env, ephemeral_tier, target_tier, total_volume, erase=False, data=None):
-        """Destage data from ephemeral_tier to target_tier.
-
-        Args:
-            env (Simpy.Environment): simulation environment.
-            ephemeral_tier (EphemeralTier): the cache tier buffer the burst before moving to target_tier.
-            target_tier (Tier): the tier where to move data to.
-            total_volume (int, float): total volume of data to transfer.
-
-        Returns:
-            bool: True if I/O event succeed.
-
-        Yields:
-            simpy.Process: yielding to resources consumption and I/O processing.
-        """
-        # TODO : refactor this mess
-        self.env = env
-        self.data = data or None
-        last_event = 0
-        volume = total_volume
-        while volume > 0:
-            # TODO :add erase argument to evict data from BB if level > threshold
-            # TODO : adjust next event to threshold volume reaching
-            with ephemeral_tier.bandwidth.request() as ephemeral_req:
-                with target_tier.bandwidth.request() as target_req:
-                    # ensure buffering bw token are available
-                    yield ephemeral_req & target_req
-                    # take the bottleneck of reading from bb are wirting to target tier
-                    available_bandwidth = min(self.get_max_bandwidth(ephemeral_tier, operation='read')/ephemeral_tier.bandwidth.count,
-                                              self.get_max_bandwidth(target_tier, operation='write')/target_tier.bandwidth.count)
-                    # estimating time to next event
-                    time_to_complete = volume / available_bandwidth
-                    next_event = self.env.peek()
-                    # take the smallest step duration to next closest event
-                    step_duration = next_event - last_event if 0 < next_event - last_event < time_to_complete else time_to_complete
-                    # define the duration event will take
-                    logger.info(f"step duration is {step_duration}")
-                    step_event = self.env.timeout(step_duration)
-                    t_start = self.env.now
-                    yield step_event
-                    t_end = self.env.now
-                    volume -= step_duration * available_bandwidth
-                    dirty_volume = step_duration * available_bandwidth
-                    # update target and ephemeral tiers level
-                    yield target_tier.capacity.put(dirty_volume)
-                    if erase and ephemeral_tier.capacity.level > 0.9*ephemeral_tier.capacity.capacity:
-                        yield ephemeral_tier.capacity.get(dirty_volume)
-                    # destage dirty data from ephemeral_tier to source_tier
-
-                    monitoring_info = {"data_movement": {"source": ephemeral_tier.name, "target": target_tier.name},
-                                       "t_start": t_start, "t_end": t_end,
-                                       "bandwidth": available_bandwidth/1e6,
-                                       "phase_duration": t_end-t_start,
-                                       "volume": step_duration * available_bandwidth,
-                                       "tiers": [tier.name for tier in self.tiers],
-                                       "tier_level": {tier.name: tier.capacity.level for tier in self.tiers},
-                                       f"{ephemeral_tier.name}_level": ephemeral_tier.capacity.level}
-                    monitor_step(self.data, monitoring_info)
-        return True
-
-    def monitor_ephemeral_tier(self, env, bb_tier):
-        """When flavor or datanode volume is full, start evicting at the speed of the lower tier.
-
-        Args:
-            env (simpy.Environment): env where all events are triggered.
-
-        Yields:
-            simpy.Process: process a data movement.
-        """
-        self.env = env
-
-        excess = bb_tier.capacity.level - 0.9*bb_tier.capacity.capacity
-        if excess > 0:
-            logger.info("BB level exceeded 90% -> eviction policy enabled")
-            # move excess data to pertistent tier with erase
-            # self.env.process(self.move_data(self.env, bb_tier, bb_tier.persistent_tier, iophase, erase=True, data=None))
-            yield self.move_data(self.env, bb_tier, bb_tier.persistent_tier,
-                                 total_volume=excess, erase=True, data=self.data)
-
-    def evict_ephemeral_tier(self, env, bb_tier, volume):
-        """Evict data with volume from ephemeral tier to its attached persistent tier.
-
-        Yields:
-            simpy.Process: process a data movement.
-        """
-        self.env = env
-        logger.info("BB level exceeded 90% -> eviction policy enabled")
-        yield self.move_data(self.env, bb_tier, bb_tier.persistent_tier,
-                             total_volume=volume, erase=True, data=self.data)
-
 
 class Tier:
     """Model a tier storage service with a focus on a limited bandwidth resource as well as a limited capacity. In this model we expect a bandwidth value at its asymptotic state, so blocksize is still not a parameter. Only the asymptotic part of the throughput curve is considered.
@@ -392,14 +179,36 @@ class EphemeralTier(Tier):
         """
         # the non transient tier it is attached to
         self.persistent_tier = persistent_tier
+        # amount of dirty data
+        self.dirty = 0
+        # eviction parameters
+        self.lower_threshold = 0.7
+        self.upper_threshold = 0.9
+
         # self.cores = simpy.Resource(env, capacity=cores)
         super().__init__(env, name, bandwidth, capacity=capacity)
 
-    # def evict(self, env):
-    #     """Eviction policy for ephemeral tiers."""
-    #     while True:
-    #         if self.capacity.level < 0.9*self.capacity.capacity:
-    #             logger.info(f"Eviction policy for {self.name}")
+    def evict(self):
+        """Check if the application should evict some data from the ephemeral tier.
+
+        Args:
+            ephemeral_tier (EphemeralTier): the ephemeral tier where data is stored.
+            lower_threshold (float): lower threshold for the eviction.
+            upper_threshold (float): upper threshold for the eviction.
+
+        Returns:
+            eviction_volume (int): amount of data to be evicted.
+        """
+
+        if self.capacity.level > self.upper_threshold*self.capacity.capacity:
+            clean_data = self.capacity.level - self.dirty
+            eviction_volume = min(self.capacity.level -
+                                  self.lower_threshold*self.capacity.capacity, clean_data)
+            if eviction_volume:
+                self.capacity.get(eviction_volume)
+                logger.info(f"Eviction activated in tier {self.name} for {convert_size(eviction_volume)}")
+                return eviction_volume
+        return 0
 
 
 def bandwidth_share_model(n_threads):

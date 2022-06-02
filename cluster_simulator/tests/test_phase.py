@@ -188,7 +188,8 @@ class TestBandwidthShare(unittest.TestCase):
         self.assertAlmostEqual(tier.capacity.level, 6e9, places=5)
 
     def test_3_shifted_write_phases_diff_placement(self):
-        """Test 2 read phases simultaneously on the same tier, and ensure that bandwidth is /2."""
+        """Test 2 read phases simultaneously on the same tier, and ensure that bandwidth is /2.
+        IOs when run without the application framework do not respect cores shared resources shortage."""
         cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
         read_io_1 = IOPhase(appname="#1", operation='write', volume=2e9, data=self.data)
         read_io_2 = IOPhase(appname="#2", operation='write', volume=2e9, data=self.data)
@@ -201,7 +202,7 @@ class TestBandwidthShare(unittest.TestCase):
         tier1 = get_tier(cluster, 1)
         tier0 = get_tier(cluster, 0)
         concurrency = [item["bandwidth_concurrency"] for item in self.data.items]
-        self.assertListEqual(concurrency, [1, 2, 2, 2, 2, 1, 1, 1, 1, 1])
+        self.assertListEqual(concurrency, [1, 2, 2, 2, 2, 1, 1, 1, 1])
         self.assertAlmostEqual(tier1.capacity.level, 4e9, places=5)
         self.assertAlmostEqual(tier0.capacity.level, 2e9, places=5)
 
