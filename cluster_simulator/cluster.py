@@ -206,7 +206,7 @@ class EphemeralTier(Tier):
                                   self.lower_threshold*self.capacity.capacity, clean_data)
             if eviction_volume:
                 self.capacity.get(eviction_volume)
-                logger.info(f"Eviction activated in tier {self.name} for {convert_size(eviction_volume)}")
+                logger.info(f"{convert_size(eviction_volume)} evicted from tier {self.name}")
                 return eviction_volume
         return 0
 

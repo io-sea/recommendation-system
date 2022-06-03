@@ -347,9 +347,10 @@ class TestDataMovement(unittest.TestCase):
         self.assertEqual(self.ssd_tier.capacity.level, 0)
 
         write_io = IOPhase(operation='write', volume=10e9, data=self.data)
-        ret = self.env.process(write_io.move_step(self.env, self.cluster, self.hdd_tier, self.ssd_tier))
+        self.env.process(write_io.move_step(self.env, self.cluster,
+                                            self.hdd_tier, self.ssd_tier))
         self.env.run()
-        self.assertEqual(self.hdd_tier.capacity.level, 10e9)
+        self.assertEqual(self.hdd_tier.capacity.level, 20e9)
         self.assertEqual(self.ssd_tier.capacity.level, 10e9)
         self.assertEquals(self.data.items[0]["type"], "movement")
         self.assertEquals(self.data.items[0]["data_placement"]["source"], self.hdd_tier.name)
@@ -362,10 +363,12 @@ class TestDataMovement(unittest.TestCase):
 
         io1 = IOPhase(operation='write', volume=10e9, data=self.data)
         io2 = IOPhase(operation='write', volume=10e9, data=self.data)
-        self.env.process(io1.move_step(self.env, self.cluster, self.hdd_tier, self.ssd_tier))
-        self.env.process(io2.move_step(self.env, self.cluster, self.hdd_tier, self.ssd_tier))
+        self.env.process(io1.move_step(self.env, self.cluster,
+                                       self.hdd_tier, self.ssd_tier))
+        self.env.process(io2.move_step(self.env, self.cluster,
+                                       self.hdd_tier, self.ssd_tier))
         self.env.run()
-        self.assertEqual(self.hdd_tier.capacity.level, 0)
+        self.assertEqual(self.hdd_tier.capacity.level, 20e9)
         self.assertEqual(self.ssd_tier.capacity.level, 20e9)
 
     def test_io_concurrent_move_step(self):
@@ -376,7 +379,24 @@ class TestDataMovement(unittest.TestCase):
 
         io1 = IOPhase(operation='write', volume=10e9, data=self.data)
         io2 = IOPhase(operation='write', volume=10e9, data=self.data)
-        self.env.process(io1.move_step(self.env, self.cluster, self.hdd_tier, self.ssd_tier))
+        self.env.process(io1.move_step(self.env, self.cluster,
+                                       self.hdd_tier, self.ssd_tier))
+        # write a concurrent IO on ssd_tier
+        self.env.process(io2.run(self.env, self.cluster, placement=1))
+        self.env.run()
+        self.assertEqual(self.hdd_tier.capacity.level, 20e9)
+        self.assertEqual(self.ssd_tier.capacity.level, 20e9)
+
+    def test_io_concurrent_move_step_with_erase(self):
+        """Test that move step moves data with erase from tier to another for the IO volume and adapts bandwidth in case of concurrency. Here the concurrent IO is a write on the target tier."""
+        self.hdd_tier.capacity.put(20e9)
+        self.assertEqual(self.hdd_tier.capacity.level, 20e9)
+        self.assertEqual(self.ssd_tier.capacity.level, 0)
+
+        io1 = IOPhase(operation='write', volume=10e9, data=self.data)
+        io2 = IOPhase(operation='write', volume=10e9, data=self.data)
+        self.env.process(io1.move_step(self.env, self.cluster,
+                                       self.hdd_tier, self.ssd_tier, erase=True))
         # write a concurrent IO on ssd_tier
         self.env.process(io2.run(self.env, self.cluster, placement=1))
         self.env.run()
@@ -391,11 +411,12 @@ class TestDataMovement(unittest.TestCase):
 
         io1 = IOPhase(operation='write', volume=10e9, data=self.data)
         io2 = IOPhase(operation='write', volume=10e9, data=self.data)
-        self.env.process(io1.move_step(self.env, self.cluster, self.hdd_tier, self.ssd_tier))
+        self.env.process(io1.move_step(self.env, self.cluster, self.hdd_tier,
+                                       self.ssd_tier))
         # write a concurrent IO on ssd_tier
         self.env.process(io2.run(self.env, self.cluster, placement=1, delay=10))
         self.env.run()
-        self.assertEqual(self.hdd_tier.capacity.level, 10e9)
+        self.assertEqual(self.hdd_tier.capacity.level, 20e9)
         self.assertEqual(self.ssd_tier.capacity.level, 20e9)
 
 
@@ -501,8 +522,8 @@ class TestPhaseEphemeralTier(unittest.TestCase):
         item = self.data.items[-1]
         self.assertAlmostEqual((item["tier_level"]["HDD"]), 2e9)
         self.assertAlmostEqual((item["BB_level"]), 1e9)
-        fig = display_run(self.data, cluster, width=800, height=900)
-        fig.show()
+        # fig = display_run(self.data, cluster, width=800, height=900)
+        # fig.show()
 
     def test_phase_use_bb_contention(self):
         """Test two writing phases, one has burst buffer usage and the other not. The two phases are happening concurrently. The one writing in BB will overlfow data"""

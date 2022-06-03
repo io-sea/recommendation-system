@@ -223,7 +223,8 @@ class IOPhase:
             tier.capacity.put(self.volume - tier.capacity.level)
         if self.operation == "write" and volume > 0:
             tier.capacity.put(volume)
-            tier.dirty += volume if isinstance(tier, EphemeralTier) else 0
+            if isinstance(tier, EphemeralTier):
+                tier.dirty += volume
         elif volume < 0:
             tier.capacity.get(abs(volume))
 
@@ -234,17 +235,20 @@ class IOPhase:
             source_tier (Tier): tier from which the data will be moved.
             target_tier (Tier): tier for which the level will be updated.
             volume (float): volume value (positive or negative) to adjust tier level.
+            erase (bool): whether or not erase the amount of volume from source_tier.
         """
-
         assert isinstance(source_tier, Tier)
         assert isinstance(target_tier, Tier)
         # reading operation suppose at least some volume in the tier
         if source_tier.capacity.level < volume:
             source_tier.capacity.put(volume - source_tier.capacity.level)
-        # destaging operation decreases the amount of dirty data
+        # target_tier get its volume updated
+        target_tier.capacity.put(volume)
+        # destaging decreases the amount of dirty data as it get a copy in a persistent tier
         if isinstance(source_tier, EphemeralTier) and type(target_tier) == Tier:
             source_tier.dirty -= volume
-            source_tier.dirty = max(0, self.dirty)
+            source_tier.dirty = max(0, source_tier.dirty)
+        # if erase original data, then update source_tier
         if erase:
             source_tier.capacity.get(volume)
 
@@ -310,51 +314,6 @@ class IOPhase:
 
         return volume
 
-    def move_step(self, env, cluster, source_tier, target_tier, erase=False):
-        """Allows to run a movement of data in an interval where available bandwidth is constant.
-
-        Args:
-            env (simpy.Environment()): environment variable where the I/O operation will take place.
-            cluster (Cluster): the cluster on which the application will run.
-            source_tier (Tier): storage tier from which we read data to move.
-            target_tier (Tier): storage tier where the data will be moved.
-
-        Returns:
-            bool: True if the step is completed, False otherwise.
-
-        Yields:
-            simpy.Event: other events that can occur during the I/O operation.
-        """
-        self.env = env
-        if not source_tier.bandwidth:
-            source_tier.bandwidth = BandwidthResource(IOPhase.current_ios, self.env, 10)
-        if not target_tier.bandwidth:
-            target_tier.bandwidth = BandwidthResource(IOPhase.current_ios, self.env, 10)
-
-        volume = self.volume  # source_tier.capacity.level - 0.9*source_tier.capacity.capacity
-        # retry data movement until its volume is consumed
-        while volume > 0:
-            with source_tier.bandwidth.request() as source_req:
-                with target_tier.bandwidth.request() as target_req:
-                    yield source_req & target_req
-                    self.last_event = self.env.now
-                    self.next_event = self.env.peek()
-
-                    step_duration, available_bandwidth = self.get_move_duration(cluster,
-                                                                                source_tier, target_tier, volume)
-                    logger.trace(f"appname: {self.appname}, now : {self.env.now} | last event: "
-                                 f"{self.last_event} | next event: {self.next_event}"
-                                 f" | full duration: {volume/available_bandwidth} | step duration: {step_duration}")
-                    move_event = self.env.process(self.move_volume(step_duration, volume,
-                                                                   available_bandwidth, cluster, source_tier, target_tier, erase=erase))
-
-                    # register the step event to be able to update it
-                    IOPhase.current_ios.append(move_event)
-                    # process the step volume
-                    volume = yield move_event
-
-        return True
-
     def get_step_duration(self, cluster, tier, volume):
         """Get the adequate step duration to not avoid I/O event or volume saturation in tier
 
@@ -413,6 +372,51 @@ class IOPhase:
                      f"{step_duration}")
 
         return step_duration, available_bandwidth
+
+    def move_step(self, env, cluster, source_tier, target_tier, erase=False):
+        """Allows to run a movement of data in an interval where available bandwidth is constant.
+
+        Args:
+            env (simpy.Environment()): environment variable where the I/O operation will take place.
+            cluster (Cluster): the cluster on which the application will run.
+            source_tier (Tier): storage tier from which we read data to move.
+            target_tier (Tier): storage tier where the data will be moved.
+
+        Returns:
+            bool: True if the step is completed, False otherwise.
+
+        Yields:
+            simpy.Event: other events that can occur during the I/O operation.
+        """
+        self.env = env
+        if not source_tier.bandwidth:
+            source_tier.bandwidth = BandwidthResource(IOPhase.current_ios, self.env, 10)
+        if not target_tier.bandwidth:
+            target_tier.bandwidth = BandwidthResource(IOPhase.current_ios, self.env, 10)
+
+        volume = self.volume  # source_tier.capacity.level - 0.9*source_tier.capacity.capacity
+        # retry data movement until its volume is consumed
+        while volume > 0:
+            with source_tier.bandwidth.request() as source_req:
+                with target_tier.bandwidth.request() as target_req:
+                    yield source_req & target_req
+                    self.last_event = self.env.now
+                    self.next_event = self.env.peek()
+
+                    step_duration, available_bandwidth = self.get_move_duration(cluster,
+                                                                                source_tier, target_tier, volume)
+                    logger.trace(f"appname: {self.appname}, now : {self.env.now} | last event: "
+                                 f"{self.last_event} | next event: {self.next_event}"
+                                 f" | full duration: {volume/available_bandwidth} | step duration: {step_duration}")
+                    move_event = self.env.process(self.move_volume(step_duration, volume,
+                                                                   available_bandwidth, cluster, source_tier, target_tier, erase=erase))
+
+                    # register the step event to be able to update it
+                    IOPhase.current_ios.append(move_event)
+                    # process the step volume
+                    volume = yield move_event
+
+        return True
 
     def run_step(self, env, cluster, tier):
         """Allows to run a step of I/O operation where bandwidth share is constant.
