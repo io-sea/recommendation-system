@@ -181,7 +181,7 @@ class IOPhase:
         return description
 
     def register_step(self, t_start, step_duration, available_bandwidth, cluster, tier,
-                      source_tier=None):
+                      source_tier=None, eviction=None):
         """Registering a processing step in the data store with some logging.
 
         Args:
@@ -190,6 +190,8 @@ class IOPhase:
             available_bandwidth (float): available bandwidth in the step.
             cluster (Cluster): the cluster on which the phase will run.
             tier (Tier): the tier on which the step will run.
+            source_tier (Tier, optional): the tier from which the step will run.
+            eviction (int, optional): volume of data which was evicted from ephemeral tier.
         """
         monitoring_info = {"app": self.appname, "type": self.operation,
                            "cpu_usage": self.cores,
@@ -208,6 +210,17 @@ class IOPhase:
         if source_tier:
             monitoring_info["data_placement"]["source"] = source_tier.name
             monitoring_info["type"] = "movement"
+        if eviction:
+            monitoring_info["type"] = "eviction"
+            monitoring_info["t_start"] = self.env.now
+            monitoring_info["t_end"] = self.env.now
+            monitoring_info["bandwidth"] = float("inf")
+            monitoring_info["phase_duration"] = 0
+            monitoring_info["volume"] = eviction
+            logger.debug(f"tier dirty: {convert_size(source_tier.dirty)} | "
+                         f"tier level: {convert_size(source_tier.capacity.level)} | "
+                         f"eviction volume = {convert_size(eviction)}")
+
         monitor_step(self.data, monitoring_info)
 
     def update_tier(self, tier, volume):
@@ -269,6 +282,11 @@ class IOPhase:
             volume -= step_duration * available_bandwidth
             self.update_tier(tier, step_duration * available_bandwidth)
             self.register_step(t_start, step_duration, available_bandwidth, cluster, tier)
+            if isinstance(tier, EphemeralTier):
+                eviction = tier.evict()
+                if eviction:
+                    self.register_step(t_start, step_duration, available_bandwidth, cluster,
+                                       tier, eviction)
 
         except simpy.exceptions.Interrupt as interrupt:
             logger.trace(f'{self.appname} interrupt at {self.env.now}')
@@ -278,6 +296,11 @@ class IOPhase:
                 volume -= step_duration * available_bandwidth
                 self.update_tier(tier, step_duration * available_bandwidth)
                 self.register_step(t_start, step_duration, available_bandwidth, cluster, tier)
+                if isinstance(tier, EphemeralTier):
+                    eviction = tier.evict()
+                    if eviction:
+                        self.register_step(t_start, step_duration, available_bandwidth, cluster,
+                                           tier, eviction)
 
         return volume
 
@@ -300,8 +323,13 @@ class IOPhase:
             volume -= step_duration * available_bandwidth
             self.update_tier_on_move(source_tier, target_tier, step_duration * available_bandwidth,
                                      erase)
-            self.register_step(t_start, step_duration, available_bandwidth, cluster, target_tier,
-                               source_tier)
+            self.register_step(t_start, step_duration, available_bandwidth, cluster,
+                               target_tier, source_tier)
+            if isinstance(source_tier, EphemeralTier):
+                eviction = source_tier.evict()
+                if eviction:
+                    self.register_step(t_start, step_duration, available_bandwidth, cluster,
+                                       target_tier, source_tier, eviction)
 
         except simpy.exceptions.Interrupt as interrupt:
             logger.trace(f'{self.appname} interrupt at {self.env.now}')
@@ -309,8 +337,13 @@ class IOPhase:
             if step_duration:
                 self.last_event += step_duration
                 volume -= step_duration * available_bandwidth
-                self.update_tier_on_move(source_tier, target_tier, step_duration * available_bandwidth, erase)
-                self.register_step(t_start, step_duration, available_bandwidth, cluster, target_tier, source_tier)
+                self.update_tier_on_move(source_tier, target_tier,
+                                         step_duration * available_bandwidth, erase)
+                if isinstance(source_tier, EphemeralTier):
+                    eviction = source_tier.evict()
+                    if eviction:
+                        self.register_step(t_start, step_duration, available_bandwidth, cluster,
+                                           target_tier, source_tier, eviction)
 
         return volume
 
@@ -360,6 +393,7 @@ class IOPhase:
         # take the count of the bottleneck bandwidth
         self.bandwidth_concurrency = bottleneck_tier.bandwidth.count
         # limit the volume to
+        # TODO : for ephemeral tier, we should limit to upper_threshold
         max_volume = min(volume, target_tier.capacity.capacity - target_tier.capacity.level)
         # take the smallest step, step_duration must be > 0
         if 0 < self.next_event - self.last_event < max_volume/available_bandwidth:
@@ -460,9 +494,14 @@ class IOPhase:
             yield self.env.timeout(delay)
         # get the tier where the I/O will be performed
         tier = get_tier(cluster, placement, use_bb=use_bb)
-        ret = yield self.env.process(self.run_step(self.env, cluster, tier))
+        # ret = yield self.env.process(self.run_step(self.env, cluster, tier))
+
         if isinstance(tier, EphemeralTier):
+            io_event = self.env.process(self.run_step(self.env, cluster, tier))
             # destage
-            self.env.process(self.move_step(self.env, cluster, tier,
-                                            tier.persistent_tier, erase=False))
+            destage_event = self.env.process(self.move_step(self.env, cluster, tier,
+                                                            tier.persistent_tier, erase=False))
+            ret = yield io_event & destage_event
+        else:
+            ret = yield self.env.process(self.run_step(self.env, cluster, tier))
         return ret

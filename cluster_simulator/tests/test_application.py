@@ -103,8 +103,8 @@ class TestAppInit(unittest.TestCase):
                           data=data)
         self.env.process(app.run(cluster, placement=tiers))
         self.env.run()
-        fig = display_run(data, cluster, width=800, height=900)
-        fig.show()
+        #fig = display_run(data, cluster, width=800, height=900)
+        # fig.show()
         #self.assertAlmostEqual(app.get_fitness(app_name_filter="appname"), 24, places=0)
         #self.assertEqual(app.get_fitness(app_name_filter="app_name"), 0)
 

@@ -552,5 +552,55 @@ class TestPhaseEphemeralTier(unittest.TestCase):
         # fig.show()
 
 
+class TestPhaseEphemeralTierEviction(unittest.TestCase):
+    """Test phases that happens on tier of type Ephemeral when eviction policy is activated."""
+
+    def setUp(self):
+        self.env = simpy.Environment()
+        self.data = simpy.Store(self.env)
+        self.nvram_bandwidth = {'read':  {'seq': 800, 'rand': 800},
+                                'write': {'seq': 400, 'rand': 400}}
+        ssd_bandwidth = {'read':  {'seq': 200, 'rand': 200},
+                         'write': {'seq': 100, 'rand': 100}}
+        hdd_bandwidth = {'read':  {'seq': 80, 'rand': 80},
+                         'write': {'seq': 40, 'rand': 40}}
+        self.hdd_tier = Tier(self.env, 'HDD', bandwidth=hdd_bandwidth, capacity=1e12)
+        self.ssd_tier = Tier(self.env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
+        self.nvram_tier = Tier(self.env, 'NVRAM', bandwidth=self.nvram_bandwidth,
+                               capacity=10e9)
+        self.bb = EphemeralTier(self.env, name="BB", persistent_tier=self.hdd_tier,
+                                bandwidth=self.nvram_bandwidth, capacity=10e9)
+
+    def test_bb_volume_eviction_below_threshold(self):
+        """Test running io phase on ephemeral tier with volume < upper_threshold."""
+        cluster = Cluster(self.env, tiers=[self.hdd_tier],
+                          ephemeral_tier=self.bb)
+        # fill BB above upper threshold
+        write_io = IOPhase(operation='write', volume=7.5e9, data=self.data)
+        self.env.process(write_io.run(self.env, cluster, placement=0, use_bb=True))
+        self.env.run()
+
+    def test_bb_volume_eviction(self):
+        """Test running io phase on ephemeral tier with volume > upper_threshold."""
+        cluster = Cluster(self.env, tiers=[self.hdd_tier],
+                          ephemeral_tier=self.bb)
+        # fill BB above upper threshold
+        write_io = IOPhase(operation='write', volume=9.5e9, data=self.data)
+        self.env.process(write_io.run(self.env, cluster, placement=0, use_bb=True))
+        self.env.run()
+        self.assertEqual(self.data.items[0]["BB_level"], 9.5e9)
+        self.assertEqual(self.data.items[-2]["type"], "eviction")
+        # self.assertEqual(self.data.items[-1]["BB_level"], 7e9)
+
+    def test_bb_volume_saturation(self):
+        """Test running process volume phase on ephemeral tier and checks buffer level."""
+        cluster = Cluster(self.env, tiers=[self.hdd_tier],
+                          ephemeral_tier=self.bb)
+        # fill BB above upper threshold
+        write_io = IOPhase(operation='write', volume=12e9, data=self.data)
+        self.env.process(write_io.run(self.env, cluster, placement=0, use_bb=True))
+        self.env.run()
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

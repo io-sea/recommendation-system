@@ -177,6 +177,7 @@ class EphemeralTier(Tier):
             bandwidth (simpy.Resource): bandwidth as limited number of slots that can be consumed.  Default capacity is up to 10 concurrent I/O sharing the maximum value of the bandwidth.
             capacity (simpy.Container, optional): storage capacity of the flavor of the datanode. Defaults to 80e9.
         """
+        self.env = env
         # the non transient tier it is attached to
         self.persistent_tier = persistent_tier
         # amount of dirty data
@@ -184,7 +185,6 @@ class EphemeralTier(Tier):
         # eviction parameters
         self.lower_threshold = 0.7
         self.upper_threshold = 0.9
-
         # self.cores = simpy.Resource(env, capacity=cores)
         super().__init__(env, name, bandwidth, capacity=capacity)
 
@@ -199,12 +199,11 @@ class EphemeralTier(Tier):
         Returns:
             eviction_volume (int): amount of data to be evicted.
         """
-
         if self.capacity.level > self.upper_threshold*self.capacity.capacity:
             clean_data = self.capacity.level - self.dirty
             eviction_volume = min(self.capacity.level -
                                   self.lower_threshold*self.capacity.capacity, clean_data)
-            if eviction_volume:
+            if eviction_volume > 0:
                 self.capacity.get(eviction_volume)
                 logger.info(f"{convert_size(eviction_volume)} evicted from tier {self.name}")
                 return eviction_volume
