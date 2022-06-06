@@ -501,7 +501,9 @@ class IOPhase:
             # destage
             destage_event = self.env.process(self.move_step(self.env, cluster, tier,
                                                             tier.persistent_tier, erase=False))
-            ret = yield io_event & destage_event
+            # do not wait for the destage to complete
+            response = yield io_event | destage_event
+            ret = all([value for key, value in response.items()])
         else:
             ret = yield self.env.process(self.run_step(self.env, cluster, tier))
         return ret

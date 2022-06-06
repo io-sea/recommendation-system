@@ -155,7 +155,7 @@ class Application:
         """
         return [cluster.compute_cores.request() for _ in range(max(self.cores_request))]
 
-    def run(self, cluster, placement):
+    def run(self, cluster, placement, use_bb=None):
         """Launches the execution process of an application on a specified cluster having compute and storage resources with placement indications for each issued I/O. Phases are executed sequentially.
 
         Args:
@@ -189,12 +189,15 @@ class Application:
                     self.status[phase] = False
             else:
                 data_placement = cluster.tiers[placement[item_number]]
+                bb = use_bb[item_number] if use_bb else False
                 if phase == 0:
                     yield AllOf(self.env, requesting_cores)
-                    self.status[phase] = yield self.env.process(item.run(self.env, cluster, placement=data_placement))
+                    ret = yield self.env.process(item.run(self.env, cluster, placement=data_placement, use_bb=bb))
+                    print(ret)
+                    self.status[phase] = ret
                     logger.debug(f"the issued status of the IO phase : {self.status[phase]}")
                 elif phase > 0 and self.status[phase-1] == True:
-                    self.status[phase] = yield self.env.process(item.run(self.env, cluster, placement=data_placement))
+                    self.status[phase] = yield self.env.process(item.run(self.env, cluster, placement=data_placement, use_bb=bb))
                 else:
                     self.status[phase] = False
                 phase += 1

@@ -3,7 +3,7 @@ import time
 import numpy as np
 import simpy
 
-from cluster_simulator.cluster import Cluster, Tier, bandwidth_share_model, compute_share_model, get_tier, convert_size
+from cluster_simulator.cluster import Cluster, Tier, EphemeralTier, bandwidth_share_model, compute_share_model, get_tier, convert_size
 from cluster_simulator.phase import DelayPhase, ComputePhase, IOPhase
 from cluster_simulator.application import Application
 from analytics import display_run
@@ -103,10 +103,10 @@ class TestAppInit(unittest.TestCase):
                           data=data)
         self.env.process(app.run(cluster, placement=tiers))
         self.env.run()
-        #fig = display_run(data, cluster, width=800, height=900)
+        # fig = display_run(data, cluster, width=800, height=900)
         # fig.show()
-        #self.assertAlmostEqual(app.get_fitness(app_name_filter="appname"), 24, places=0)
-        #self.assertEqual(app.get_fitness(app_name_filter="app_name"), 0)
+        # self.assertAlmostEqual(app.get_fitness(app_name_filter="appname"), 24, places=0)
+        # self.assertEqual(app.get_fitness(app_name_filter="app_name"), 0)
 
 
 class TestBasicApps(unittest.TestCase):
@@ -298,20 +298,45 @@ class TestPhaseSuperposition(unittest.TestCase):
         self.env.process(app1.run(cluster, placement=[1, 1]))
         self.env.process(app2.run(cluster, placement=[1, 1]))
         self.env.run()
-        #self.assertEqual(data.items[0]["t_start"], data.items[1]["t_start"])
+        # self.assertEqual(data.items[0]["t_start"], data.items[1]["t_start"])
         # fig = display_run(data, cluster, width=800, height=900)
         # fig.show()
 
 
-class TestProcessIOFunction(unittest.TestCase):
+class TestBufferedApplications(unittest.TestCase):
     def setUp(self):
         self.env = simpy.Environment()
-        nvram_bandwidth = {'read':  {'seq': 780, 'rand': 760},
-                           'write': {'seq': 515, 'rand': 505}}
-        ssd_bandwidth = {'read':  {'seq': 210, 'rand': 190},
+        self.data = simpy.Store(self.env)
+        self.nvram_bandwidth = {'read':  {'seq': 800, 'rand': 800},
+                                'write': {'seq': 400, 'rand': 400}}
+        ssd_bandwidth = {'read':  {'seq': 200, 'rand': 200},
                          'write': {'seq': 100, 'rand': 100}}
+        hdd_bandwidth = {'read':  {'seq': 80, 'rand': 80},
+                         'write': {'seq': 40, 'rand': 40}}
+        self.hdd_tier = Tier(self.env, 'HDD', bandwidth=hdd_bandwidth, capacity=1e12)
         self.ssd_tier = Tier(self.env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
-        self.nvram_tier = Tier(self.env, 'NVRAM', bandwidth=nvram_bandwidth, capacity=80e9)
+        self.nvram_tier = Tier(self.env, 'NVRAM', bandwidth=self.nvram_bandwidth,
+                               capacity=10e9)
+        self.bb = EphemeralTier(self.env, name="BB", persistent_tier=self.hdd_tier,
+                                bandwidth=self.nvram_bandwidth, capacity=10e9)
+
+    def test_basic_app_cluster_datanode(self):
+        cluster = Cluster(self.env, tiers=[self.hdd_tier],
+                          ephemeral_tier=self.bb)
+        # Simple app: read 1GB -> compute 10s -> write 5GB
+        compute = [0,  10]
+        read = [1e9, 0]
+        write = [0, 5e9]
+        tiers = [0, 0]
+        use_bb = [True, False]
+        app = Application(self.env,
+                          compute=compute,
+                          read=read,
+                          write=write)
+
+        self.env.process(app.run(cluster, placement=tiers, use_bb=use_bb))
+        self.env.run()
+        """Test running simple apps in cluster having a datanode with BB."""
 
 
 if __name__ == '__main__':
