@@ -15,12 +15,12 @@ from loguru import logger
 import numpy as np
 import pandas as pd
 import math
-#from cluster_simulator.cluster import Cluster, Tier, bandwidth_share_model, compute_share_model, get_tier, convert_size
+# from cluster_simulator.cluster import Cluster, Tier, bandwidth_share_model, compute_share_model, get_tier, convert_size
 
 from cluster_simulator.utils import convert_size, get_tier, compute_share_model, BandwidthResource
 from cluster_simulator.cluster import Tier
 from cluster_simulator.cluster import EphemeralTier  # proper import for isinstance but causes import error for notebooks
-#from cluster import EphemeralTier
+# from cluster import EphemeralTier
 import random
 import string
 import time
@@ -147,7 +147,8 @@ class IOPhase:
         pattern: describes the pattern encoding with 1 if pure sequential, 0 if pure random, and a float in between.
         last_event: float to keep the timestamp of the last I/O event.
         next_event: float to keep the timestamp of the next I/O event.
-        bandwidth_concurrency! int to indicate how many processes are doing I/O.
+        bandwidth_concurrency: int to indicate how many processes are doing I/O.
+        dirty: int to indicate the amount of data that is dirty in ephemeral tier/RAM (does not have a copy in persistent tier).
         data: data store object where application records are kept.
         appname: a user specified application name the phase belongs to.
     """
@@ -179,7 +180,8 @@ class IOPhase:
         description += (f"{self.operation.capitalize()} I/O Phase of volume {convert_size(self.volume)} with pattern: {io_pattern}\n")
         return description
 
-    def register_step(self, t_start, step_duration, available_bandwidth, cluster, tier):
+    def register_step(self, t_start, step_duration, available_bandwidth, cluster, tier,
+                      source_tier=None, eviction=None):
         """Registering a processing step in the data store with some logging.
 
         Args:
@@ -188,6 +190,8 @@ class IOPhase:
             available_bandwidth (float): available bandwidth in the step.
             cluster (Cluster): the cluster on which the phase will run.
             tier (Tier): the tier on which the step will run.
+            source_tier (Tier, optional): the tier from which the step will run.
+            eviction (int, optional): volume of data which was evicted from ephemeral tier.
         """
         monitoring_info = {"app": self.appname, "type": self.operation,
                            "cpu_usage": self.cores,
@@ -202,6 +206,26 @@ class IOPhase:
         # update info if using a burst buffer
         if cluster.ephemeral_tier:
             monitoring_info[cluster.ephemeral_tier.name + "_level"] = cluster.ephemeral_tier.capacity.level
+        # update info if using source_tier for data movement
+        if source_tier:
+            monitoring_info["data_placement"]["source"] = source_tier.name
+            monitoring_info["type"] = "movement"
+        if eviction:
+            monitoring_info["type"] = "eviction"
+            monitoring_info["t_start"] = self.env.now
+            monitoring_info["t_end"] = self.env.now
+            monitoring_info["bandwidth"] = float("inf")
+            monitoring_info["phase_duration"] = 0
+            monitoring_info["volume"] = eviction
+            if source_tier:
+                logger.debug(f"tier dirty: {convert_size(source_tier.dirty)} | "
+                             f"tier level: {convert_size(source_tier.capacity.level)} | "
+                             f"eviction volume = {convert_size(eviction)}")
+            else:
+                logger.debug(f"tier dirty: {convert_size(tier.dirty)} | "
+                             f"tier level: {convert_size(tier.capacity.level)} | "
+                             f"eviction volume = {convert_size(eviction)}")
+
         monitor_step(self.data, monitoring_info)
 
     def update_tier(self, tier, volume):
@@ -211,20 +235,46 @@ class IOPhase:
             tier (Tier): tier for which the level will be updated.
             volume (float): volume value (positive or negative) to adjust tier level.
         """
-        assert isinstance(tier, Tier)
+        assert isinstance(tier, Tier)  # check if tier is a Tier/EphemeralTier instance
         # reading operation suppose at least some volume in the tier
         if self.operation == "read" and tier.capacity.level < self.volume:
             tier.capacity.put(self.volume - tier.capacity.level)
         if self.operation == "write" and volume > 0:
             tier.capacity.put(volume)
+            if isinstance(tier, EphemeralTier):
+                tier.dirty += volume
         elif volume < 0:
             tier.capacity.get(abs(volume))
 
-    def process_volume(self, step_duration, volume, available_bandwidth, cluster, tier):
-        """This method processes a small amount of I/O volume between two predictable events. If an event occurs in the meantime, I/O will be interrupted and bandwidth updated according.
+    def update_tier_on_move(self, source_tier, target_tier, volume, erase):
+        """Update tier level following a volume move.
 
         Args:
-            step_duration (float): the expected duration between two predictible events.
+            source_tier (Tier): tier from which the data will be moved.
+            target_tier (Tier): tier for which the level will be updated.
+            volume (float): volume value (positive or negative) to adjust tier level.
+            erase (bool): whether or not erase the amount of volume from source_tier.
+        """
+        assert isinstance(source_tier, Tier)
+        assert isinstance(target_tier, Tier)
+        # reading operation suppose at least some volume in the tier
+        if source_tier.capacity.level < volume:
+            source_tier.capacity.put(volume - source_tier.capacity.level)
+        # target_tier get its volume updated
+        target_tier.capacity.put(volume)
+        # destaging decreases the amount of dirty data as it get a copy in a persistent tier
+        if isinstance(source_tier, EphemeralTier) and type(target_tier) == Tier:
+            source_tier.dirty -= volume
+            source_tier.dirty = max(0, source_tier.dirty)
+        # if erase original data, then update source_tier
+        if erase:
+            source_tier.capacity.get(volume)
+
+    def process_volume(self, step_duration, volume, available_bandwidth, cluster, tier):
+        """This method processes a small amount of I/O volume between two predictable events on a specific tier. If an event occurs in the meantime, I/O will be interrupted and bandwidth updated according.
+
+        Args:
+            step_duration (float): the expected duration between two predictable events.
             volume (float): volume in bytes of the data to process.
             cluster (Cluster): cluster facility where the I/O operation should take place.
             available_bandwidth (float): available bandwidth in the step.
@@ -237,6 +287,11 @@ class IOPhase:
             volume -= step_duration * available_bandwidth
             self.update_tier(tier, step_duration * available_bandwidth)
             self.register_step(t_start, step_duration, available_bandwidth, cluster, tier)
+            if isinstance(tier, EphemeralTier):
+                eviction = tier.evict()
+                if eviction:
+                    self.register_step(t_start, step_duration, available_bandwidth, cluster,
+                                       tier=tier, eviction=eviction)
 
         except simpy.exceptions.Interrupt as interrupt:
             logger.trace(f'{self.appname} interrupt at {self.env.now}')
@@ -246,8 +301,161 @@ class IOPhase:
                 volume -= step_duration * available_bandwidth
                 self.update_tier(tier, step_duration * available_bandwidth)
                 self.register_step(t_start, step_duration, available_bandwidth, cluster, tier)
+                if isinstance(tier, EphemeralTier):
+                    eviction = tier.evict()
+                    if eviction:
+                        self.register_step(t_start, step_duration, available_bandwidth,
+                                           cluster, tier=tier, eviction=eviction)
 
         return volume
+
+    def move_volume(self, step_duration, volume, available_bandwidth, cluster, source_tier,
+                    target_tier, erase=False):
+        """This method moves a small amount of I/O volume between two predictable events from a source_tier to a target tier with available bandiwdth value. If an event occurs in the meantime, data movement will be interrupted and bandwidth updated accordingly.
+
+        Args:
+            step_duration (float): the expected duration between two predictible events.
+            volume (float): volume in bytes of the data to move.
+            cluster (Cluster): cluster facility where the I/O operation should take place.
+            available_bandwidth (float): available bandwidth in the step.
+            source_tier (Tier): storage tier from which we read data to move.
+            target_tier (Tier): storage tier where the data will be moved.
+        """
+        try:
+            t_start = self.env.now
+            volume_event = self.env.timeout(step_duration)
+            yield volume_event
+            volume -= step_duration * available_bandwidth
+            self.update_tier_on_move(source_tier, target_tier, step_duration * available_bandwidth,
+                                     erase)
+            self.register_step(t_start, step_duration, available_bandwidth, cluster,
+                               target_tier, source_tier)
+            if isinstance(source_tier, EphemeralTier):
+                eviction = source_tier.evict()
+                if eviction:
+                    self.register_step(t_start, step_duration, available_bandwidth, cluster,
+                                       target_tier, source_tier, eviction)
+
+        except simpy.exceptions.Interrupt as interrupt:
+            logger.trace(f'{self.appname} interrupt at {self.env.now}')
+            step_duration = self.env.now - t_start
+            if step_duration:
+                self.last_event += step_duration
+                volume -= step_duration * available_bandwidth
+                self.update_tier_on_move(source_tier, target_tier,
+                                         step_duration * available_bandwidth, erase)
+                if isinstance(source_tier, EphemeralTier):
+                    eviction = source_tier.evict()
+                    if eviction:
+                        self.register_step(t_start, step_duration, available_bandwidth, cluster,
+                                           target_tier, source_tier, eviction)
+
+        return volume
+
+    def get_step_duration(self, cluster, tier, volume):
+        """Get the adequate step duration to not avoid I/O event or volume saturation in tier
+
+        Args:
+            cluster (Cluster): _description_
+            tier (Tier): _description_
+            volume (float): _description_
+
+        Returns:
+            tuple: _description_
+        """
+        max_bandwidth = cluster.get_max_bandwidth(tier, operation=self.operation, pattern=self.pattern)
+        self.bandwidth_concurrency = tier.bandwidth.count
+        available_bandwidth = max_bandwidth/self.bandwidth_concurrency
+        # limit the volume to maximum available
+        max_volume = min(volume, tier.capacity.capacity - tier.capacity.level)
+        # take the smallest step, step_duration must be > 0
+        if 0 < self.next_event - self.last_event < max_volume/available_bandwidth:
+            step_duration = self.next_event - self.last_event
+        else:
+            step_duration = max_volume/available_bandwidth
+        logger.trace(f"appname: {self.appname}, now : {self.env.now} | last event: {self.last_event} | next event: {self.next_event}"
+                     f" | full duration: {volume/available_bandwidth} | step duration: {step_duration}")
+
+        return step_duration, available_bandwidth
+
+    def get_move_duration(self, cluster, source_tier, target_tier, volume):
+        """Get the adequate step duration to avoid I/O event or volume saturation in tier
+
+        Args:
+            cluster (Cluster): _description_
+            tier (Tier): _description_
+            volume (float): _description_
+
+        Returns:
+            tuple: _description_
+        """
+
+        read_from_source_bandwidth = cluster.get_max_bandwidth(source_tier, operation='read')/source_tier.bandwidth.count
+        write_to_target_bandwidth = cluster.get_max_bandwidth(target_tier, operation='write')/target_tier.bandwidth.count
+        bandwidths = [read_from_source_bandwidth, write_to_target_bandwidth]
+        available_bandwidth = min(bandwidths)
+        bottleneck_tier = source_tier if bandwidths.index(available_bandwidth) == 0 else target_tier
+        # take the count of the bottleneck bandwidth
+        self.bandwidth_concurrency = bottleneck_tier.bandwidth.count
+        # limit the volume to
+        # TODO : for ephemeral tier, we should limit to upper_threshold
+        max_volume = min(volume, target_tier.capacity.capacity - target_tier.capacity.level)
+        # take the smallest step, step_duration must be > 0
+        if 0 < self.next_event - self.last_event < max_volume/available_bandwidth:
+            step_duration = self.next_event - self.last_event
+        else:
+            step_duration = max_volume/available_bandwidth
+        logger.trace(f"data-movement for: {self.appname}, now : {self.env.now} | "
+                     f"last event: {self.last_event} | next event: {self.next_event}"
+                     f" | full duration: {volume/available_bandwidth} | step duration: "
+                     f"{step_duration}")
+
+        return step_duration, available_bandwidth
+
+    def move_step(self, env, cluster, source_tier, target_tier, erase=False):
+        """Allows to run a movement of data in an interval where available bandwidth is constant.
+
+        Args:
+            env (simpy.Environment()): environment variable where the I/O operation will take place.
+            cluster (Cluster): the cluster on which the application will run.
+            source_tier (Tier): storage tier from which we read data to move.
+            target_tier (Tier): storage tier where the data will be moved.
+
+        Returns:
+            bool: True if the step is completed, False otherwise.
+
+        Yields:
+            simpy.Event: other events that can occur during the I/O operation.
+        """
+        self.env = env
+        if not source_tier.bandwidth:
+            source_tier.bandwidth = BandwidthResource(IOPhase.current_ios, self.env, 10)
+        if not target_tier.bandwidth:
+            target_tier.bandwidth = BandwidthResource(IOPhase.current_ios, self.env, 10)
+
+        volume = self.volume  # source_tier.capacity.level - 0.9*source_tier.capacity.capacity
+        # retry data movement until its volume is consumed
+        while volume > 0:
+            with source_tier.bandwidth.request() as source_req:
+                with target_tier.bandwidth.request() as target_req:
+                    yield source_req & target_req
+                    self.last_event = self.env.now
+                    self.next_event = self.env.peek()
+
+                    step_duration, available_bandwidth = self.get_move_duration(cluster,
+                                                                                source_tier, target_tier, volume)
+                    logger.trace(f"appname: {self.appname}, now : {self.env.now} | last event: "
+                                 f"{self.last_event} | next event: {self.next_event}"
+                                 f" | full duration: {volume/available_bandwidth} | step duration: {step_duration}")
+                    move_event = self.env.process(self.move_volume(step_duration, volume,
+                                                                   available_bandwidth, cluster, source_tier, target_tier, erase=erase))
+
+                    # register the step event to be able to update it
+                    IOPhase.current_ios.append(move_event)
+                    # process the step volume
+                    volume = yield move_event
+
+        return True
 
     def run_step(self, env, cluster, tier):
         """Allows to run a step of I/O operation where bandwidth share is constant.
@@ -271,21 +479,14 @@ class IOPhase:
         while volume > 0:
             with tier.bandwidth.request() as req:
                 yield req
-                max_bandwidth = cluster.get_max_bandwidth(tier, operation=self.operation, pattern=self.pattern)
-                self.bandwidth_concurrency = tier.bandwidth.count
-                available_bandwidth = max_bandwidth/self.bandwidth_concurrency
                 self.last_event = self.env.now
                 self.next_event = self.env.peek()
-                # take the smallest step, step_duration must be > 0
 
-                if 0 < self.next_event - self.last_event < volume/available_bandwidth:
-                    step_duration = self.next_event - self.last_event
-                else:
-                    step_duration = volume/available_bandwidth
+                step_duration, available_bandwidth = self.get_step_duration(cluster, tier, volume)
                 logger.trace(f"appname: {self.appname}, now : {self.env.now} | last event: {self.last_event} | next event: {self.next_event}"
                              f" | full duration: {volume/available_bandwidth} | step duration: {step_duration}")
-                step_event = self.env.process(self.process_volume(step_duration, volume, available_bandwidth, cluster, tier))
-                # register the step event to be able to update it
+                step_event = self.env.process(self.process_volume(step_duration, volume,
+                                                                  available_bandwidth, cluster, tier))
                 IOPhase.current_ios.append(step_event)
                 # process the step volume
                 volume = yield step_event
@@ -298,13 +499,28 @@ class IOPhase:
             yield self.env.timeout(delay)
         # get the tier where the I/O will be performed
         tier = get_tier(cluster, placement, use_bb=use_bb)
+        # ret = yield self.env.process(self.run_step(self.env, cluster, tier))
+
         if isinstance(tier, EphemeralTier):
-            # if target is ephemeral, buffer the I/O in tier
-            ret = yield self.env.process(self.run_step(self.env, cluster, tier))
-            if ret is True:
-                # if I/O is successful, destage on persistent tier in sequential way
-                ret2 = yield self.env.process(self.run_step(self.env, cluster, tier.persistent_tier))
-                return ret2
+            if self.operation == "read":
+                # do prefetch
+                io_prefetch = self.env.process(self.move_step(self.env, cluster,
+                                                              tier.persistent_tier,
+                                                              tier, erase=False))
+                ret1 = yield io_prefetch
+                io_event = self.env.process(self.run_step(self.env, cluster, tier))
+                if ret1:
+                    ret = yield io_event
+
+            elif self.operation == "write":
+                io_event = self.env.process(self.run_step(self.env, cluster, tier))
+                # destage
+                destage_event = self.env.process(self.move_step(self.env, cluster, tier,
+                                                                tier.persistent_tier, erase=False))
+                # do not wait for the destage to complete
+                # TODO, logic will fail if destaging is faster than the IO
+                response = yield io_event | destage_event
+                ret = all([value for key, value in response.items()])
         else:
-            ret = yield env.process(self.run_step(env, cluster, tier))
-            return ret
+            ret = yield self.env.process(self.run_step(self.env, cluster, tier))
+        return ret

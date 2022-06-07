@@ -228,7 +228,8 @@ def display_run(data, cluster, width=800, height=600):
         # feeding buffer level
         if cluster.ephemeral_tier:
             bb_tier = cluster.ephemeral_tier.name
-            buffer_storage.setdefault(bb_tier, []).append(phase[bb_tier+"_level"])
+            if bb_tier+"_level" in phase:
+                buffer_storage.setdefault(bb_tier, []).append(phase[bb_tier+"_level"])
 
     # Burst Buffer level tracing
     for bb in buffer_storage.keys():

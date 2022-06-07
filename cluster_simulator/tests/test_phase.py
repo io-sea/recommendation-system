@@ -188,7 +188,8 @@ class TestBandwidthShare(unittest.TestCase):
         self.assertAlmostEqual(tier.capacity.level, 6e9, places=5)
 
     def test_3_shifted_write_phases_diff_placement(self):
-        """Test 2 read phases simultaneously on the same tier, and ensure that bandwidth is /2."""
+        """Test 2 read phases simultaneously on the same tier, and ensure that bandwidth is /2.
+        IOs when run without the application framework do not respect cores shared resources shortage."""
         cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
         read_io_1 = IOPhase(appname="#1", operation='write', volume=2e9, data=self.data)
         read_io_2 = IOPhase(appname="#2", operation='write', volume=2e9, data=self.data)
@@ -269,13 +270,154 @@ class TestBandwidthShare(unittest.TestCase):
 class TestDataMovement(unittest.TestCase):
     def setUp(self):
         self.env = simpy.Environment()
-        nvram_bandwidth = {'read':  {'seq': 780, 'rand': 760},
-                           'write': {'seq': 515, 'rand': 505}}
+        self.data = simpy.Store(self.env)
+        hdd_bandwidth = {'read':  {'seq': 80, 'rand': 80},
+                         'write': {'seq': 40, 'rand': 40}}
         ssd_bandwidth = {'read':  {'seq': 210, 'rand': 190},
                          'write': {'seq': 100, 'rand': 100}}
-
+        self.hdd_tier = Tier(self.env, 'HDD', bandwidth=hdd_bandwidth, capacity=1e12)
         self.ssd_tier = Tier(self.env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
-        self.nvram_tier = Tier(self.env, 'NVRAM', bandwidth=nvram_bandwidth, capacity=80e9)
+        self.cluster = Cluster(self.env, tiers=[self.hdd_tier, self.ssd_tier])
+
+    def test_update_tier_on_move(self):
+        """Test if updating tiers levels after data moves works well."""
+        # prepare initial volume on tier
+        self.hdd_tier.capacity.put(20e9)
+        self.assertEqual(self.ssd_tier.capacity.level, 0)
+        write_io = IOPhase(operation='write', volume=10e9, data=self.data)
+        write_io.update_tier_on_move(source_tier=self.hdd_tier,
+                                     target_tier=self.ssd_tier,
+                                     volume=10e9,
+                                     erase=False)
+        self.assertEqual(self.ssd_tier.capacity.level, 10e9)
+
+    def test_move_volume_write(self):
+        """Test moving volume on I/O of type write."""
+        write_io = IOPhase(operation='write', volume=9e9, data=self.data)
+        write_io.env = self.env
+        self.hdd_tier.capacity.put(20e9)
+
+        ret = self.env.process(write_io.move_volume(step_duration=1,
+                                                    volume=1e9,
+                                                    available_bandwidth=500e6,
+                                                    cluster=self.cluster,
+                                                    source_tier=self.hdd_tier,
+                                                    target_tier=self.ssd_tier))
+        self.env.run()
+        self.assertEqual(self.data.items[0]["volume"], 500e6)
+        self.assertEqual(self.ssd_tier.capacity.level, 500e6)
+
+    def test_move_volume_write_with_erase(self):
+        """Test moving volume on I/O of type write with erase option."""
+        write_io = IOPhase(operation='write', volume=9e9, data=self.data)
+        write_io.env = self.env
+        self.hdd_tier.capacity.put(20e9)
+        self.assertEqual(self.hdd_tier.capacity.level, 20e9)
+        ret = self.env.process(write_io.move_volume(step_duration=1,
+                                                    volume=1e9,
+                                                    available_bandwidth=500e6,
+                                                    cluster=self.cluster,
+                                                    source_tier=self.hdd_tier,
+                                                    target_tier=self.ssd_tier,
+                                                    erase=True))
+        self.env.run()
+        self.assertEqual(self.data.items[0]["volume"], 500e6)
+        self.assertEqual(self.ssd_tier.capacity.level, 500e6)
+        self.assertEqual(self.hdd_tier.capacity.level, 20e9-500e6)
+        # self.assertEqual(ret.value, 1e9 - 500)
+
+    def test_update_tier_on_move_with_erase(self):
+        """Test if updating tiers levels after data moves works well with erase option."""
+        # prepare initial volume on tier
+        self.hdd_tier.capacity.put(20e9)
+        self.assertEqual(self.hdd_tier.capacity.level, 20e9)
+        self.assertEqual(self.ssd_tier.capacity.level, 0)
+        write_io = IOPhase(operation='write', volume=10e9, data=self.data)
+        write_io.update_tier_on_move(source_tier=self.hdd_tier,
+                                     target_tier=self.ssd_tier,
+                                     volume=10e9,
+                                     erase=True)
+        self.assertEqual(self.ssd_tier.capacity.level, 10e9)
+        self.assertEqual(self.hdd_tier.capacity.level, 20e9-10e9)
+
+    def test_move_step(self):
+        """Test that move step moves data from tier to another for the IO volume."""
+        self.hdd_tier.capacity.put(20e9)
+        self.assertEqual(self.hdd_tier.capacity.level, 20e9)
+        self.assertEqual(self.ssd_tier.capacity.level, 0)
+
+        write_io = IOPhase(operation='write', volume=10e9, data=self.data)
+        self.env.process(write_io.move_step(self.env, self.cluster,
+                                            self.hdd_tier, self.ssd_tier))
+        self.env.run()
+        self.assertEqual(self.hdd_tier.capacity.level, 20e9)
+        self.assertEqual(self.ssd_tier.capacity.level, 10e9)
+        self.assertEquals(self.data.items[0]["type"], "movement")
+        self.assertEquals(self.data.items[0]["data_placement"]["source"], self.hdd_tier.name)
+
+    def test_concurrent_move_step(self):
+        """Test that move step moves data from tier to another for the IO volume and adapts bandwidth in case of concurrency."""
+        self.hdd_tier.capacity.put(20e9)
+        self.assertEqual(self.hdd_tier.capacity.level, 20e9)
+        self.assertEqual(self.ssd_tier.capacity.level, 0)
+
+        io1 = IOPhase(operation='write', volume=10e9, data=self.data)
+        io2 = IOPhase(operation='write', volume=10e9, data=self.data)
+        self.env.process(io1.move_step(self.env, self.cluster,
+                                       self.hdd_tier, self.ssd_tier))
+        self.env.process(io2.move_step(self.env, self.cluster,
+                                       self.hdd_tier, self.ssd_tier))
+        self.env.run()
+        self.assertEqual(self.hdd_tier.capacity.level, 20e9)
+        self.assertEqual(self.ssd_tier.capacity.level, 20e9)
+
+    def test_io_concurrent_move_step(self):
+        """Test that move step moves data from tier to another for the IO volume and adapts bandwidth in case of concurrency. Here the concurrent IO is a write on the target tier."""
+        self.hdd_tier.capacity.put(20e9)
+        self.assertEqual(self.hdd_tier.capacity.level, 20e9)
+        self.assertEqual(self.ssd_tier.capacity.level, 0)
+
+        io1 = IOPhase(operation='write', volume=10e9, data=self.data)
+        io2 = IOPhase(operation='write', volume=10e9, data=self.data)
+        self.env.process(io1.move_step(self.env, self.cluster,
+                                       self.hdd_tier, self.ssd_tier))
+        # write a concurrent IO on ssd_tier
+        self.env.process(io2.run(self.env, self.cluster, placement=1))
+        self.env.run()
+        self.assertEqual(self.hdd_tier.capacity.level, 20e9)
+        self.assertEqual(self.ssd_tier.capacity.level, 20e9)
+
+    def test_io_concurrent_move_step_with_erase(self):
+        """Test that move step moves data with erase from tier to another for the IO volume and adapts bandwidth in case of concurrency. Here the concurrent IO is a write on the target tier."""
+        self.hdd_tier.capacity.put(20e9)
+        self.assertEqual(self.hdd_tier.capacity.level, 20e9)
+        self.assertEqual(self.ssd_tier.capacity.level, 0)
+
+        io1 = IOPhase(operation='write', volume=10e9, data=self.data)
+        io2 = IOPhase(operation='write', volume=10e9, data=self.data)
+        self.env.process(io1.move_step(self.env, self.cluster,
+                                       self.hdd_tier, self.ssd_tier, erase=True))
+        # write a concurrent IO on ssd_tier
+        self.env.process(io2.run(self.env, self.cluster, placement=1))
+        self.env.run()
+        self.assertEqual(self.hdd_tier.capacity.level, 10e9)
+        self.assertEqual(self.ssd_tier.capacity.level, 20e9)
+
+    def test_shifted_io_concurrent_move_step(self):
+        """Test that move step moves data from tier to another for the IO volume and adapts bandwidth in case of concurrency. Here the concurrent IO is time_shifted write on the target tier."""
+        self.hdd_tier.capacity.put(20e9)
+        self.assertEqual(self.hdd_tier.capacity.level, 20e9)
+        self.assertEqual(self.ssd_tier.capacity.level, 0)
+
+        io1 = IOPhase(operation='write', volume=10e9, data=self.data)
+        io2 = IOPhase(operation='write', volume=10e9, data=self.data)
+        self.env.process(io1.move_step(self.env, self.cluster, self.hdd_tier,
+                                       self.ssd_tier))
+        # write a concurrent IO on ssd_tier
+        self.env.process(io2.run(self.env, self.cluster, placement=1, delay=10))
+        self.env.run()
+        self.assertEqual(self.hdd_tier.capacity.level, 20e9)
+        self.assertEqual(self.ssd_tier.capacity.level, 20e9)
 
 
 class TestPhaseEphemeralTier(unittest.TestCase):
@@ -312,6 +454,26 @@ class TestPhaseEphemeralTier(unittest.TestCase):
         self.assertEqual(bb.capacity.level, 500e6)
         self.assertEqual(ret.value, 1e9 - 500e6)
 
+    def test_move_volume_use_bb(self):
+        """Test running move volume phase on ephemeral tier and checks buffer level."""
+        data = simpy.Store(self.env)
+        bb = EphemeralTier(self.env, name="BB", persistent_tier=self.hdd_tier,
+                           bandwidth=self.nvram_bandwidth, capacity=10e9)
+        cluster = Cluster(self.env, tiers=[self.hdd_tier, self.ssd_tier],
+                          ephemeral_tier=bb)
+        write_io = IOPhase(operation='write', volume=9e9, data=data)
+        write_io.env = self.env
+        ret = self.env.process(write_io.move_volume(step_duration=1,
+                                                    volume=1e9,
+                                                    available_bandwidth=500e6,
+                                                    cluster=cluster,
+                                                    source_tier=self.hdd_tier,
+                                                    target_tier=bb))
+        self.env.run()
+        self.assertEqual(data.items[0]["volume"], 500e6)
+        self.assertEqual(bb.capacity.level, 500e6)
+        self.assertEqual(ret.value, 1e9 - 500e6)
+
     def test_phase_use_bb(self):
         """Test running complete write phase on ephemeral tier and checks destaging buffered data on persistent tier."""
         # define an IO phase
@@ -324,10 +486,8 @@ class TestPhaseEphemeralTier(unittest.TestCase):
         # run the phase on the tier with placement = bb
         self.env.process(write_io.run(self.env, cluster, placement=0, use_bb=True))  # nvram 200-100
         self.env.run()
-        self.assertEqual(self.data.items[0]["volume"], 1e9)
-        self.assertEqual(self.data.items[-1]["volume"], 1e9)
-        self.assertEqual(bb.capacity.level, 1e9)
-        self.assertEqual(bb.persistent_tier.capacity.level, 1e9)
+        self.assertEqual(bb.capacity.level, write_io.volume)
+        self.assertEqual(bb.persistent_tier.capacity.level, write_io.volume)
 
     def test_phase_use_bb_false(self):
         """Test running simple write phase on ephemeral tier with False option and checks if it runs without buffering."""
@@ -341,10 +501,8 @@ class TestPhaseEphemeralTier(unittest.TestCase):
         # run the phase on the tier with placement = bb
         self.env.process(write_io.run(self.env, cluster, placement=0, use_bb=False))  # nvram 200-100
         self.env.run()
-        # ensure at last item that persistent/eph levels are correct
-        item = self.data.items[-1]
-        self.assertAlmostEqual((item["tier_level"]["HDD"]), 1e9)
-        self.assertAlmostEqual((item["BB_level"]), 0)
+        self.assertEqual(bb.capacity.level, 0)
+        self.assertEqual(bb.persistent_tier.capacity.level, write_io.volume)
 
     def test_phase_use_bb_concurrency(self):
         """Test two writing phases, one has burst buffer usage and the other not. The two phases are happening concurrently."""
@@ -370,7 +528,7 @@ class TestPhaseEphemeralTier(unittest.TestCase):
     def test_phase_use_bb_contention(self):
         """Test two writing phases, one has burst buffer usage and the other not. The two phases are happening concurrently. The one writing in BB will overlfow data"""
         # define an IO phase
-        write_io = IOPhase(operation='write', volume=12e9, data=self.data, appname="Buffered")
+        write_io = IOPhase(operation='write', volume=10e9, data=self.data, appname="Buffered")
         write_io_c = IOPhase(operation='write', volume=10e9, data=self.data, appname="Concurrent")
 
         # define burst buffer with its backend PFS
@@ -392,6 +550,56 @@ class TestPhaseEphemeralTier(unittest.TestCase):
         #self.assertAlmostEqual((item["BB_level"]), 1e9)
         # fig = display_run(self.data, cluster, width=800, height=900)
         # fig.show()
+
+
+class TestPhaseEphemeralTierEviction(unittest.TestCase):
+    """Test phases that happens on tier of type Ephemeral when eviction policy is activated."""
+
+    def setUp(self):
+        self.env = simpy.Environment()
+        self.data = simpy.Store(self.env)
+        self.nvram_bandwidth = {'read':  {'seq': 800, 'rand': 800},
+                                'write': {'seq': 400, 'rand': 400}}
+        ssd_bandwidth = {'read':  {'seq': 200, 'rand': 200},
+                         'write': {'seq': 100, 'rand': 100}}
+        hdd_bandwidth = {'read':  {'seq': 80, 'rand': 80},
+                         'write': {'seq': 40, 'rand': 40}}
+        self.hdd_tier = Tier(self.env, 'HDD', bandwidth=hdd_bandwidth, capacity=1e12)
+        self.ssd_tier = Tier(self.env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
+        self.nvram_tier = Tier(self.env, 'NVRAM', bandwidth=self.nvram_bandwidth,
+                               capacity=10e9)
+        self.bb = EphemeralTier(self.env, name="BB", persistent_tier=self.hdd_tier,
+                                bandwidth=self.nvram_bandwidth, capacity=10e9)
+
+    def test_bb_volume_eviction_below_threshold(self):
+        """Test running io phase on ephemeral tier with volume < upper_threshold."""
+        cluster = Cluster(self.env, tiers=[self.hdd_tier],
+                          ephemeral_tier=self.bb)
+        # fill BB above upper threshold
+        write_io = IOPhase(operation='write', volume=7.5e9, data=self.data)
+        self.env.process(write_io.run(self.env, cluster, placement=0, use_bb=True))
+        self.env.run()
+
+    def test_bb_volume_eviction(self):
+        """Test running io phase on ephemeral tier with volume > upper_threshold."""
+        cluster = Cluster(self.env, tiers=[self.hdd_tier],
+                          ephemeral_tier=self.bb)
+        # fill BB above upper threshold
+        write_io = IOPhase(operation='write', volume=9.5e9, data=self.data)
+        self.env.process(write_io.run(self.env, cluster, placement=0, use_bb=True))
+        self.env.run()
+        self.assertEqual(self.data.items[0]["BB_level"], 9.5e9)
+        self.assertEqual(self.data.items[-2]["type"], "eviction")
+        # self.assertEqual(self.data.items[-1]["BB_level"], 7e9)
+
+    def test_bb_volume_saturation(self):
+        """Test running process volume phase on ephemeral tier and checks buffer level."""
+        cluster = Cluster(self.env, tiers=[self.hdd_tier],
+                          ephemeral_tier=self.bb)
+        # fill BB above upper threshold
+        write_io = IOPhase(operation='write', volume=12e9, data=self.data)
+        self.env.process(write_io.run(self.env, cluster, placement=0, use_bb=True))
+        self.env.run()
 
 
 if __name__ == '__main__':

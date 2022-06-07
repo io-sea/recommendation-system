@@ -6,6 +6,9 @@
 Welcome to Cluster Simulator's documentation!
 =============================================
 .. automodule:: cluster_simulator.application
+   :members:
+.. automodule:: cluster_simulator.phase
+   :members:
 .. automodule:: cluster_simulator.cluster
    :members:
 .. toctree::
