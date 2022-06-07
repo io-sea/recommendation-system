@@ -320,7 +320,51 @@ class TestBufferedApplications(unittest.TestCase):
         self.bb = EphemeralTier(self.env, name="BB", persistent_tier=self.hdd_tier,
                                 bandwidth=self.nvram_bandwidth, capacity=10e9)
 
-    def test_basic_app_cluster_datanode(self):
+    def test_noSBB_app(self):
+        """Test running simple apps in cluster having a datanode with BB."""
+        cluster = Cluster(self.env, tiers=[self.hdd_tier],
+                          ephemeral_tier=self.bb)
+        # Simple app: read 1GB -> compute 10s -> write 5GB
+        compute = [0,  10]
+        read = [1e9, 0]
+        write = [0, 5e9]
+        tiers = [0, 0]
+        use_bb = [False, False]
+        app = Application(self.env,
+                          compute=compute,
+                          read=read,
+                          write=write,
+                          data=self.data)
+        self.env.process(app.run(cluster, placement=tiers, use_bb=use_bb))
+        self.env.run()
+        self.assertEqual(self.data.items[0]["type"], "read")
+        self.assertEqual(self.data.items[1]["type"], "compute")
+        self.assertEqual(self.data.items[2]["type"], "write")
+
+    def test_SBB_app_write_phase(self):
+        """Test running simple apps in cluster having a datanode with BB."""
+        cluster = Cluster(self.env, tiers=[self.hdd_tier],
+                          ephemeral_tier=self.bb)
+        # Simple app: read 1GB -> compute 10s -> write 5GB
+        compute = [0,  10]
+        read = [1e9, 0]
+        write = [0, 5e9]
+        tiers = [0, 0]
+        use_bb = [False, True]
+        app = Application(self.env,
+                          compute=compute,
+                          read=read,
+                          write=write,
+                          data=self.data)
+        self.env.process(app.run(cluster, placement=tiers, use_bb=use_bb))
+        self.env.run()
+        self.assertEqual(self.data.items[0]["type"], "read")
+        self.assertEqual(self.data.items[1]["type"], "compute")
+        self.assertEqual(self.data.items[2]["type"], "write")
+        self.assertEqual(self.data.items[3]["type"], "movement")
+
+    def test_prefetch_SBB_app_read_phase(self):
+        """Test running simple apps in cluster having a datanode with BB."""
         cluster = Cluster(self.env, tiers=[self.hdd_tier],
                           ephemeral_tier=self.bb)
         # Simple app: read 1GB -> compute 10s -> write 5GB
@@ -332,11 +376,14 @@ class TestBufferedApplications(unittest.TestCase):
         app = Application(self.env,
                           compute=compute,
                           read=read,
-                          write=write)
-
+                          write=write,
+                          data=self.data)
         self.env.process(app.run(cluster, placement=tiers, use_bb=use_bb))
         self.env.run()
-        """Test running simple apps in cluster having a datanode with BB."""
+        self.assertEqual(self.data.items[0]["type"], "movement")
+        self.assertEqual(self.data.items[1]["type"], "read")
+        self.assertEqual(self.data.items[2]["type"], "compute")
+        self.assertEqual(self.data.items[3]["type"], "write")
 
 
 if __name__ == '__main__':

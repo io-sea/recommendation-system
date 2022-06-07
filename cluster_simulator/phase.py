@@ -497,13 +497,25 @@ class IOPhase:
         # ret = yield self.env.process(self.run_step(self.env, cluster, tier))
 
         if isinstance(tier, EphemeralTier):
-            io_event = self.env.process(self.run_step(self.env, cluster, tier))
-            # destage
-            destage_event = self.env.process(self.move_step(self.env, cluster, tier,
-                                                            tier.persistent_tier, erase=False))
-            # do not wait for the destage to complete
-            response = yield io_event | destage_event
-            ret = all([value for key, value in response.items()])
+            if self.operation == "read":
+                # do prefetch
+                io_prefetch = self.env.process(self.move_step(self.env, cluster,
+                                                              tier.persistent_tier,
+                                                              tier, erase=False))
+                ret1 = yield io_prefetch
+                io_event = self.env.process(self.run_step(self.env, cluster, tier))
+                if ret1:
+                    ret = yield io_event
+
+            elif self.operation == "write":
+                io_event = self.env.process(self.run_step(self.env, cluster, tier))
+                # destage
+                destage_event = self.env.process(self.move_step(self.env, cluster, tier,
+                                                                tier.persistent_tier, erase=False))
+                # do not wait for the destage to complete
+                # TODO, logic will fail if destaging is faster than the IO
+                response = yield io_event | destage_event
+                ret = all([value for key, value in response.items()])
         else:
             ret = yield self.env.process(self.run_step(self.env, cluster, tier))
         return ret
