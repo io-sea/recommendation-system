@@ -217,9 +217,14 @@ class IOPhase:
             monitoring_info["bandwidth"] = float("inf")
             monitoring_info["phase_duration"] = 0
             monitoring_info["volume"] = eviction
-            logger.debug(f"tier dirty: {convert_size(source_tier.dirty)} | "
-                         f"tier level: {convert_size(source_tier.capacity.level)} | "
-                         f"eviction volume = {convert_size(eviction)}")
+            if source_tier:
+                logger.debug(f"tier dirty: {convert_size(source_tier.dirty)} | "
+                             f"tier level: {convert_size(source_tier.capacity.level)} | "
+                             f"eviction volume = {convert_size(eviction)}")
+            else:
+                logger.debug(f"tier dirty: {convert_size(tier.dirty)} | "
+                             f"tier level: {convert_size(tier.capacity.level)} | "
+                             f"eviction volume = {convert_size(eviction)}")
 
         monitor_step(self.data, monitoring_info)
 
@@ -286,7 +291,7 @@ class IOPhase:
                 eviction = tier.evict()
                 if eviction:
                     self.register_step(t_start, step_duration, available_bandwidth, cluster,
-                                       tier, eviction)
+                                       tier=tier, eviction=eviction)
 
         except simpy.exceptions.Interrupt as interrupt:
             logger.trace(f'{self.appname} interrupt at {self.env.now}')
@@ -299,8 +304,8 @@ class IOPhase:
                 if isinstance(tier, EphemeralTier):
                     eviction = tier.evict()
                     if eviction:
-                        self.register_step(t_start, step_duration, available_bandwidth, cluster,
-                                           tier, eviction)
+                        self.register_step(t_start, step_duration, available_bandwidth,
+                                           cluster, tier=tier, eviction=eviction)
 
         return volume
 

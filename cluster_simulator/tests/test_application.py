@@ -321,7 +321,7 @@ class TestBufferedApplications(unittest.TestCase):
                                 bandwidth=self.nvram_bandwidth, capacity=10e9)
 
     def test_noSBB_app(self):
-        """Test running simple apps in cluster having a datanode with BB."""
+        """Test running simple apps in cluster having a datanode with BB but not requested."""
         cluster = Cluster(self.env, tiers=[self.hdd_tier],
                           ephemeral_tier=self.bb)
         # Simple app: read 1GB -> compute 10s -> write 5GB
@@ -342,7 +342,7 @@ class TestBufferedApplications(unittest.TestCase):
         self.assertEqual(self.data.items[2]["type"], "write")
 
     def test_SBB_app_write_phase(self):
-        """Test running simple apps in cluster having a datanode with BB."""
+        """Test running simple apps in cluster having a datanode with BB and a write operation"""
         cluster = Cluster(self.env, tiers=[self.hdd_tier],
                           ephemeral_tier=self.bb)
         # Simple app: read 1GB -> compute 10s -> write 5GB
@@ -364,7 +364,7 @@ class TestBufferedApplications(unittest.TestCase):
         self.assertEqual(self.data.items[3]["type"], "movement")
 
     def test_prefetch_SBB_app_read_phase(self):
-        """Test running simple apps in cluster having a datanode with BB."""
+        """Test running simple apps in cluster having a datanode with BB and a prefetch operation """
         cluster = Cluster(self.env, tiers=[self.hdd_tier],
                           ephemeral_tier=self.bb)
         # Simple app: read 1GB -> compute 10s -> write 5GB
@@ -384,6 +384,29 @@ class TestBufferedApplications(unittest.TestCase):
         self.assertEqual(self.data.items[1]["type"], "read")
         self.assertEqual(self.data.items[2]["type"], "compute")
         self.assertEqual(self.data.items[3]["type"], "write")
+
+    def test_SBB_apps_with_concurrency(self):
+        "Test running multiples apps concurrent in a single SBB."
+        cluster = Cluster(self.env, tiers=[self.hdd_tier],
+                          ephemeral_tier=self.bb)
+        app1 = Application(self.env,
+                           read=[2e9, 0],
+                           compute=[0, 10],
+                           write=[0, 5e9],
+                           data=self.data, delay=0)
+        app2 = Application(self.env,
+                           read=[1e9, 0],
+                           compute=[0, 6],
+                           write=[0, 5e9],
+                           data=self.data, delay=0)
+        self.env.process(app1.run(cluster, placement=[0, 0],
+                                  use_bb=[False, True]))
+        self.env.process(app2.run(cluster, placement=[0, 0],
+                                  use_bb=[False, True]))
+
+        self.env.run()
+        fig = display_run(self.data, cluster, width=800, height=900)
+        fig.show()
 
 
 if __name__ == '__main__':
