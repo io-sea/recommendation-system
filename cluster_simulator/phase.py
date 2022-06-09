@@ -299,7 +299,6 @@ class IOPhase:
             volume -= step_duration * available_bandwidth
             if not initial_levels:
                 initial_levels = cluster.get_levels()
-            logger.info(initial_levels)
             self.update_tier(tier, step_duration * available_bandwidth)
             self.register_step(t_start, step_duration, available_bandwidth, cluster, tier=tier,
                                initial_levels=initial_levels)
@@ -316,7 +315,8 @@ class IOPhase:
             if step_duration:
                 self.last_event += step_duration
                 volume -= step_duration * available_bandwidth
-                initial_levels = cluster.get_levels()
+                if not initial_levels:
+                    initial_levels = cluster.get_levels()
                 self.update_tier(tier, step_duration * available_bandwidth)
                 self.register_step(t_start, step_duration, available_bandwidth, cluster, tier=tier,
                                    initial_levels=initial_levels)
@@ -365,7 +365,8 @@ class IOPhase:
             if step_duration:
                 self.last_event += step_duration
                 volume -= step_duration * available_bandwidth
-                initial_levels = cluster.get_levels()
+                if not initial_levels:
+                    initial_levels = cluster.get_levels()
                 self.update_tier_on_move(source_tier, target_tier,
                                          step_duration * available_bandwidth, erase)
                 self.register_step(t_start, step_duration, available_bandwidth, cluster,
@@ -424,8 +425,7 @@ class IOPhase:
         bottleneck_tier = source_tier if bandwidths.index(available_bandwidth) == 0 else target_tier
         # take the count of the bottleneck bandwidth
         self.bandwidth_concurrency = bottleneck_tier.bandwidth.count
-        # limit the volume to
-        # TODO : for ephemeral tier, we should limit to upper_threshold
+        # limit the volume to available
         max_volume = min(volume, target_tier.capacity.capacity - target_tier.capacity.level)
         # take the smallest step, step_duration must be > 0
         if 0 < self.next_event - self.last_event < max_volume/available_bandwidth:

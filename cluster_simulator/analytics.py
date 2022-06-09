@@ -236,6 +236,7 @@ def display_run(data, cluster, width=800, height=600):
     x_evict = []
     capacities = dict()
     text = []
+    text_evict = []
     cpu_phase = []
     buffer_storage = dict()
     storage = dict()
@@ -255,6 +256,8 @@ def display_run(data, cluster, width=800, height=600):
                 tier = phase["data_placement"]["source"]
                 eviction_levels.setdefault(tier, []).append([phase["init_level"][tier], phase["tier_level"][tier]])
                 x_evict.append([phase["t_start"], phase["t_end"]])
+                text_evict.append(phase["type"].upper() + "|IN:"+tier + "|volume="+convert_size(phase["init_level"][tier]-phase["tier_level"][tier]))
+                text_evict.append(phase["type"].upper() + "|IN:"+tier + "|volume="+convert_size(phase["init_level"][tier]-phase["tier_level"][tier]))
 
         tier_indication = "|" + phase["data_placement"]["placement"] if phase["data_placement"] else ''
 
@@ -299,9 +302,15 @@ def display_run(data, cluster, width=800, height=600):
                 #                             text=text,
                 #                             textposition="top center",
                 #                             name=bb, line=dict(color='red', width=3, dash='dot'), showlegend=False), row=i, col=1)
-                fig.add_shape(type="line", x0=segment[0], y0=level[0], x1=segment[1], y1=level[1],
-                              line=dict(width=3, dash="dash", color="black"),
-                              row=i, col=1)
+                fig.append_trace(go.Scatter(x=np.array(segment), y=np.array(level),
+                                            text=text_evict,
+                                            textposition="top center",
+                                            name=" Eviction",
+                                            line=dict(shape='linear', color="black"),
+                                            showlegend=False), row=i, col=1)
+                # fig.add_shape(type="line", x0=segment[0], y0=level[0], x1=segment[1], y1=level[1],
+                #               line=dict(width=3, color="black"),
+                #               row=i, col=1)
                 # fig.add_annotation(ax=segment[0],
                 #                    ay=level[0],
                 #                    x=segment[1],
