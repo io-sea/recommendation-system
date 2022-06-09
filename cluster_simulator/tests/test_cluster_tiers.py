@@ -87,6 +87,44 @@ class TestClusterTiers(unittest.TestCase):
         self.assertIsInstance(cluster.ephemeral_tier, EphemeralTier)
 
 
+class TestClusterMonitoring(unittest.TestCase):
+    def setUp(self):
+        self.env = simpy.Environment()
+        self.data = simpy.Store(self.env)
+        self.nvram_bandwidth = {'read':  {'seq': 800, 'rand': 800},
+                                'write': {'seq': 400, 'rand': 400}}
+        ssd_bandwidth = {'read':  {'seq': 200, 'rand': 200},
+                         'write': {'seq': 100, 'rand': 100}}
+        hdd_bandwidth = {'read':  {'seq': 80, 'rand': 80},
+                         'write': {'seq': 40, 'rand': 40}}
+        self.hdd_tier = Tier(self.env, 'HDD', bandwidth=hdd_bandwidth, capacity=1e12)
+        self.ssd_tier = Tier(self.env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
+        self.nvram_tier = Tier(self.env, 'NVRAM', bandwidth=self.nvram_bandwidth,
+                               capacity=10e9)
+        self.bb = EphemeralTier(self.env, name="BB", persistent_tier=self.hdd_tier,
+                                bandwidth=self.nvram_bandwidth, capacity=10e9)
+
+    def test_register_levels_empty(self):
+        """Test registering tiers levels"""
+        cluster = Cluster(self.env, tiers=[self.hdd_tier, self.ssd_tier, self.nvram_tier],
+                          ephemeral_tier=self.bb)
+        levels = cluster.get_levels()
+        for (key, value) in levels.items():
+            self.assertEqual(value, 0)
+
+    def test_register_levels_filled(self):
+        """Test registering tiers levels"""
+        self.hdd_tier.capacity.put(1e9)
+        self.ssd_tier.capacity.put(1e9)
+        self.nvram_tier.capacity.put(1e9)
+        self.bb.capacity.put(1e9)
+        cluster = Cluster(self.env, tiers=[self.hdd_tier, self.ssd_tier, self.nvram_tier],
+                          ephemeral_tier=self.bb)
+        levels = cluster.get_levels()
+        for (key, value) in levels.items():
+            self.assertEqual(value, 1e9)
+
+
 class TestClusterTierEviction(unittest.TestCase):
     def setUp(self):
         self.env = simpy.Environment()

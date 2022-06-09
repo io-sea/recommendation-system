@@ -486,6 +486,8 @@ class TestPhaseEphemeralTier(unittest.TestCase):
         # run the phase on the tier with placement = bb
         self.env.process(write_io.run(self.env, cluster, placement=0, use_bb=True))  # nvram 200-100
         self.env.run()
+        fig = display_run(self.data, cluster, width=800, height=900)
+        fig.show()
         self.assertEqual(bb.capacity.level, write_io.volume)
         self.assertEqual(bb.persistent_tier.capacity.level, write_io.volume)
 

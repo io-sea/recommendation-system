@@ -390,11 +390,13 @@ class TestBufferedApplications(unittest.TestCase):
         cluster = Cluster(self.env, tiers=[self.hdd_tier],
                           ephemeral_tier=self.bb)
         app1 = Application(self.env,
+                           name="1",
                            read=[2e9, 0],
                            compute=[0, 10],
                            write=[0, 5e9],
-                           data=self.data, delay=0)
+                           data=self.data, delay=2)
         app2 = Application(self.env,
+                           name="2",
                            read=[1e9, 0],
                            compute=[0, 6],
                            write=[0, 5e9],
