@@ -76,15 +76,18 @@ class DelayPhase:
         """
         logger.info(f"(App {self.appname}) - Start waiting phase at {env.now}")
         t_start = env.now
+        initial_levels = cluster.get_levels()
         yield env.timeout(self.duration)
         t_end = env.now
+        final_levels = cluster.get_levels()
         monitor_step(self.data,
                      {"app": self.appname, "type": "wait", "cpu_usage": 0,
                       "t_start": t_start, "t_end": t_end, "bandwidth": 0,
                       "phase_duration": self.duration, "volume": 0,
                       "tiers": [tier.name for tier in cluster.tiers],
                       "data_placement": None,
-                      "tier_level": {tier.name: tier.capacity.level for tier in cluster.tiers}})
+                      "init_level": initial_levels,
+                      "tier_level": final_levels})
         logger.info(f"(App {self.appname}) - End waiting phase at {env.now}")
         return True
 
@@ -122,15 +125,18 @@ class ComputePhase:
         logger.info(f"(App {self.appname}) - Start computing phase at {env.now} with {self.cores} requested cores")
         phase_duration = self.duration/compute_share_model(self.cores)
         t_start = env.now
+        initial_levels = cluster.get_levels()
         yield env.timeout(phase_duration)
         t_end = env.now
+        final_levels = cluster.get_levels()
         monitor_step(self.data,
                      {"app": self.appname, "type": "compute", "cpu_usage": self.cores,
                       "t_start": t_start, "t_end": t_end, "bandwidth": 0,
                       "phase_duration": phase_duration, "volume": 0,
                       "tiers": [tier.name for tier in cluster.tiers],
                       "data_placement": None,
-                      "tier_level": {tier.name: tier.capacity.level for tier in cluster.tiers}})
+                      "init_level": initial_levels,
+                      "tier_level": final_levels})
 
         logger.info(f"(App {self.appname}) - End computing phase at {env.now} and releasing {self.cores} cores")
         return True
@@ -181,7 +187,7 @@ class IOPhase:
         return description
 
     def register_step(self, t_start, step_duration, available_bandwidth, cluster, tier,
-                      source_tier=None, eviction=None):
+                      initial_levels=None, source_tier=None, eviction=None):
         """Registering a processing step in the data store with some logging.
 
         Args:
@@ -190,9 +196,11 @@ class IOPhase:
             available_bandwidth (float): available bandwidth in the step.
             cluster (Cluster): the cluster on which the phase will run.
             tier (Tier): the tier on which the step will run.
+            initial_levels (dict): initial levels of all tiers at the start of the step.
             source_tier (Tier, optional): the tier from which the step will run.
             eviction (int, optional): volume of data which was evicted from ephemeral tier.
         """
+        final_levels = cluster.get_levels()
         monitoring_info = {"app": self.appname, "type": self.operation,
                            "cpu_usage": self.cores,
                            "t_start": t_start, "t_end": t_start + step_duration,
@@ -202,7 +210,10 @@ class IOPhase:
                            "volume": step_duration * available_bandwidth,
                            "tiers": [tier.name for tier in cluster.tiers],
                            "data_placement": {"placement": tier.name},
-                           "tier_level": {tier.name: tier.capacity.level for tier in cluster.tiers}}
+                           "init_level": initial_levels,
+                           "tier_level": final_levels,
+                           # "tier_level": {tier.name: tier.capacity.level for tier in cluster.tiers}
+                           }
         # update info if using a burst buffer
         if cluster.ephemeral_tier:
             monitoring_info[cluster.ephemeral_tier.name + "_level"] = cluster.ephemeral_tier.capacity.level
@@ -270,7 +281,8 @@ class IOPhase:
         if erase:
             source_tier.capacity.get(volume)
 
-    def process_volume(self, step_duration, volume, available_bandwidth, cluster, tier):
+    def process_volume(self, step_duration, volume, available_bandwidth, cluster, tier,
+                       initial_levels=None):
         """This method processes a small amount of I/O volume between two predictable events on a specific tier. If an event occurs in the meantime, I/O will be interrupted and bandwidth updated according.
 
         Args:
@@ -285,13 +297,17 @@ class IOPhase:
             volume_event = self.env.timeout(step_duration)
             yield volume_event
             volume -= step_duration * available_bandwidth
+            if not initial_levels:
+                initial_levels = cluster.get_levels()
             self.update_tier(tier, step_duration * available_bandwidth)
-            self.register_step(t_start, step_duration, available_bandwidth, cluster, tier)
+            self.register_step(t_start, step_duration, available_bandwidth, cluster, tier=tier,
+                               initial_levels=initial_levels)
             if isinstance(tier, EphemeralTier):
+                initial_levels = cluster.get_levels()
                 eviction = tier.evict()
                 if eviction:
                     self.register_step(t_start, step_duration, available_bandwidth, cluster,
-                                       tier=tier, eviction=eviction)
+                                       tier=tier, initial_levels=initial_levels, eviction=eviction)
 
         except simpy.exceptions.Interrupt as interrupt:
             logger.trace(f'{self.appname} interrupt at {self.env.now}')
@@ -299,18 +315,21 @@ class IOPhase:
             if step_duration:
                 self.last_event += step_duration
                 volume -= step_duration * available_bandwidth
+                if not initial_levels:
+                    initial_levels = cluster.get_levels()
                 self.update_tier(tier, step_duration * available_bandwidth)
-                self.register_step(t_start, step_duration, available_bandwidth, cluster, tier)
+                self.register_step(t_start, step_duration, available_bandwidth, cluster, tier=tier,
+                                   initial_levels=initial_levels)
                 if isinstance(tier, EphemeralTier):
+                    initial_levels = cluster.get_levels()
                     eviction = tier.evict()
                     if eviction:
                         self.register_step(t_start, step_duration, available_bandwidth,
-                                           cluster, tier=tier, eviction=eviction)
-
+                                           cluster, tier=tier, initial_levels=initial_levels, eviction=eviction)
         return volume
 
     def move_volume(self, step_duration, volume, available_bandwidth, cluster, source_tier,
-                    target_tier, erase=False):
+                    target_tier, erase=False, initial_levels=None):
         """This method moves a small amount of I/O volume between two predictable events from a source_tier to a target tier with available bandiwdth value. If an event occurs in the meantime, data movement will be interrupted and bandwidth updated accordingly.
 
         Args:
@@ -326,15 +345,19 @@ class IOPhase:
             volume_event = self.env.timeout(step_duration)
             yield volume_event
             volume -= step_duration * available_bandwidth
+            if not initial_levels:
+                initial_levels = cluster.get_levels()
             self.update_tier_on_move(source_tier, target_tier, step_duration * available_bandwidth,
                                      erase)
             self.register_step(t_start, step_duration, available_bandwidth, cluster,
-                               target_tier, source_tier)
+                               target_tier, initial_levels, source_tier)
             if isinstance(source_tier, EphemeralTier):
+                initial_levels = cluster.get_levels()
                 eviction = source_tier.evict()
                 if eviction:
+                    # register eviction step
                     self.register_step(t_start, step_duration, available_bandwidth, cluster,
-                                       target_tier, source_tier, eviction)
+                                       target_tier, initial_levels, source_tier, eviction)
 
         except simpy.exceptions.Interrupt as interrupt:
             logger.trace(f'{self.appname} interrupt at {self.env.now}')
@@ -342,13 +365,18 @@ class IOPhase:
             if step_duration:
                 self.last_event += step_duration
                 volume -= step_duration * available_bandwidth
+                if not initial_levels:
+                    initial_levels = cluster.get_levels()
                 self.update_tier_on_move(source_tier, target_tier,
                                          step_duration * available_bandwidth, erase)
+                self.register_step(t_start, step_duration, available_bandwidth, cluster,
+                                   target_tier, initial_levels, source_tier)
                 if isinstance(source_tier, EphemeralTier):
+                    initial_levels = cluster.get_levels()
                     eviction = source_tier.evict()
                     if eviction:
                         self.register_step(t_start, step_duration, available_bandwidth, cluster,
-                                           target_tier, source_tier, eviction)
+                                           target_tier, initial_levels, source_tier, eviction)
 
         return volume
 
@@ -397,8 +425,7 @@ class IOPhase:
         bottleneck_tier = source_tier if bandwidths.index(available_bandwidth) == 0 else target_tier
         # take the count of the bottleneck bandwidth
         self.bandwidth_concurrency = bottleneck_tier.bandwidth.count
-        # limit the volume to
-        # TODO : for ephemeral tier, we should limit to upper_threshold
+        # limit the volume to available
         max_volume = min(volume, target_tier.capacity.capacity - target_tier.capacity.level)
         # take the smallest step, step_duration must be > 0
         if 0 < self.next_event - self.last_event < max_volume/available_bandwidth:
@@ -447,8 +474,9 @@ class IOPhase:
                     logger.trace(f"appname: {self.appname}, now : {self.env.now} | last event: "
                                  f"{self.last_event} | next event: {self.next_event}"
                                  f" | full duration: {volume/available_bandwidth} | step duration: {step_duration}")
+                    initial_volumes = cluster.get_levels()
                     move_event = self.env.process(self.move_volume(step_duration, volume,
-                                                                   available_bandwidth, cluster, source_tier, target_tier, erase=erase))
+                                                                   available_bandwidth, cluster, source_tier, target_tier, erase=erase, initial_levels=initial_volumes))
 
                     # register the step event to be able to update it
                     IOPhase.current_ios.append(move_event)
@@ -485,8 +513,9 @@ class IOPhase:
                 step_duration, available_bandwidth = self.get_step_duration(cluster, tier, volume)
                 logger.trace(f"appname: {self.appname}, now : {self.env.now} | last event: {self.last_event} | next event: {self.next_event}"
                              f" | full duration: {volume/available_bandwidth} | step duration: {step_duration}")
+                initial_volumes = cluster.get_levels()
                 step_event = self.env.process(self.process_volume(step_duration, volume,
-                                                                  available_bandwidth, cluster, tier))
+                                                                  available_bandwidth, cluster, tier, initial_levels=initial_volumes))
                 IOPhase.current_ios.append(step_event)
                 # process the step volume
                 volume = yield step_event
@@ -497,7 +526,7 @@ class IOPhase:
         self.env = env
         if delay:
             yield self.env.timeout(delay)
-        # get the tier where the I/O will be performed
+        # get the tier where the I/O will be performed, if use_sbb=True, get the BB
         tier = get_tier(cluster, placement, use_bb=use_bb)
         # ret = yield self.env.process(self.run_step(self.env, cluster, tier))
 

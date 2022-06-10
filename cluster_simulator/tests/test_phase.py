@@ -518,6 +518,7 @@ class TestPhaseEphemeralTier(unittest.TestCase):
         self.env.process(write_io.run(self.env, cluster, placement=0, use_bb=True))  # nvram 200-100
         self.env.process(write_io_2.run(self.env, cluster, placement=0, use_bb=False))  # nvram 200-100
         self.env.run()
+
         # ensure at last item that persistent/eph levels are correct
         item = self.data.items[-1]
         self.assertAlmostEqual((item["tier_level"]["HDD"]), 2e9)
@@ -540,6 +541,7 @@ class TestPhaseEphemeralTier(unittest.TestCase):
         self.env.process(write_io.run(self.env, cluster, placement=0, use_bb=True))  # nvram 400
         self.env.process(write_io_c.run(self.env, cluster, placement=0, use_bb=False))  # hdd 40
         self.env.run()
+
         # fig = display_run(self.data, cluster, width=800, height=900)
         # fig.show()
         # finally hdd should get 2*10e9

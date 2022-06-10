@@ -92,6 +92,17 @@ class Cluster:
                 description += tier.__str__()
         return description
 
+    def get_levels(self):
+        """Gathers tiers levels snapshot at a specific time event into a dict.
+
+        Returns:
+            levels (dict): snapshot of the tiers levels.
+        """
+        levels = dict([(tier.name, tier.capacity.level) for tier in self.tiers])
+        if self.ephemeral_tier:
+            levels[self.ephemeral_tier.name] = self.ephemeral_tier.capacity.level
+        return levels
+
     def get_max_bandwidth(self, tier, cores=1, operation='read', pattern=1):
         """Get the maximum bandwidth for a given tier, number of cores dedicated to the operation, a type of operation. Sequential pattern are assumed during copy/move as well as an important blocksize.
 
