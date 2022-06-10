@@ -358,6 +358,8 @@ class TestBufferedApplications(unittest.TestCase):
                           data=self.data)
         self.env.process(app.run(cluster, placement=tiers, use_bb=use_bb))
         self.env.run()
+        # fig = display_run(self.data, cluster, width=800, height=900)
+        # fig.show()
         self.assertEqual(self.data.items[0]["type"], "read")
         self.assertEqual(self.data.items[1]["type"], "compute")
         self.assertEqual(self.data.items[2]["type"], "write")
@@ -407,8 +409,6 @@ class TestBufferedApplications(unittest.TestCase):
                                   use_bb=[False, True]))
 
         self.env.run()
-        fig = display_run(self.data, cluster, width=800, height=900)
-        fig.show()
 
 
 if __name__ == '__main__':
