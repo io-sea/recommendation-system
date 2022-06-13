@@ -1,8 +1,3 @@
-.. Cluster Simulator documentation master file, created by
-   sphinx-quickstart on Thu May 19 09:54:53 2022.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
-
 Welcome to Cluster Simulator's documentation!
 =============================================
 **Cluster Simulator** is a python package that allows to simulate an HPC application execution on a cluster with heterogeneous tier levels. It supports also the use of high performance ephemeral tiers as burst buffers.
@@ -10,21 +5,21 @@ Welcome to Cluster Simulator's documentation!
 .. note::
    This project is funded by the IO-SEA European project.
 
-Contents
---------
 .. toctree::
-   :maxdepth: 2
-
-   introduction
-   
+   :maxdepth: 4
+   :caption: Contents:
 
 
-
-
+   readme
+   installation
+   usage
+   modules
+   contributing
+   authors
+   history
 
 Indices and tables
 ==================
-
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`

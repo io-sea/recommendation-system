@@ -15,8 +15,8 @@ import simpy
 from loguru import logger
 import numpy as np
 import math
-from utils import convert_size
 from cluster_simulator.utils import convert_size, BandwidthResource
+
 
 
 def convert_size(size_bytes):
@@ -122,10 +122,7 @@ class Cluster:
 
 
 class Tier:
-    """Model a tier storage service with a focus on a limited bandwidth resource as well as a limited capacity. In this model we expect a bandwidth value at its asymptotic state, so blocksize is still not a parameter. Only the asymptotic part of the throughput curve is considered.
-    Other considered variables are:
-        read/write variables
-        sequential/random variables
+    """Model a tier storage service with a focus on a limited bandwidth resource as well as a limited capacity. In this model we expect a bandwidth value at its asymptotic state, so blocksize is still not a parameter. Only the asymptotic part of the throughput curve is considered. Other considered variables are read/write variables and sequential/random variables.
     Output is a scalar value in MB/s.
     Typically we access the bandwidth value as in dictionary: b['read']['seq'] = 200MB/s.
     TODO: extend this to a NN as function approximator to allow:

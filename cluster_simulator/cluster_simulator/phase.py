@@ -19,8 +19,7 @@ import math
 
 from cluster_simulator.utils import convert_size, get_tier, compute_share_model, BandwidthResource
 from cluster_simulator.cluster import Tier
-from cluster_simulator.cluster import EphemeralTier  # proper import for isinstance but causes import error for notebooks
-# from cluster import EphemeralTier
+from cluster_simulator.cluster import EphemeralTier
 import random
 import string
 import time
