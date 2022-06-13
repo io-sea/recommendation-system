@@ -9,9 +9,8 @@ Welcome to Cluster Simulator's documentation!
    :maxdepth: 4
    :caption: Contents:
 
-
-   readme
    installation
+   readme
    usage
    modules
    contributing

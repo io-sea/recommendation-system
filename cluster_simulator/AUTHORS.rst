@@ -2,12 +2,12 @@
 Credits
 =======
 
-Development Lead
-----------------
+Development
+-----------
 
 * Salim Mimouni <salim.mimouni@atos.net>
 
 Contributors
 ------------
 
-None yet. Why not be the first?
+IO-SEA members are welcome.

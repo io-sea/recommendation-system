@@ -15,7 +15,7 @@ Types of Contributions
 Report Bugs
 ~~~~~~~~~~~
 
-Report bugs at https://github.com/audreyr/cluster_simulator/issues.
+Report bugs at https://gitlab.jsc.fz-juelich.de/io-sea/wp3.4-analytics/.
 
 If you are reporting a bug, please include:
 
@@ -45,7 +45,7 @@ articles, and such.
 Submit Feedback
 ~~~~~~~~~~~~~~~
 
-The best way to send feedback is to file an issue at https://github.com/audreyr/cluster_simulator/issues.
+The best way to send feedback is to file an issue at https://gitlab.jsc.fz-juelich.de/io-sea/wp3.4-analytics/cluster_simulator/issues.
 
 If you are proposing a feature:
 
@@ -62,7 +62,7 @@ Ready to contribute? Here's how to set up `cluster_simulator` for local developm
 1. Fork the `cluster_simulator` repo on GitHub.
 2. Clone your fork locally::
 
-    $ git clone git@github.com:your_name_here/cluster_simulator.git
+    $ git clone https://gitlab.jsc.fz-juelich.de/io-sea/wp3.4-analytics/cluster_simulator.git
 
 3. Install your local copy into a virtualenv. Assuming you have virtualenvwrapper installed, this is how you set up your fork for local development::
 
@@ -103,7 +103,7 @@ Before you submit a pull request, check that it meets these guidelines:
    your new functionality into a function with a docstring, and add the
    feature to the list in README.rst.
 3. The pull request should work for Python 3.5, 3.6, 3.7 and 3.8, and for PyPy. Check
-   https://travis-ci.com/audreyr/cluster_simulator/pull_requests
+   https://gitlab.jsc.fz-juelich.de/io-sea/wp3.4-analytics/cluster_simulator/pull_requests
    and make sure that the tests pass for all supported Python versions.
 
 Tips
