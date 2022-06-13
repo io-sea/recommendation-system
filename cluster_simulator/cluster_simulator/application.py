@@ -193,7 +193,6 @@ class Application:
                 if phase == 0:
                     yield AllOf(self.env, requesting_cores)
                     ret = yield self.env.process(item.run(self.env, cluster, placement=data_placement, use_bb=bb))
-                    print(ret)
                     self.status[phase] = ret
                     logger.debug(f"the issued status of the IO phase : {self.status[phase]}")
                 elif phase > 0 and self.status[phase-1] == True:

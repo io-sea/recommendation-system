@@ -6,7 +6,7 @@ import simpy
 from cluster_simulator.cluster import Cluster, Tier, EphemeralTier, bandwidth_share_model, compute_share_model, get_tier, convert_size
 from cluster_simulator.phase import DelayPhase, ComputePhase, IOPhase
 from cluster_simulator.application import Application
-from analytics import display_run
+from cluster_simulator.analytics import display_run
 
 
 class TestAppInit(unittest.TestCase):

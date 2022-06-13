@@ -2,6 +2,7 @@ import simpy
 from functools import partial, wraps
 from loguru import logger
 from phase import IOPhase
+from cluster_simulator.phase import IOPhase
 
 
 # def check_bandwidth(env, bandwidth):
