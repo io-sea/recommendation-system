@@ -11,32 +11,46 @@
         </thead>
         <tbody>
             <tr class="file">
-                <td class="name left"><a href="d_e19319c698d56c7e___init___py.html">cluster_simulator\__init__.py</a></td>
-                <td>0</td>
-                <td>0</td>
-                <td>0</td>
-                <td class="right" data-ratio="0 0">100%</td>
-            </tr>
-            <tr class="file">
-                <td class="name left"><a href="d_e19319c698d56c7e_analytics_py.html">cluster_simulator\analytics.py</a></td>
-                <td>192</td>
-                <td>67</td>
-                <td>0</td>
-                <td class="right" data-ratio="125 192">65%</td>
-            </tr>
-            <tr class="file">
-                <td class="name left"><a href="d_e19319c698d56c7e_application_py.html">cluster_simulator\application.py</a></td>
-                <td>103</td>
+                <td class="name left"><a href="d_d61ce9ed0005970a___init___py.html">cluster_simulator\cluster_simulator\__init__.py</a></td>
                 <td>3</td>
                 <td>0</td>
-                <td class="right" data-ratio="100 103">97%</td>
+                <td>0</td>
+                <td class="right" data-ratio="3 3">100%</td>
             </tr>
             <tr class="file">
-                <td class="name left"><a href="d_e19319c698d56c7e_cluster_py.html">cluster_simulator\cluster.py</a></td>
+                <td class="name left"><a href="d_d61ce9ed0005970a_analytics_py.html">cluster_simulator\cluster_simulator\analytics.py</a></td>
+                <td>192</td>
+                <td>176</td>
+                <td>0</td>
+                <td class="right" data-ratio="16 192">8%</td>
+            </tr>
+            <tr class="file">
+                <td class="name left"><a href="d_d61ce9ed0005970a_application_py.html">cluster_simulator\cluster_simulator\application.py</a></td>
                 <td>102</td>
+                <td>3</td>
+                <td>0</td>
+                <td class="right" data-ratio="99 102">97%</td>
+            </tr>
+            <tr class="file">
+                <td class="name left"><a href="d_d61ce9ed0005970a_cluster_py.html">cluster_simulator\cluster_simulator\cluster.py</a></td>
+                <td>101</td>
                 <td>9</td>
                 <td>0</td>
-                <td class="right" data-ratio="93 102">91%</td>
+                <td class="right" data-ratio="92 101">91%</td>
+            </tr>
+            <tr class="file">
+                <td class="name left"><a href="d_d61ce9ed0005970a_phase_py.html">cluster_simulator\cluster_simulator\phase.py</a></td>
+                <td>255</td>
+                <td>9</td>
+                <td>0</td>
+                <td class="right" data-ratio="246 255">96%</td>
+            </tr>
+            <tr class="file">
+                <td class="name left"><a href="d_d61ce9ed0005970a_utils_py.html">cluster_simulator\cluster_simulator\utils.py</a></td>
+                <td>73</td>
+                <td>7</td>
+                <td>0</td>
+                <td class="right" data-ratio="66 73">90%</td>
             </tr>
             <tr class="file">
                 <td class="name left"><a href="d_5c0f19d45edc3e2c___init___py.html">cluster_simulator\notebooks\__init__.py</a></td>
@@ -44,13 +58,6 @@
                 <td>0</td>
                 <td>0</td>
                 <td class="right" data-ratio="0 0">100%</td>
-            </tr>
-            <tr class="file">
-                <td class="name left"><a href="d_e19319c698d56c7e_phase_py.html">cluster_simulator\phase.py</a></td>
-                <td>255</td>
-                <td>9</td>
-                <td>0</td>
-                <td class="right" data-ratio="246 255">96%</td>
             </tr>
             <tr class="file">
                 <td class="name left"><a href="d_7ca7a22f67752698___init___py.html">cluster_simulator\tests\__init__.py</a></td>
@@ -68,10 +75,10 @@
             </tr>
             <tr class="file">
                 <td class="name left"><a href="d_7ca7a22f67752698_test_application_py.html">cluster_simulator\tests\test_application.py</a></td>
-                <td>250</td>
+                <td>248</td>
                 <td>1</td>
                 <td>0</td>
-                <td class="right" data-ratio="249 250">99%</td>
+                <td class="right" data-ratio="247 248">99%</td>
             </tr>
             <tr class="file">
                 <td class="name left"><a href="d_7ca7a22f67752698_test_cluster_tiers_py.html">cluster_simulator\tests\test_cluster_tiers.py</a></td>
@@ -87,83 +94,15 @@
                 <td>0</td>
                 <td class="right" data-ratio="398 399">99%</td>
             </tr>
-            <tr class="file">
-                <td class="name left"><a href="d_e19319c698d56c7e_utils_py.html">cluster_simulator\utils.py</a></td>
-                <td>154</td>
-                <td>78</td>
-                <td>0</td>
-                <td class="right" data-ratio="76 154">49%</td>
-            </tr>
         </tbody>
         <tfoot>
             <tr class="total">
                 <td class="name left">Total</td>
-                <td>1662</td>
-                <td>170</td>
+                <td>1580</td>
+                <td>208</td>
                 <td>0</td>
-                <td class="right" data-ratio="1492 1662">90%</td>
+                <td class="right" data-ratio="1372 1580">87%</td>
             </tr>
         </tfoot>
     </table>
-    
-    
-```mermaid
-classDiagram
-    class Cluster{
-        nodes: int
-        cores_per_node:int
-        Tiers:List[Tier]
-    }
-    class Tier{
-        capacity: float
-        bandwidth: Bandwidth
-    }
-    class Bandwidth {
-        dict()
-        evaluate('read/write', 'seq/rand')
-    }
-    class ComputePhase{
-        duration: float
-        cores: int
-        play()
-    }
-    class IOPhase{
-        volume:float
-        pattern:float
-        block_size:int
-    }
-    class ReadIOPhase{
-        from_tier: Tier
-        play(tier)
-        schedule(tier)
-    }
-    class WriteIOPhase{
-        to_tier: Tier
-        play(tier)
-        schedule(tier)
-    }
-    class Application{
-        compute: List
-        read: List
-        write: List
-        put_compute(duration)
-        put_io(volume)
-        schedule(tier:Tier)
-        run(cluster:Cluster)
-    }
-    IOPhase <|-- ReadIOPhase
-    IOPhase <|-- WriteIOPhase
-    %% ReadIOPhase--Tier
-    Application *-- IOPhase
-    Application *-- ComputePhase
-    %% Application --> Tier
-    %% Tier -->Bandwidth
 
-    class Workflow{
-        nodes: IOPhase
-        edged: ComputePhase
-        add_compute()
-        add_readio()
-        add_writeio()
-    }
-```
