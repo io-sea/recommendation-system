@@ -72,11 +72,31 @@ Simple sequential application
     env.run()
 
 We get the following (interactive) timeseries plot.
-The application lasts 102.5 seconds. The first read I/O conveys 5GB of data from the HDD tier at a rate of 80MB/s. Its duration is 37.5 seconds. Then it is followed by a compute dominant phase of 15 seconds. Finally the write I/O phase happens on the SSD tier in 50 seconds at a 100MB/s rate
+The application lasts 102.5 seconds. The first read I/O conveys 5GB of data from the HDD tier at a rate of 80MB/s. Its duration is 37.5 seconds. Then it is followed by a compute dominant phase of 15 seconds. Finally the write I/O phase happens on the SSD tier in 50 seconds at a 100MB/s rate.
 
 .. raw:: html
     :file: docs/figure.html
 
+Two parallel applications
+-------------------------
+Now we define two similar applications that will run on the same cluster and place their I/O operations on the same SSD tier.
+
+.. code-block:: python
+    :caption: running concurrent applications on the same cluster
+
+    app1 = Application(env, name="app1", read=[4e9, 0], compute=[0, 10],  write=[0, 10e9],
+                   data=data)
+    app2 = Application(env, name="app2", read=[7e9, 0], compute=[0, 15],  write=[0, 3e9],
+                   data=data)
+
+    env.process(app1.run(cluster, placement=[1, 1])) # both I/O are placed in SSD
+    env.process(app2.run(cluster, placement=[1, 1])) # app2 I/O are also in SSD
+    env.run()
+
+The two apps share equally an available bandwidth of 210MB/s for reading from SSD. Once app1 finishes the I/O reading at t = 38.09 seconds, it frees the bandwidth for the first reading I/O of the application 2. Hence the throughput reaches 210MB/s between 38.09 and 48.09 seconds. After this interval, the writing I/O of app1 starts while the first reading I/O still not finished, so they will share again available bandwidth.
+
+.. raw:: html
+    :file: docs/figure2.html
 
 * TODO
 
