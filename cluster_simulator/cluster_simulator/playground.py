@@ -1,14 +1,12 @@
+# imports
 import simpy
 from loguru import logger
-import numpy as np
-import pandas as pd
-import math
-from cluster import Cluster, Tier, bandwidth_share_model, compute_share_model, get_tier, convert_size
-from phase import DelayPhase, ComputePhase, IOPhase, name_app
-import copy
 import time
-import analytics
-from application import Application
+import numpy as np
+from cluster_simulator.cluster import Cluster, Tier, EphemeralTier, bandwidth_share_model, compute_share_model, get_tier, convert_size
+from cluster_simulator.phase import DelayPhase, ComputePhase, IOPhase
+from cluster_simulator.application import Application
+from cluster_simulator.analytics import display_run
 
 # imports for surrogate models
 from sklearn.gaussian_process import GaussianProcessRegressor
@@ -85,7 +83,7 @@ if __name__ == '__main__':
     cbb = ClusterBlackBox()
     PARAMETER_SPACE = cbb.parameter_space
     # combinations are self.n_tiers ** sum(self.ios)
-    NBR_ITERATION = 500  # cbb.n_tiers ** sum(cbb.ios)
+    NBR_ITERATION = 50  # cbb.n_tiers ** sum(cbb.ios)
 
     np.random.seed(5)
     bbopt = BBOptimizer(black_box=cbb,

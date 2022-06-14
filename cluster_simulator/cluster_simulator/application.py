@@ -188,7 +188,7 @@ class Application:
                 else:
                     self.status[phase] = False
             else:
-                data_placement = cluster.tiers[placement[item_number]]
+                data_placement = cluster.tiers[int(placement[item_number])]
                 bb = use_bb[item_number] if use_bb else False
                 if phase == 0:
                     yield AllOf(self.env, requesting_cores)
@@ -215,7 +215,7 @@ class Application:
         Returns:
             float: the timestamp of the last event of the session.
         """
-        t_min = 0
+        t_min = math.inf
         t_max = 0
         if not self.data:
             logger.error("No data store provided")
@@ -227,3 +227,30 @@ class Application:
                 t_max = max(t_max, phase["t_end"])
                 t_min = min(t_min, phase["t_start"])
         return t_max - t_min
+
+    def get_ephemeral_size(self):
+        """Method to get the maximum space used by an ephemeral tier. It iterate over records saved in data to find the if a tier is in tier_level but not in tiers and get its maximum level.
+
+        Record example:
+        | Monitoring| app: 1 | type: read | cpu_usage: 1 | t_start: 37.5 | t_end: 46.0 | bandwidth_concurrency: 2 | bandwidth: 40.0 MB/s | phase_duration: 8.5 | volume: 340.0 MB | tiers: ['HDD'] | data_placement: {'placement': 'HDD'} | init_level: {'HDD': 2170000000.0, 'BB': 1700000000.0} | tier_level: {'HDD': 2170000000.0, 'BB': 1700000000.0} | BB_level: 1700000000.0
+
+        Returns:
+            float: the maximum level reached by the ephemeral tier.
+        """
+        if not self.data:
+            logger.error("No data store provided")
+            return None
+        if not self.data.items:
+            return None
+        bb = list(set(self.data.items[0]["tier_level"].keys()) - set(self.data.items[0]["tiers"]))
+        if bb:
+            ephemeral_tier = bb[0]
+            max_level = 0
+            for phase in self.data.items:
+                max_level = max(max_level, phase["tier_level"][ephemeral_tier])
+            return max_level
+        else:
+            return None
+
+
+
