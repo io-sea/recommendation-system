@@ -84,9 +84,9 @@ Now we define two similar applications that will run on the same cluster and pla
 .. code-block:: python
     :caption: running concurrent applications on the same cluster
 
-    app1 = Application(env, name="app1", read=[4e9, 0], compute=[0, 10],  write=[0, 10e9],
+    app1 = Application(env, name="app1", read=[4e9, 0], compute=[0, 15],  write=[0, 10e9],
                    data=data)
-    app2 = Application(env, name="app2", read=[7e9, 0], compute=[0, 15],  write=[0, 3e9],
+    app2 = Application(env, name="app2", read=[7e9, 0], compute=[0, 10],  write=[0, 3e9],
                    data=data)
 
     env.process(app1.run(cluster, placement=[1, 1])) # both I/O are placed in SSD

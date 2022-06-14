@@ -206,27 +206,24 @@ class Application:
         yield AllOf(self.env, releasing_cores)
         return self.data
 
-    def get_fitness(self, app_name_filter=None):
+    def get_fitness(self):
         """Method to get execution duration of the applications. It iterate over records saved in data to find the phase having the latest timestamp.
 
         Record example:
         sample_item = {'app': 'B8', 'type': 'read', 'cpu_usage': 1, 't_start': 0, 't_end': 4.761904761904762, 'bandwidth': 210.0, 'phase_duration': 4.761904761904762, 'volume': 1000000000.0, 'tiers': ['SSD', 'NVRAM'], 'data_placement': {'placement': 'SSD'}, 'tier_level': {'SSD': 1000000000.0, 'NVRAM': 0}}
 
-
-        Args:
-            app_name_filter (string, optional): filter records that have application name equal to the specified string. Defaults to None.
-
         Returns:
             float: the timestamp of the last event of the session.
         """
+        t_min = 0
         t_max = 0
         if not self.data:
             logger.error("No data store provided")
-            # TODO: raise an error here.
             return None
         if not self.data.items:
-            return t_max
+            return t_max - t_min
         for phase in self.data.items:
-            if app_name_filter is not None and phase["app"] == app_name_filter or app_name_filter is None:
+            if phase["type"] in ["read", "write", "compute"]:
                 t_max = max(t_max, phase["t_end"])
-        return t_max
+                t_min = min(t_min, phase["t_start"])
+        return t_max - t_min
