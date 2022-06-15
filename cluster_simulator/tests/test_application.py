@@ -453,7 +453,7 @@ class TestBufferedApplications(unittest.TestCase):
         self.assertEqual(self.data.items[2]["type"], "compute")
         self.assertEqual(self.data.items[3]["type"], "write")
         self.assertEqual(app.get_fitness(), 136.25)
-        self.assertEqual(app.get_ephemeral_size(), 10e9)
+        self.assertEqual(app.get_ephemeral_size(), 1e9)
 
     def test_SBB_apps_with_concurrency(self):
         "Test running multiples apps concurrent in a single SBB."
