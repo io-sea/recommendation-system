@@ -91,20 +91,33 @@
 
 <p>Applications running on the same cluster are stackables as well as their relative phases and thus can run in parallel. A start delay can be applied to any application that postpones its scheduling.</p>
 <dl class="method">
+<dt id="cluster_simulator.application.Application.get_ephemeral_size">
+<code class="sig-name descname">get_ephemeral_size</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.application.Application.get_ephemeral_size" title="Permalink to this definition">¶</a></dt>
+<dd><p>Method to get the maximum space used by an ephemeral tier. It iterate over records saved in data to find the if a tier is in tier_level but not in tiers and get its maximum level.</p>
+<p>Record example:
+| Monitoring| app: 1 | type: read | cpu_usage: 1 | t_start: 37.5 | t_end: 46.0 | bandwidth_concurrency: 2 | bandwidth: 40.0 MB/s | phase_duration: 8.5 | volume: 340.0 MB | tiers: [‘HDD’] | data_placement: {‘placement’: ‘HDD’} | init_level: {‘HDD’: 2170000000.0, ‘BB’: 1700000000.0} | tier_level: {‘HDD’: 2170000000.0, ‘BB’: 1700000000.0} | BB_level: 1700000000.0</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>the maximum level reached by the ephemeral tier.</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>float</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
 <dt id="cluster_simulator.application.Application.get_fitness">
-<code class="sig-name descname">get_fitness</code><span class="sig-paren">(</span><em class="sig-param">app_name_filter=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.application.Application.get_fitness" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">get_fitness</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.application.Application.get_fitness" title="Permalink to this definition">¶</a></dt>
 <dd><p>Method to get execution duration of the applications. It iterate over records saved in data to find the phase having the latest timestamp.</p>
 <p>Record example:
 sample_item = {‘app’: ‘B8’, ‘type’: ‘read’, ‘cpu_usage’: 1, ‘t_start’: 0, ‘t_end’: 4.761904761904762, ‘bandwidth’: 210.0, ‘phase_duration’: 4.761904761904762, ‘volume’: 1000000000.0, ‘tiers’: [‘SSD’, ‘NVRAM’], ‘data_placement’: {‘placement’: ‘SSD’}, ‘tier_level’: {‘SSD’: 1000000000.0, ‘NVRAM’: 0}}</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><p><strong>app_name_filter</strong> (<em>string</em><em>, </em><em>optional</em>) – filter records that have application name equal to the specified string. Defaults to None.</p>
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>the timestamp of the last event of the session.</p>
 </dd>
-<dt class="field-even">Returns</dt>
-<dd class="field-even"><p>the timestamp of the last event of the session.</p>
-</dd>
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p>float</p>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>float</p>
 </dd>
 </dl>
 </dd></dl>
@@ -824,6 +837,18 @@ Variables:</p>
 <dd class="field-odd"><p>string</p>
 </dd>
 </dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="cluster_simulator.utils.convex_hull">
+<code class="sig-prename descclassname">cluster_simulator.utils.</code><code class="sig-name descname">convex_hull</code><span class="sig-paren">(</span><em class="sig-param">points</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.utils.convex_hull" title="Permalink to this definition">¶</a></dt>
+<dd><p>Computes the convex hull of a set of 2D points.</p>
+<p>Input: an iterable sequence of (x, y) pairs representing the points.
+Output: a list of vertices of the convex hull in counter-clockwise order,</p>
+<blockquote>
+<div><p>starting from the vertex with the lexicographically smallest coordinates.</p>
+</div></blockquote>
+<p>Implements Andrew’s monotone chain algorithm. O(n log n) complexity.</p>
 </dd></dl>
 
 <dl class="function">
