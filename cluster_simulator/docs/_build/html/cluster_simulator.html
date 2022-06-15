@@ -1,0 +1,981 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>cluster_simulator package &#8212; Cluster Simulator 0.1.0 documentation</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/language_data.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Contributing" href="contributing.html" />
+    <link rel="prev" title="cluster_simulator" href="modules.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="cluster-simulator-package">
+<h1>cluster_simulator package<a class="headerlink" href="#cluster-simulator-package" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
+</div>
+<div class="section" id="module-cluster_simulator.application">
+<span id="cluster-simulator-application-module"></span><h2>cluster_simulator.application module<a class="headerlink" href="#module-cluster_simulator.application" title="Permalink to this headline">¶</a></h2>
+<p>This module proposes a class to define HPC applications as a sequence of phases that are compute, read or write dominant behavior.</p>
+<dl class="class">
+<dt id="cluster_simulator.application.Application">
+<em class="property">class </em><code class="sig-prename descclassname">cluster_simulator.application.</code><code class="sig-name descname">Application</code><span class="sig-paren">(</span><em class="sig-param">env</em>, <em class="sig-param">name=None</em>, <em class="sig-param">compute=None</em>, <em class="sig-param">read=None</em>, <em class="sig-param">write=None</em>, <em class="sig-param">data=None</em>, <em class="sig-param">delay=0</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.application.Application" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Defining an application as a sequential set of phases(Compute/Read/Write) that occur in linear fashion. Next phase cannot proceed until previous one is finished.</p>
+<p>Each phases has its own attributes and resources dedicated to it. But all phases need computes units(called here cores) in order to run.</p>
+<p>Special attention is given to phases compute units: when phases requests different number of cores the application will wait for the availability of the maximum requested cores. Once available within the cluster, this max number if locked until the application execution is finished.</p>
+<dl class="attribute">
+<dt id="cluster_simulator.application.Application.env">
+<code class="sig-name descname">env</code><a class="headerlink" href="#cluster_simulator.application.Application.env" title="Permalink to this definition">¶</a></dt>
+<dd><p>the environment object where all the discrete event simulation occurs.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cluster_simulator.application.Application.name">
+<code class="sig-name descname">name</code><a class="headerlink" href="#cluster_simulator.application.Application.name" title="Permalink to this definition">¶</a></dt>
+<dd><p>a string name can be given to the application that is visible in plotting utilities and logging traces. If not provided, a random string will be given the the application.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cluster_simulator.application.Application.compute">
+<code class="sig-name descname">compute</code><a class="headerlink" href="#cluster_simulator.application.Application.compute" title="Permalink to this definition">¶</a></dt>
+<dd><p>a list of any size that contains times where events will occur, and compute phases are between the elements of the list.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cluster_simulator.application.Application.read">
+<code class="sig-name descname">read</code><a class="headerlink" href="#cluster_simulator.application.Application.read" title="Permalink to this definition">¶</a></dt>
+<dd><p>a list of the same length as compute, for each timestamp indicated in the compute list the read list indicates the volume of data in bytes that will be read during this phase. The duration of the read phase depends on the cluster hardware.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cluster_simulator.application.Application.write">
+<code class="sig-name descname">write</code><a class="headerlink" href="#cluster_simulator.application.Application.write" title="Permalink to this definition">¶</a></dt>
+<dd><p>a list of the same length as compute. For each time indicated in the compute list, the write list contains the volume of bytes that should be written by the application at this timed event. The duration of the write phase depends on the cluster hardware.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cluster_simulator.application.Application.data">
+<code class="sig-name descname">data</code><a class="headerlink" href="#cluster_simulator.application.Application.data" title="Permalink to this definition">¶</a></dt>
+<dd><p>(optional) a simpy.Store object that stores the phases schedule of the application and make it available outside of the application.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cluster_simulator.application.Application.delay">
+<code class="sig-name descname">delay</code><a class="headerlink" href="#cluster_simulator.application.Application.delay" title="Permalink to this definition">¶</a></dt>
+<dd><p>time in seconds to wait in order to start the application.</p>
+</dd></dl>
+
+<p>Applications running on the same cluster are stackables as well as their relative phases and thus can run in parallel. A start delay can be applied to any application that postpones its scheduling.</p>
+<dl class="method">
+<dt id="cluster_simulator.application.Application.get_fitness">
+<code class="sig-name descname">get_fitness</code><span class="sig-paren">(</span><em class="sig-param">app_name_filter=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.application.Application.get_fitness" title="Permalink to this definition">¶</a></dt>
+<dd><p>Method to get execution duration of the applications. It iterate over records saved in data to find the phase having the latest timestamp.</p>
+<p>Record example:
+sample_item = {‘app’: ‘B8’, ‘type’: ‘read’, ‘cpu_usage’: 1, ‘t_start’: 0, ‘t_end’: 4.761904761904762, ‘bandwidth’: 210.0, ‘phase_duration’: 4.761904761904762, ‘volume’: 1000000000.0, ‘tiers’: [‘SSD’, ‘NVRAM’], ‘data_placement’: {‘placement’: ‘SSD’}, ‘tier_level’: {‘SSD’: 1000000000.0, ‘NVRAM’: 0}}</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>app_name_filter</strong> (<em>string</em><em>, </em><em>optional</em>) – filter records that have application name equal to the specified string. Defaults to None.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>the timestamp of the last event of the session.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>float</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="cluster_simulator.application.Application.put_compute">
+<code class="sig-name descname">put_compute</code><span class="sig-paren">(</span><em class="sig-param">duration</em>, <em class="sig-param">cores=1</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.application.Application.put_compute" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add a compute phase that requests some unit cores and lasts a specific duration. It subclasses ComputePhase and object is queued to store attribute and cores needed to cores_request list.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>duration</strong> (<em>float</em>) – time in seconds of the compute phase.</p></li>
+<li><p><strong>cores</strong> (<em>int</em>) – number of cores</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="cluster_simulator.application.Application.put_delay">
+<code class="sig-name descname">put_delay</code><span class="sig-paren">(</span><em class="sig-param">duration</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.application.Application.put_delay" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add a Delay phase that waits before starting the application. This phase consumes 0 units of compute resources. It subclasses DeplayPhase and the object is queued to store attribute and cores needed to cores_request list.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>duration</strong> (<em>float</em>) – time in seconds of the delay phase.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="cluster_simulator.application.Application.put_io">
+<code class="sig-name descname">put_io</code><span class="sig-paren">(</span><em class="sig-param">operation</em>, <em class="sig-param">volume</em>, <em class="sig-param">pattern=1</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.application.Application.put_io" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add an I/O phase in read or write mode with a specific volume and pattern. It subclasses IOPhase and the object is queued to store attribute.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>operation</strong> (<em>string</em>) – type of I/O operation, “read” or “write”. Cannot schedule a mix of both.</p></li>
+<li><p><strong>volume</strong> (<em>float</em>) – volume in bytes of data to be processed by the I/O.</p></li>
+<li><p><strong>pattern</strong> (<em>float</em>) – encodes sequential pattern for a value of 1, and a random pattern for value of 0. Accepts intermediate values like 0.2, i.e. a mix of 20% sequential and 80% random. Default value is set to 1.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="cluster_simulator.application.Application.request_cores">
+<code class="sig-name descname">request_cores</code><span class="sig-paren">(</span><em class="sig-param">cluster</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.application.Application.request_cores" title="Permalink to this definition">¶</a></dt>
+<dd><p>Issues a request on compute cores to get a slot as a shared resources. Takes the maximum of requested cores through the application phases as a reference resource amount to lock for the application duration.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>cluster</strong> (<a class="reference internal" href="#cluster_simulator.cluster.Cluster" title="cluster_simulator.cluster.Cluster"><em>Cluster</em></a>) – accepts an object of type Cluster that contains the compute resources.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>an array of requests of each individual compute unit (core).</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="cluster_simulator.application.Application.run">
+<code class="sig-name descname">run</code><span class="sig-paren">(</span><em class="sig-param">cluster</em>, <em class="sig-param">placement</em>, <em class="sig-param">use_bb=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.application.Application.run" title="Permalink to this definition">¶</a></dt>
+<dd><p>Launches the execution process of an application on a specified cluster having compute and storage resources with placement indications for each issued I/O. Phases are executed sequentially.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>cluster</strong> (<a class="reference internal" href="#cluster_simulator.cluster.Cluster" title="cluster_simulator.cluster.Cluster"><em>Cluster</em></a>) – a set of compute resources with storage services.</p></li>
+<li><p><strong>tiers</strong> (<em>_type_</em>) – _description_</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>list of objects that stores scheduled phases of the application.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>data (simpy.Store)</p>
+</dd>
+<dt class="field-even">Yields</dt>
+<dd class="field-even"><p><em>simpy.Event</em> – relative events.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="cluster_simulator.application.Application.schedule">
+<code class="sig-name descname">schedule</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.application.Application.schedule" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read the compute/read/write inputs from application attributes and schedule them in a sequential order.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>status</strong> (<em>list of bool</em>) – store the sequential status of each element of the application sequence.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-cluster_simulator.cluster">
+<span id="cluster-simulator-cluster-module"></span><h2>cluster_simulator.cluster module<a class="headerlink" href="#module-cluster_simulator.cluster" title="Permalink to this headline">¶</a></h2>
+<p>This module proposes a class to define HPC cluster as a set of compute resources and storage facilities. Both are shared between applications running on the cluster.</p>
+<dl class="class">
+<dt id="cluster_simulator.cluster.Cluster">
+<em class="property">class </em><code class="sig-prename descclassname">cluster_simulator.cluster.</code><code class="sig-name descname">Cluster</code><span class="sig-paren">(</span><em class="sig-param">env</em>, <em class="sig-param">compute_nodes=1</em>, <em class="sig-param">cores_per_node=2</em>, <em class="sig-param">tiers=[]</em>, <em class="sig-param">ephemeral_tier=None</em>, <em class="sig-param">data=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.cluster.Cluster" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>A cluster is a set of compute nodes each node having a fixed number of cores. The storage system is heterogenous and consists on a set of tiers. Each tier has its own capacity and performances.
+Generally speaking, these tiers are referenced as persistent storage, which means that data conveyed through tiers is kept persistently and can be retrieved anytime by an application, unless it is explicitly removed as in data movers methods.
+A cluster contains also a specific type of tiers that is ephemeral, which means that it does not keep data beyond the execution time of an application. Ephemeral tiers are often supported by datanodes that hold their own compute units and also high storage hardware to serve as burst buffers backend. Burst buffers partitions their resources into flavors to dispatch them smartly between applications. They have also their own policy of eviction when storage are (quasi) saturated as well as a destaging capacity in order to move data to a persistent storage tier. As a consequence, each ephemeral tier has its a specific tier attached to it.</p>
+<dl class="method">
+<dt id="cluster_simulator.cluster.Cluster.get_levels">
+<code class="sig-name descname">get_levels</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.cluster.Cluster.get_levels" title="Permalink to this definition">¶</a></dt>
+<dd><p>Gathers tiers levels snapshot at a specific time event into a dict.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>snapshot of the tiers levels.</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>levels (dict)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="cluster_simulator.cluster.Cluster.get_max_bandwidth">
+<code class="sig-name descname">get_max_bandwidth</code><span class="sig-paren">(</span><em class="sig-param">tier</em>, <em class="sig-param">cores=1</em>, <em class="sig-param">operation='read'</em>, <em class="sig-param">pattern=1</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.cluster.Cluster.get_max_bandwidth" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the maximum bandwidth for a given tier, number of cores dedicated to the operation, a type of operation. Sequential pattern are assumed during copy/move as well as an important blocksize.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>tier</strong> (<a class="reference internal" href="#cluster_simulator.cluster.Tier" title="cluster_simulator.cluster.Tier"><em>Tier</em></a><em> or </em><em>index</em>) – the tier from which the bandwidth will be estimated.</p></li>
+<li><p><strong>cores</strong> (<em>int</em><em>, </em><em>optional</em>) – _description_. Defaults to 1.</p></li>
+<li><p><strong>operation</strong> (<em>str</em><em>, </em><em>optional</em>) – _description_. Defaults to ‘read’.</p></li>
+<li><p><strong>pattern</strong> (<em>int</em><em>, </em><em>optional</em>) – _description_. Defaults to 1.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a bandwidth value in MB/s for the specified arguments.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>float</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="cluster_simulator.cluster.EphemeralTier">
+<em class="property">class </em><code class="sig-prename descclassname">cluster_simulator.cluster.</code><code class="sig-name descname">EphemeralTier</code><span class="sig-paren">(</span><em class="sig-param">env</em>, <em class="sig-param">name</em>, <em class="sig-param">persistent_tier</em>, <em class="sig-param">bandwidth</em>, <em class="sig-param">capacity=80000000000.0</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.cluster.EphemeralTier" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#cluster_simulator.cluster.Tier" title="cluster_simulator.cluster.Tier"><code class="xref py py-class docutils literal notranslate"><span class="pre">cluster_simulator.cluster.Tier</span></code></a></p>
+<p>Ephemeral tiers are tiers that are used for the duration of an application or a workflow. They are attached to a persistent Tier where data will resided at the end of the application or workflow.
+When the app should read data from a tier 1, and will make use of a transient tier, this data can be prefetched to the transient tier to be accessed later by the app from ephemeral tier.
+When the app should write data to a target tier 2, and will make use of a transient tier t, this data will be first written to tier t, and then when destaging policy is triggered destage data to tier 2.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>persistent_tier</strong> (<a class="reference internal" href="#cluster_simulator.cluster.Tier" title="cluster_simulator.cluster.Tier"><em>Tier</em></a>) – persistent tier attached to this transient/ephemeral tier where all data conveyed by the application will be found.</p>
+</dd>
+</dl>
+<dl class="method">
+<dt id="cluster_simulator.cluster.EphemeralTier.evict">
+<code class="sig-name descname">evict</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.cluster.EphemeralTier.evict" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check if the application should evict some data from the ephemeral tier.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ephemeral_tier</strong> (<a class="reference internal" href="#cluster_simulator.cluster.EphemeralTier" title="cluster_simulator.cluster.EphemeralTier"><em>EphemeralTier</em></a>) – the ephemeral tier where data is stored.</p></li>
+<li><p><strong>lower_threshold</strong> (<em>float</em>) – lower threshold for the eviction.</p></li>
+<li><p><strong>upper_threshold</strong> (<em>float</em>) – upper threshold for the eviction.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>amount of data to be evicted.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>eviction_volume (int)</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="cluster_simulator.cluster.Tier">
+<em class="property">class </em><code class="sig-prename descclassname">cluster_simulator.cluster.</code><code class="sig-name descname">Tier</code><span class="sig-paren">(</span><em class="sig-param">env</em>, <em class="sig-param">name</em>, <em class="sig-param">bandwidth</em>, <em class="sig-param">capacity=100000000000.0</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.cluster.Tier" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Model a tier storage service with a focus on a limited bandwidth resource as well as a limited capacity. In this model we expect a bandwidth value at its asymptotic state, so blocksize is still not a parameter. Only the asymptotic part of the throughput curve is considered. Other considered variables are read/write variables and sequential/random variables.
+Output is a scalar value in MB/s.
+Typically we access the bandwidth value as in dictionary: b[‘read’][‘seq’] = 200MB/s.
+TODO: extend this to a NN as function approximator to allow:</p>
+<blockquote>
+<div><p>averaging over variables
+interpolation when data entry is absent, i.e. b[‘seq’] gives a value</p>
+</div></blockquote>
+</dd></dl>
+
+<dl class="function">
+<dt id="cluster_simulator.cluster.bandwidth_share_model">
+<code class="sig-prename descclassname">cluster_simulator.cluster.</code><code class="sig-name descname">bandwidth_share_model</code><span class="sig-paren">(</span><em class="sig-param">n_threads</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.cluster.bandwidth_share_model" title="Permalink to this definition">¶</a></dt>
+<dd><p>Description of a bandwidth share model that could extend the behavior from storage services measurements.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>n_threads</strong> (<em>int</em>) – number of threads/processes processing I/O simultaneously.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>the bandwidth share of the last process.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>float</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="cluster_simulator.cluster.compute_share_model">
+<code class="sig-prename descclassname">cluster_simulator.cluster.</code><code class="sig-name descname">compute_share_model</code><span class="sig-paren">(</span><em class="sig-param">n_cores</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.cluster.compute_share_model" title="Permalink to this definition">¶</a></dt>
+<dd><p>Description of parallelizing compute resources for an application. The gain factor is considered for a reference duration when using a single unit of computing.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>n_cores</strong> (<em>int</em>) – number of cores (computing unit) the application is distributed on.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>the speedup factor in comparison when using a single compute unit.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>float</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="cluster_simulator.cluster.convert_size">
+<code class="sig-prename descclassname">cluster_simulator.cluster.</code><code class="sig-name descname">convert_size</code><span class="sig-paren">(</span><em class="sig-param">size_bytes</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.cluster.convert_size" title="Permalink to this definition">¶</a></dt>
+<dd><p>Function to display a data volume in human readable way (B, KB, MB,…) instead of 1e3, 1e6, 1e9 bytes.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>size_bytes</strong> (<em>float</em>) – volume of data in bytes to convert.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>containing the volume expressed with a more convenient unit.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>string</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="cluster_simulator.cluster.get_tier">
+<code class="sig-prename descclassname">cluster_simulator.cluster.</code><code class="sig-name descname">get_tier</code><span class="sig-paren">(</span><em class="sig-param">cluster</em>, <em class="sig-param">tier_reference</em>, <em class="sig-param">use_bb=False</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.cluster.get_tier" title="Permalink to this definition">¶</a></dt>
+<dd><p>Cluster has attributes called tiers and ephemeral_tier. The first one is a list and the second one is a single object attached to one of the(persistent) tiers.
+Reference to a tier could be either a string(search by name) or an integer(search by index in the list of tiers).
+When a placement refers to a Tier object, and use_bb is False, data will be placed in the tier.
+When use_bb is True, data will be placed in the ephemeral_tier which is attached to the indicated tier.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>cluster</strong> (<a class="reference internal" href="#cluster_simulator.cluster.Cluster" title="cluster_simulator.cluster.Cluster"><em>Cluster</em></a>) – a cluster object that contains the tiers</p></li>
+<li><p><strong>tier_reference</strong> (<em>string</em><em>, </em><em>int</em>) – tier name or index in the list of tiers</p></li>
+<li><p><strong>use_bb</strong> (<em>bool</em>) – if True, data will be placed in the ephemeral_tier which is attached to the indicated tier.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>The storage tier that will be targeted for I/O operations.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference internal" href="#cluster_simulator.cluster.Tier" title="cluster_simulator.cluster.Tier">Tier</a> or <a class="reference internal" href="#cluster_simulator.cluster.EphemeralTier" title="cluster_simulator.cluster.EphemeralTier">EphemeralTier</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="cluster_simulator.cluster.monitor_step">
+<code class="sig-prename descclassname">cluster_simulator.cluster.</code><code class="sig-name descname">monitor_step</code><span class="sig-paren">(</span><em class="sig-param">data</em>, <em class="sig-param">lst</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.cluster.monitor_step" title="Permalink to this definition">¶</a></dt>
+<dd><p>Monitoring function that feed a queue of records on phases events when an application is running on the cluster.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<em>simpy.Store</em>) – a store object that queues elements of information useful for logging and analytics.</p></li>
+<li><p><strong>lst</strong> (<em>dict</em>) – information element to add to the data store.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+<div class="section" id="module-cluster_simulator.phase">
+<span id="cluster-simulator-phase-module"></span><h2>cluster_simulator.phase module<a class="headerlink" href="#module-cluster_simulator.phase" title="Permalink to this headline">¶</a></h2>
+<p>This module proposes a class for each type of phase that composes an application. While real applications do rarely exhibits pure phases and that are often dominant, we consider that is possible to describe it as a combinations of pure phases of compute, read or write without loss of generality.</p>
+<dl class="class">
+<dt id="cluster_simulator.phase.ComputePhase">
+<em class="property">class </em><code class="sig-prename descclassname">cluster_simulator.phase.</code><code class="sig-name descname">ComputePhase</code><span class="sig-paren">(</span><em class="sig-param">duration</em>, <em class="sig-param">cores=1</em>, <em class="sig-param">data=None</em>, <em class="sig-param">appname=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.phase.ComputePhase" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Defining an application phase of type compute which consists only on doing a dominant/intensive compute operation of a certain duration involving some compute units.</p>
+<dl class="attribute">
+<dt id="cluster_simulator.phase.ComputePhase.duration">
+<code class="sig-name descname">duration</code><a class="headerlink" href="#cluster_simulator.phase.ComputePhase.duration" title="Permalink to this definition">¶</a></dt>
+<dd><p>duration in seconds of the computing period.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cluster_simulator.phase.ComputePhase.cores">
+<code class="sig-name descname">cores</code><a class="headerlink" href="#cluster_simulator.phase.ComputePhase.cores" title="Permalink to this definition">¶</a></dt>
+<dd><p>number of compute units involved or consumed during the operation.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cluster_simulator.phase.ComputePhase.data">
+<code class="sig-name descname">data</code><a class="headerlink" href="#cluster_simulator.phase.ComputePhase.data" title="Permalink to this definition">¶</a></dt>
+<dd><p>data store object where application records are kept.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cluster_simulator.phase.ComputePhase.appname">
+<code class="sig-name descname">appname</code><a class="headerlink" href="#cluster_simulator.phase.ComputePhase.appname" title="Permalink to this definition">¶</a></dt>
+<dd><p>a user specified application name the phase belongs to.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cluster_simulator.phase.ComputePhase.run">
+<code class="sig-name descname">run</code><span class="sig-paren">(</span><em class="sig-param">env</em>, <em class="sig-param">cluster</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.phase.ComputePhase.run" title="Permalink to this definition">¶</a></dt>
+<dd><p>Executes the compute phase.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>env</strong> (<em>simpy.Environment</em>) – environment object where all simulation takes place.</p></li>
+<li><p><strong>cluster</strong> (<a class="reference internal" href="#cluster_simulator.cluster.Cluster" title="cluster_simulator.cluster.Cluster"><em>Cluster</em></a>) – the cluster on which the phase will run.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>True if the execution succeeds, False if not.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>bool</p>
+</dd>
+<dt class="field-even">Yields</dt>
+<dd class="field-even"><p><em>event</em> – yields a timeout event.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="cluster_simulator.phase.DelayPhase">
+<em class="property">class </em><code class="sig-prename descclassname">cluster_simulator.phase.</code><code class="sig-name descname">DelayPhase</code><span class="sig-paren">(</span><em class="sig-param">duration</em>, <em class="sig-param">data=None</em>, <em class="sig-param">appname=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.phase.DelayPhase" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Defining an application phase of type delay which consists only on waiting a duration in order to start the next phase.</p>
+<dl class="attribute">
+<dt id="cluster_simulator.phase.DelayPhase.duration">
+<code class="sig-name descname">duration</code><a class="headerlink" href="#cluster_simulator.phase.DelayPhase.duration" title="Permalink to this definition">¶</a></dt>
+<dd><p>duration in seconds of the waiting period.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cluster_simulator.phase.DelayPhase.data">
+<code class="sig-name descname">data</code><a class="headerlink" href="#cluster_simulator.phase.DelayPhase.data" title="Permalink to this definition">¶</a></dt>
+<dd><p>data store object where application records are kept.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cluster_simulator.phase.DelayPhase.appname">
+<code class="sig-name descname">appname</code><a class="headerlink" href="#cluster_simulator.phase.DelayPhase.appname" title="Permalink to this definition">¶</a></dt>
+<dd><p>a user specified application name the phase belongs to.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cluster_simulator.phase.DelayPhase.run">
+<code class="sig-name descname">run</code><span class="sig-paren">(</span><em class="sig-param">env</em>, <em class="sig-param">cluster</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.phase.DelayPhase.run" title="Permalink to this definition">¶</a></dt>
+<dd><p>Executes the delay phase by running a simple timeout event.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>env</strong> (<em>simpy.Environment</em>) – environment object where all simulation takes place.</p></li>
+<li><p><strong>cluster</strong> (<a class="reference internal" href="#cluster_simulator.cluster.Cluster" title="cluster_simulator.cluster.Cluster"><em>Cluster</em></a>) – the cluster on which the phase will run.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>True if the execution succeeds, False if not.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>bool</p>
+</dd>
+<dt class="field-even">Yields</dt>
+<dd class="field-even"><p><em>event</em> – yields a timeout event.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="cluster_simulator.phase.IOPhase">
+<em class="property">class </em><code class="sig-prename descclassname">cluster_simulator.phase.</code><code class="sig-name descname">IOPhase</code><span class="sig-paren">(</span><em class="sig-param">cores=1</em>, <em class="sig-param">operation='read'</em>, <em class="sig-param">volume=1000000000.0</em>, <em class="sig-param">pattern=1</em>, <em class="sig-param">data=None</em>, <em class="sig-param">appname=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.phase.IOPhase" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Defining an application I/O phase which consists on processing dominantly inputs/outputs during the application runtime.
+Variables:</p>
+<blockquote>
+<div><p>current_ios: list of IOPhase instances that are in running state so it is possible to update IOs following a change in bandwidth consumption.</p>
+</div></blockquote>
+<dl class="attribute">
+<dt id="cluster_simulator.phase.IOPhase.cores">
+<code class="sig-name descname">cores</code><a class="headerlink" href="#cluster_simulator.phase.IOPhase.cores" title="Permalink to this definition">¶</a></dt>
+<dd><p>number of compute units involved or consumed during the operation.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cluster_simulator.phase.IOPhase.operation">
+<code class="sig-name descname">operation</code><a class="headerlink" href="#cluster_simulator.phase.IOPhase.operation" title="Permalink to this definition">¶</a></dt>
+<dd><p>specify if it is “read” operation (input data) or “write” operation (output data).</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cluster_simulator.phase.IOPhase.volume">
+<code class="sig-name descname">volume</code><a class="headerlink" href="#cluster_simulator.phase.IOPhase.volume" title="Permalink to this definition">¶</a></dt>
+<dd><p>volume in bytes of the data to be operated during the phase.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cluster_simulator.phase.IOPhase.pattern">
+<code class="sig-name descname">pattern</code><a class="headerlink" href="#cluster_simulator.phase.IOPhase.pattern" title="Permalink to this definition">¶</a></dt>
+<dd><p>describes the pattern encoding with 1 if pure sequential, 0 if pure random, and a float in between.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cluster_simulator.phase.IOPhase.last_event">
+<code class="sig-name descname">last_event</code><a class="headerlink" href="#cluster_simulator.phase.IOPhase.last_event" title="Permalink to this definition">¶</a></dt>
+<dd><p>float to keep the timestamp of the last I/O event.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cluster_simulator.phase.IOPhase.next_event">
+<code class="sig-name descname">next_event</code><a class="headerlink" href="#cluster_simulator.phase.IOPhase.next_event" title="Permalink to this definition">¶</a></dt>
+<dd><p>float to keep the timestamp of the next I/O event.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cluster_simulator.phase.IOPhase.bandwidth_concurrency">
+<code class="sig-name descname">bandwidth_concurrency</code><a class="headerlink" href="#cluster_simulator.phase.IOPhase.bandwidth_concurrency" title="Permalink to this definition">¶</a></dt>
+<dd><p>int to indicate how many processes are doing I/O.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cluster_simulator.phase.IOPhase.dirty">
+<code class="sig-name descname">dirty</code><a class="headerlink" href="#cluster_simulator.phase.IOPhase.dirty" title="Permalink to this definition">¶</a></dt>
+<dd><p>int to indicate the amount of data that is dirty in ephemeral tier/RAM (does not have a copy in persistent tier).</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cluster_simulator.phase.IOPhase.data">
+<code class="sig-name descname">data</code><a class="headerlink" href="#cluster_simulator.phase.IOPhase.data" title="Permalink to this definition">¶</a></dt>
+<dd><p>data store object where application records are kept.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cluster_simulator.phase.IOPhase.appname">
+<code class="sig-name descname">appname</code><a class="headerlink" href="#cluster_simulator.phase.IOPhase.appname" title="Permalink to this definition">¶</a></dt>
+<dd><p>a user specified application name the phase belongs to.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="cluster_simulator.phase.IOPhase.current_ios">
+<code class="sig-name descname">current_ios</code><em class="property"> = []</em><a class="headerlink" href="#cluster_simulator.phase.IOPhase.current_ios" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cluster_simulator.phase.IOPhase.get_move_duration">
+<code class="sig-name descname">get_move_duration</code><span class="sig-paren">(</span><em class="sig-param">cluster</em>, <em class="sig-param">source_tier</em>, <em class="sig-param">target_tier</em>, <em class="sig-param">volume</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.phase.IOPhase.get_move_duration" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the adequate step duration to avoid I/O event or volume saturation in tier</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>cluster</strong> (<a class="reference internal" href="#cluster_simulator.cluster.Cluster" title="cluster_simulator.cluster.Cluster"><em>Cluster</em></a>) – _description_</p></li>
+<li><p><strong>tier</strong> (<a class="reference internal" href="#cluster_simulator.cluster.Tier" title="cluster_simulator.cluster.Tier"><em>Tier</em></a>) – _description_</p></li>
+<li><p><strong>volume</strong> (<em>float</em>) – _description_</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>_description_</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>tuple</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="cluster_simulator.phase.IOPhase.get_step_duration">
+<code class="sig-name descname">get_step_duration</code><span class="sig-paren">(</span><em class="sig-param">cluster</em>, <em class="sig-param">tier</em>, <em class="sig-param">volume</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.phase.IOPhase.get_step_duration" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the adequate step duration to not avoid I/O event or volume saturation in tier</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>cluster</strong> (<a class="reference internal" href="#cluster_simulator.cluster.Cluster" title="cluster_simulator.cluster.Cluster"><em>Cluster</em></a>) – _description_</p></li>
+<li><p><strong>tier</strong> (<a class="reference internal" href="#cluster_simulator.cluster.Tier" title="cluster_simulator.cluster.Tier"><em>Tier</em></a>) – _description_</p></li>
+<li><p><strong>volume</strong> (<em>float</em>) – _description_</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>_description_</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>tuple</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="cluster_simulator.phase.IOPhase.move_step">
+<code class="sig-name descname">move_step</code><span class="sig-paren">(</span><em class="sig-param">env</em>, <em class="sig-param">cluster</em>, <em class="sig-param">source_tier</em>, <em class="sig-param">target_tier</em>, <em class="sig-param">erase=False</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.phase.IOPhase.move_step" title="Permalink to this definition">¶</a></dt>
+<dd><p>Allows to run a movement of data in an interval where available bandwidth is constant.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>env</strong> (<em>simpy.Environment</em><em>(</em><em>)</em>) – environment variable where the I/O operation will take place.</p></li>
+<li><p><strong>cluster</strong> (<a class="reference internal" href="#cluster_simulator.cluster.Cluster" title="cluster_simulator.cluster.Cluster"><em>Cluster</em></a>) – the cluster on which the application will run.</p></li>
+<li><p><strong>source_tier</strong> (<a class="reference internal" href="#cluster_simulator.cluster.Tier" title="cluster_simulator.cluster.Tier"><em>Tier</em></a>) – storage tier from which we read data to move.</p></li>
+<li><p><strong>target_tier</strong> (<a class="reference internal" href="#cluster_simulator.cluster.Tier" title="cluster_simulator.cluster.Tier"><em>Tier</em></a>) – storage tier where the data will be moved.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>True if the step is completed, False otherwise.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>bool</p>
+</dd>
+<dt class="field-even">Yields</dt>
+<dd class="field-even"><p><em>simpy.Event</em> – other events that can occur during the I/O operation.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="cluster_simulator.phase.IOPhase.move_volume">
+<code class="sig-name descname">move_volume</code><span class="sig-paren">(</span><em class="sig-param">step_duration</em>, <em class="sig-param">volume</em>, <em class="sig-param">available_bandwidth</em>, <em class="sig-param">cluster</em>, <em class="sig-param">source_tier</em>, <em class="sig-param">target_tier</em>, <em class="sig-param">erase=False</em>, <em class="sig-param">initial_levels=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.phase.IOPhase.move_volume" title="Permalink to this definition">¶</a></dt>
+<dd><p>This method moves a small amount of I/O volume between two predictable events from a source_tier to a target tier with available bandiwdth value. If an event occurs in the meantime, data movement will be interrupted and bandwidth updated accordingly.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>step_duration</strong> (<em>float</em>) – the expected duration between two predictible events.</p></li>
+<li><p><strong>volume</strong> (<em>float</em>) – volume in bytes of the data to move.</p></li>
+<li><p><strong>cluster</strong> (<a class="reference internal" href="#cluster_simulator.cluster.Cluster" title="cluster_simulator.cluster.Cluster"><em>Cluster</em></a>) – cluster facility where the I/O operation should take place.</p></li>
+<li><p><strong>available_bandwidth</strong> (<em>float</em>) – available bandwidth in the step.</p></li>
+<li><p><strong>source_tier</strong> (<a class="reference internal" href="#cluster_simulator.cluster.Tier" title="cluster_simulator.cluster.Tier"><em>Tier</em></a>) – storage tier from which we read data to move.</p></li>
+<li><p><strong>target_tier</strong> (<a class="reference internal" href="#cluster_simulator.cluster.Tier" title="cluster_simulator.cluster.Tier"><em>Tier</em></a>) – storage tier where the data will be moved.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="cluster_simulator.phase.IOPhase.process_volume">
+<code class="sig-name descname">process_volume</code><span class="sig-paren">(</span><em class="sig-param">step_duration</em>, <em class="sig-param">volume</em>, <em class="sig-param">available_bandwidth</em>, <em class="sig-param">cluster</em>, <em class="sig-param">tier</em>, <em class="sig-param">initial_levels=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.phase.IOPhase.process_volume" title="Permalink to this definition">¶</a></dt>
+<dd><p>This method processes a small amount of I/O volume between two predictable events on a specific tier. If an event occurs in the meantime, I/O will be interrupted and bandwidth updated according.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>step_duration</strong> (<em>float</em>) – the expected duration between two predictable events.</p></li>
+<li><p><strong>volume</strong> (<em>float</em>) – volume in bytes of the data to process.</p></li>
+<li><p><strong>cluster</strong> (<a class="reference internal" href="#cluster_simulator.cluster.Cluster" title="cluster_simulator.cluster.Cluster"><em>Cluster</em></a>) – cluster facility where the I/O operation should take place.</p></li>
+<li><p><strong>available_bandwidth</strong> (<em>float</em>) – available bandwidth in the step.</p></li>
+<li><p><strong>tier</strong> (<a class="reference internal" href="#cluster_simulator.cluster.Tier" title="cluster_simulator.cluster.Tier"><em>Tier</em></a>) – storage tier concerned by the I/O operation. It could be reading from this tier or writing to it.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="cluster_simulator.phase.IOPhase.register_step">
+<code class="sig-name descname">register_step</code><span class="sig-paren">(</span><em class="sig-param">t_start</em>, <em class="sig-param">step_duration</em>, <em class="sig-param">available_bandwidth</em>, <em class="sig-param">cluster</em>, <em class="sig-param">tier</em>, <em class="sig-param">initial_levels=None</em>, <em class="sig-param">source_tier=None</em>, <em class="sig-param">eviction=None</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.phase.IOPhase.register_step" title="Permalink to this definition">¶</a></dt>
+<dd><p>Registering a processing step in the data store with some logging.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>t_start</strong> (<em>float</em>) – timestamp of the start of the step.</p></li>
+<li><p><strong>step_duration</strong> (<em>float</em>) – duration of the step.</p></li>
+<li><p><strong>available_bandwidth</strong> (<em>float</em>) – available bandwidth in the step.</p></li>
+<li><p><strong>cluster</strong> (<a class="reference internal" href="#cluster_simulator.cluster.Cluster" title="cluster_simulator.cluster.Cluster"><em>Cluster</em></a>) – the cluster on which the phase will run.</p></li>
+<li><p><strong>tier</strong> (<a class="reference internal" href="#cluster_simulator.cluster.Tier" title="cluster_simulator.cluster.Tier"><em>Tier</em></a>) – the tier on which the step will run.</p></li>
+<li><p><strong>initial_levels</strong> (<em>dict</em>) – initial levels of all tiers at the start of the step.</p></li>
+<li><p><strong>source_tier</strong> (<a class="reference internal" href="#cluster_simulator.cluster.Tier" title="cluster_simulator.cluster.Tier"><em>Tier</em></a><em>, </em><em>optional</em>) – the tier from which the step will run.</p></li>
+<li><p><strong>eviction</strong> (<em>int</em><em>, </em><em>optional</em>) – volume of data which was evicted from ephemeral tier.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="cluster_simulator.phase.IOPhase.run">
+<code class="sig-name descname">run</code><span class="sig-paren">(</span><em class="sig-param">env</em>, <em class="sig-param">cluster</em>, <em class="sig-param">placement</em>, <em class="sig-param">use_bb=False</em>, <em class="sig-param">delay=0</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.phase.IOPhase.run" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="cluster_simulator.phase.IOPhase.run_step">
+<code class="sig-name descname">run_step</code><span class="sig-paren">(</span><em class="sig-param">env</em>, <em class="sig-param">cluster</em>, <em class="sig-param">tier</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.phase.IOPhase.run_step" title="Permalink to this definition">¶</a></dt>
+<dd><p>Allows to run a step of I/O operation where bandwidth share is constant.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>env</strong> (<em>simpy.Environment</em><em>(</em><em>)</em>) – environment variable where the I/O operation will take place.</p></li>
+<li><p><strong>cluster</strong> (<a class="reference internal" href="#cluster_simulator.cluster.Cluster" title="cluster_simulator.cluster.Cluster"><em>Cluster</em></a>) – the cluster on which the application will run.</p></li>
+<li><p><strong>tier</strong> (<a class="reference internal" href="#cluster_simulator.cluster.Tier" title="cluster_simulator.cluster.Tier"><em>Tier</em></a>) – the storage tier where the I/O will be processed.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>True if the step is completed, False otherwise.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>bool</p>
+</dd>
+<dt class="field-even">Yields</dt>
+<dd class="field-even"><p><em>simpy.Event</em> – other events that can occur during the I/O operation.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="cluster_simulator.phase.IOPhase.update_tier">
+<code class="sig-name descname">update_tier</code><span class="sig-paren">(</span><em class="sig-param">tier</em>, <em class="sig-param">volume</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.phase.IOPhase.update_tier" title="Permalink to this definition">¶</a></dt>
+<dd><p>Update tier level with the algebric value of volume.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>tier</strong> (<a class="reference internal" href="#cluster_simulator.cluster.Tier" title="cluster_simulator.cluster.Tier"><em>Tier</em></a>) – tier for which the level will be updated.</p></li>
+<li><p><strong>volume</strong> (<em>float</em>) – volume value (positive or negative) to adjust tier level.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="cluster_simulator.phase.IOPhase.update_tier_on_move">
+<code class="sig-name descname">update_tier_on_move</code><span class="sig-paren">(</span><em class="sig-param">source_tier</em>, <em class="sig-param">target_tier</em>, <em class="sig-param">volume</em>, <em class="sig-param">erase</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.phase.IOPhase.update_tier_on_move" title="Permalink to this definition">¶</a></dt>
+<dd><p>Update tier level following a volume move.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>source_tier</strong> (<a class="reference internal" href="#cluster_simulator.cluster.Tier" title="cluster_simulator.cluster.Tier"><em>Tier</em></a>) – tier from which the data will be moved.</p></li>
+<li><p><strong>target_tier</strong> (<a class="reference internal" href="#cluster_simulator.cluster.Tier" title="cluster_simulator.cluster.Tier"><em>Tier</em></a>) – tier for which the level will be updated.</p></li>
+<li><p><strong>volume</strong> (<em>float</em>) – volume value (positive or negative) to adjust tier level.</p></li>
+<li><p><strong>erase</strong> (<em>bool</em>) – whether or not erase the amount of volume from source_tier.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="cluster_simulator.phase.monitor_step">
+<code class="sig-prename descclassname">cluster_simulator.phase.</code><code class="sig-name descname">monitor_step</code><span class="sig-paren">(</span><em class="sig-param">data</em>, <em class="sig-param">lst</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.phase.monitor_step" title="Permalink to this definition">¶</a></dt>
+<dd><p>Monitoring function that feed a queue of records on phases events when an application is running on the cluster.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<em>simpy.Store</em>) – a store object that queues elements of information useful for logging and analytics.</p></li>
+<li><p><strong>lst</strong> (<em>dict</em>) – information element to add to the data store.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+<div class="section" id="module-cluster_simulator.utils">
+<span id="cluster-simulator-utils-module"></span><h2>cluster_simulator.utils module<a class="headerlink" href="#module-cluster_simulator.utils" title="Permalink to this headline">¶</a></h2>
+<p>This module contains mainly utility functions that are used through other modules of the cluster simulator package.</p>
+<dl class="class">
+<dt id="cluster_simulator.utils.BandwidthResource">
+<em class="property">class </em><code class="sig-prename descclassname">cluster_simulator.utils.</code><code class="sig-name descname">BandwidthResource</code><span class="sig-paren">(</span><em class="sig-param">event_list</em>, <em class="sig-param">*args</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.utils.BandwidthResource" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">simpy.resources.resource.Resource</span></code></p>
+<p>Subclassing simpy Resource to introduce the ability to check_bandwidth when resource is requested or released.</p>
+<dl class="method">
+<dt id="cluster_simulator.utils.BandwidthResource.check_bandwidth">
+<code class="sig-name descname">check_bandwidth</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.utils.BandwidthResource.check_bandwidth" title="Permalink to this definition">¶</a></dt>
+<dd><p>Checks running IO when bandwidth occupation changes. IOs should be interrupted on release or request of a bandwidth slot.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cluster_simulator.utils.BandwidthResource.release">
+<code class="sig-name descname">release</code><span class="sig-paren">(</span><em class="sig-param">*args</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.utils.BandwidthResource.release" title="Permalink to this definition">¶</a></dt>
+<dd><p>On release method, check_bandwidth using parent release method.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="cluster_simulator.utils.BandwidthResource.request">
+<code class="sig-name descname">request</code><span class="sig-paren">(</span><em class="sig-param">*args</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.utils.BandwidthResource.request" title="Permalink to this definition">¶</a></dt>
+<dd><p>On request method, check_bandwidth using parent request method.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="cluster_simulator.utils.compute_share_model">
+<code class="sig-prename descclassname">cluster_simulator.utils.</code><code class="sig-name descname">compute_share_model</code><span class="sig-paren">(</span><em class="sig-param">n_cores</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.utils.compute_share_model" title="Permalink to this definition">¶</a></dt>
+<dd><p>Description of parallelizing compute resources for an application. The gain factor is considered for a reference duration when using a single unit of computing.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>n_cores</strong> (<em>int</em>) – number of cores (computing unit) the application is distributed on.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>the speedup factor in comparison when using a single compute unit.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>float</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="cluster_simulator.utils.convert_size">
+<code class="sig-prename descclassname">cluster_simulator.utils.</code><code class="sig-name descname">convert_size</code><span class="sig-paren">(</span><em class="sig-param">size_bytes</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.utils.convert_size" title="Permalink to this definition">¶</a></dt>
+<dd><p>Function to display a data volume in human readable way (B, KB, MB,…) instead of 1e3, 1e6, 1e9 bytes.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>size_bytes</strong> (<em>float</em>) – volume of data in bytes to convert.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>containing the volume expressed with a more convenient unit.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>string</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="cluster_simulator.utils.get_tier">
+<code class="sig-prename descclassname">cluster_simulator.utils.</code><code class="sig-name descname">get_tier</code><span class="sig-paren">(</span><em class="sig-param">cluster</em>, <em class="sig-param">tier_reference</em>, <em class="sig-param">use_bb=False</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.utils.get_tier" title="Permalink to this definition">¶</a></dt>
+<dd><p>Cluster has attributes called tiers and ephemeral_tier. The first one is a list and the second one is a single object attached to one of the(persistent) tiers.
+Reference to a tier could be either a string(search by name) or an integer(search by index in the list of tiers).
+When a placement refers to a Tier object, and use_bb is False, data will be placed in the tier.
+When use_bb is True, data will be placed in the ephemeral_tier which is attached to the indicated tier.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>cluster</strong> (<a class="reference internal" href="#cluster_simulator.cluster.Cluster" title="cluster_simulator.cluster.Cluster"><em>Cluster</em></a>) – a cluster object that contains the tiers</p></li>
+<li><p><strong>tier_reference</strong> (<em>string</em><em>, </em><em>int</em>) – tier name or index in the list of tiers</p></li>
+<li><p><strong>use_bb</strong> (<em>bool</em>) – if True, data will be placed in the ephemeral_tier which is attached to the indicated tier.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>The storage tier that will be targeted for I/O operations.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference internal" href="#cluster_simulator.cluster.Tier" title="cluster_simulator.cluster.Tier">Tier</a> or <a class="reference internal" href="#cluster_simulator.cluster.EphemeralTier" title="cluster_simulator.cluster.EphemeralTier">EphemeralTier</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="cluster_simulator.utils.monitor_step">
+<code class="sig-prename descclassname">cluster_simulator.utils.</code><code class="sig-name descname">monitor_step</code><span class="sig-paren">(</span><em class="sig-param">data</em>, <em class="sig-param">lst</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.utils.monitor_step" title="Permalink to this definition">¶</a></dt>
+<dd><p>Monitoring function that feed a queue of records on phases events when an application is running on the cluster.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<em>simpy.Store</em>) – a store object that queues elements of information useful for logging and analytics.</p></li>
+<li><p><strong>lst</strong> (<em>dict</em>) – information element to add to the data store.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="cluster_simulator.utils.name_app">
+<code class="sig-prename descclassname">cluster_simulator.utils.</code><code class="sig-name descname">name_app</code><span class="sig-paren">(</span><em class="sig-param">number_of_letter=1</em>, <em class="sig-param">number_of_digits=1</em><span class="sig-paren">)</span><a class="headerlink" href="#cluster_simulator.utils.name_app" title="Permalink to this definition">¶</a></dt>
+<dd><p>Give a random but reproducible string that should be enough to be unique for naming phases and applications.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>string concatenating uppercase letters and digits to be easily identifiable.</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>string</p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+<div class="section" id="module-cluster_simulator">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-cluster_simulator" title="Permalink to this headline">¶</a></h2>
+<p>Top-level package for Cluster Simulator.</p>
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">Cluster Simulator</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="readme.html">Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">Usage</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="modules.html">cluster_simulator</a><ul class="current">
+<li class="toctree-l2 current"><a class="current reference internal" href="#">cluster_simulator package</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#submodules">Submodules</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#module-cluster_simulator.application">cluster_simulator.application module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#module-cluster_simulator.cluster">cluster_simulator.cluster module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#module-cluster_simulator.phase">cluster_simulator.phase module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#module-cluster_simulator.utils">cluster_simulator.utils module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#module-cluster_simulator">Module contents</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="authors.html">Credits</a></li>
+<li class="toctree-l1"><a class="reference internal" href="history.html">History</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  <li><a href="modules.html">cluster_simulator</a><ul>
+      <li>Previous: <a href="modules.html" title="previous chapter">cluster_simulator</a></li>
+      <li>Next: <a href="contributing.html" title="next chapter">Contributing</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;
+Copyright(C) 2022 Bull S. A. S. - All rights reserved
+Bull, Rue Jean Jaures, B.P.68, 78340, Les Clayes-sous-Bois, France
+This is not Free or Open Source software.
+Please contact Bull S. A. S. for details about its license.
+.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.3.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/cluster_simulator.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
