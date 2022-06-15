@@ -3,6 +3,9 @@ import simpy
 from loguru import logger
 import time
 import numpy as np
+import pandas as pd
+import time, os
+from itertools import chain
 from cluster_simulator.cluster import Cluster, Tier, EphemeralTier, bandwidth_share_model, compute_share_model, get_tier, convert_size
 from cluster_simulator.phase import DelayPhase, ComputePhase, IOPhase
 from cluster_simulator.application import Application
@@ -22,6 +25,8 @@ from loguru import logger
 
 
 class ClusterBlackBox:
+    # store optimization curve
+    experiment_data = []
     def __init__(self):
         self.env = simpy.Environment()
         self.data = simpy.Store(self.env)
@@ -56,7 +61,8 @@ class ClusterBlackBox:
         self.apps = [app1, app2, app3]
 
         self.bb = EphemeralTier(self.env, name="BB", persistent_tier=self.ssd_tier,
-                                bandwidth=self.nvram_bandwidth, capacity=self.get_max_io_volume())
+                                bandwidth=self.nvram_bandwidth, capacity=50e9)
+                                #capacity=self.get_max_io_volume())
         self.cluster = Cluster(self.env, compute_nodes=2, cores_per_node=5,
                                tiers=[self.hdd_tier, self.ssd_tier],
                                ephemeral_tier=self.bb)
@@ -64,7 +70,12 @@ class ClusterBlackBox:
 
         self.ios = self.get_io_nbr()
         self.n_tiers = len(self.cluster.tiers)
-        self.parameter_space = np.array([np.arange(0, self.n_tiers, 1)]*sum(self.ios))
+        #self.parameter_space = np.array([np.arange(0, self.n_tiers, 1)]*sum(self.ios))
+        self.parameter_space = np.array([np.arange(0, self.n_tiers, 1), np.arange(0, 2, 1)]*sum(self.ios))
+
+
+
+
 
     def get_io_nbr(self):
         """Get the total number of I/O operations for all applications
@@ -87,28 +98,104 @@ class ClusterBlackBox:
         self.__init__()
         # https://stackoverflow.com/questions/45061369/simpy-how-to-run-a-simulation-multiple-times
         start_index = 0
-        print(placement)
+        print(f"Full BBO param array = {placement}")
+        row = [placement]
         for i_app, app in enumerate(self.apps):
-            place_tier = placement[start_index: start_index + self.ios[i_app]]
+            tier_placement = placement[0:sum(self.ios)] # get the placement param
+            bb_placement = placement[sum(self.ios)+1:] # get the use_bb param
+            place_tier = tier_placement[start_index: start_index + self.ios[i_app]]
+            # converting list of 0/1 values to False/True
+            use_bb = list(map(bool, bb_placement[start_index: start_index + self.ios[i_app]]))
             start_index = self.ios[i_app]
-            self.env.process(app.run(self.cluster, placement=place_tier))
+            self.env.process(app.run(self.cluster, placement=place_tier, use_bb=use_bb))
+            row += [place_tier, use_bb]
+            print(f"    | app#{i_app+1} : tier placement: {place_tier} | use_bb = {use_bb}")
+
         # run the simulation
         self.env.run()
+        fitness = app.get_fitness()
+        bb_size = app.get_ephemeral_size()
+        print(f"    | runtime = {fitness} |  BB_size = {convert_size(bb_size)}")
+        row += [fitness, bb_size]
+        self.experiment_data.append(row)
         return app.get_fitness()
+    # def display_placement(self, placement):
+    #     self.__init__()
+    #     # https://stackoverflow.com/questions/45061369/simpy-how-to-run-a-simulation-multiple-times
+    #     start_index = 0
+    #     #print(placement)
+    #     for i_app, app in enumerate(self.apps):
+    #         place_tier = placement[start_index: start_index + self.ios[i_app]]
+    #         start_index = self.ios[i_app]
+    #         self.env.process(app.run(self.cluster, placement=place_tier))
+    #     # run the simulation
+    #     self.env.run()
+    #     fig = display_run(self.data, self.cluster, width=800, height=900)
+    #     fitness = app.get_fitness()
+    #     appslist = ", ".join([app.name for app in self.apps])
+    #     print(f"The apps {appslist} lasts {round(fitness, 3)} seconds when placement = {placement}")
+    #     return fig
+    def display_placement(self, placement):
+        self.__init__()
+        start_index = 0
+        print(f"Displaying result for placement parameter = {placement}")
+        for i_app, app in enumerate(self.apps):
+            tier_placement = placement[0:sum(self.ios)] # get the placement param
+            bb_placement = placement[sum(self.ios)+1:] # get the use_bb param
+            place_tier = tier_placement[start_index: start_index + self.ios[i_app]]
+            # converting list of 0/1 values to False/True
+            use_bb = list(map(bool, bb_placement[start_index: start_index + self.ios[i_app]]))
+            start_index = self.ios[i_app]
+            self.env.process(app.run(self.cluster, placement=place_tier, use_bb=use_bb))
+            print(f"    | app#{i_app+1} : tier placement: {place_tier} | use_bb = {use_bb}")
+
+        # run the simulation
+        self.env.run()
+        fitness = app.get_fitness()
+        bb_size = app.get_ephemeral_size()
+        print(f"    | runtime = {fitness} |  BB_size = {convert_size(bb_size)}")
+        fig = display_run(self.data, self.cluster, width=800, height=900)
+        return fig
+
+
+    def save_experiment(self, filename=str(round(time.time()*1000)), save=False):
+        """Organise a dataframe with adequate number of columns to save experiment results.
+
+        Example:
+            param | app#1 tier place | app#1 use bb | ... | fitness | bb_size
+
+        Args:
+            row_list (list): parameter for black box optimization
+
+        Returns:
+            df (dataframe): dataframe containing the results of iterations over parameters.
+        """
+
+        columns = ["Param"] + list(chain.from_iterable((f"App#{i+1} tier place",
+                                                        f"App#{i+1} use bb") for i in range(len(self.apps)))) + ["Fitness", "BB_size"]
+
+        self.df = pd.DataFrame(self.experiment_data, columns=columns)
+        if save:
+            pathfile = os.path.join(os.getcwd(), "notebooks", filename)
+            self.df.to_pickle(pathfile)
+            print(f"dataframe saved to {pathfile}")
+        else:
+            return self.df
+
 
 
 if __name__ == '__main__':
     logger.remove()
     cbb = ClusterBlackBox()
     PARAMETER_SPACE = cbb.parameter_space
-    # combinations are self.n_tiers ** sum(self.ios)
+    # combinations are self.n_tiers ** sum(self.ios) + 2**sum(self.ios)
     NBR_ITERATION = 50  # cbb.n_tiers ** sum(cbb.ios)
 
     np.random.seed(5)
     bbopt = BBOptimizer(black_box=cbb,
                         heuristic="surrogate_model",
                         max_iteration=NBR_ITERATION,
-                        initial_sample_size=30,
+                        initial_sample_size=60,
                         parameter_space=PARAMETER_SPACE,
                         next_parameter_strategy=expected_improvement,
                         regression_model=GaussianProcessRegressor)
@@ -120,3 +207,4 @@ if __name__ == '__main__':
     print("-----------------")
     bbopt.summarize()
     print(f"Fitness history : {bbopt.history['fitness']}")
+    cbb.save_experiment(filename = "flavor_optim", save=True)
