@@ -109,7 +109,7 @@ class ClusterBlackBox:
             start_index = self.ios[i_app]
             self.env.process(app.run(self.cluster, placement=place_tier, use_bb=use_bb))
             row += [place_tier, use_bb]
-            print(f"    | app#{i_app+1} : tier placement: {place_tier} | use_bb = {use_bb}")
+            print(f"    | app#{self.apps[i_app].name} : tier placement: {place_tier} | use_bb = {use_bb}")
 
         # run the simulation
         self.env.run()
@@ -171,8 +171,8 @@ class ClusterBlackBox:
             df (dataframe): dataframe containing the results of iterations over parameters.
         """
 
-        columns = ["Param"] + list(chain.from_iterable((f"App#{i+1} tier place",
-                                                        f"App#{i+1} use bb") for i in range(len(self.apps)))) + ["Fitness", "BB_size"]
+        columns = ["Param"] + list(chain.from_iterable((f"App#{self.apps[i].name} tier place",
+                                                        f"App#{self.apps[i].name} use bb") for i in range(len(self.apps)))) + ["Fitness", "BB_size"]
 
         self.df = pd.DataFrame(self.experiment_data, columns=columns)
         if save:
@@ -195,7 +195,7 @@ if __name__ == '__main__':
     bbopt = BBOptimizer(black_box=cbb,
                         heuristic="surrogate_model",
                         max_iteration=NBR_ITERATION,
-                        initial_sample_size=60,
+                        initial_sample_size=80,
                         parameter_space=PARAMETER_SPACE,
                         next_parameter_strategy=expected_improvement,
                         regression_model=GaussianProcessRegressor)

@@ -3,7 +3,11 @@ import simpy
 from loguru import logger
 import time
 import numpy as np
+import pandas as pd
+import time, os
+from itertools import chain
 from cluster_simulator.cluster import Cluster, Tier, EphemeralTier, bandwidth_share_model, compute_share_model, get_tier, convert_size
+from utils import get_ephemeral_size, get_fitness
 from cluster_simulator.phase import DelayPhase, ComputePhase, IOPhase
 from cluster_simulator.application import Application
 from cluster_simulator.analytics import display_run
@@ -22,6 +26,8 @@ from loguru import logger
 
 
 class ClusterBlackBox:
+    # store optimization curve
+    experiment_data = []
     def __init__(self):
         self.env = simpy.Environment()
         self.data = simpy.Store(self.env)
@@ -30,11 +36,12 @@ class ClusterBlackBox:
                                 'write': {'seq': 515, 'rand': 505}}
         self.ssd_bandwidth = {'read':  {'seq': 210, 'rand': 190},
                               'write': {'seq': 100, 'rand': 100}}
+        self.hdd_bandwidth = {'read':  {'seq': 80, 'rand': 80},
+                         'write': {'seq': 40, 'rand': 40}}
 
         self.ssd_tier = Tier(self.env, 'SSD', bandwidth=self.ssd_bandwidth, capacity=200e9)
+        self.hdd_tier = Tier(self.env, 'HDD', bandwidth=self.hdd_bandwidth, capacity=1e12)
         self.nvram_tier = Tier(self.env, 'NVRAM', bandwidth=self.nvram_bandwidth, capacity=80e9)
-        self.cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=5,
-                               tiers=[self.nvram_tier, self.ssd_tier])
 
         app1 = Application(self.env,
                            compute=[0, 10],
@@ -53,16 +60,37 @@ class ClusterBlackBox:
                            data=self.data)
 
         self.apps = [app1, app2, app3]
+
+        self.bb = EphemeralTier(self.env, name="BB", persistent_tier=self.ssd_tier,
+                                bandwidth=self.nvram_bandwidth, capacity=50e9)
+                                #capacity=self.get_max_io_volume())
+        self.cluster = Cluster(self.env, compute_nodes=2, cores_per_node=5,
+                               tiers=[self.hdd_tier, self.ssd_tier],
+                               ephemeral_tier=self.bb)
+
+
         self.ios = self.get_io_nbr()
         self.n_tiers = len(self.cluster.tiers)
+        #self.parameter_space = np.array([np.arange(0, self.n_tiers, 1)]*sum(self.ios))
         self.parameter_space = np.array([np.arange(0, self.n_tiers, 1)]*sum(self.ios))
 
+
     def get_io_nbr(self):
+        """Get the total number of I/O operations for all applications
+        Example:
+            [2, 3, 2] for three apps having respectively 2, 3 and 2 IOs.
+        Returns:
+            io_app (list): list of len equal to the number of apps. Each element of the list is equal to the number of io to place.
+        """
         io_app = []
         for app in self.apps:
             io_app.append(len([io for io in app.read if io > 0]) +
                           len([io for io in app.write if io > 0]))
         return io_app
+
+    def get_max_io_volume(self):
+        """Get the total number of I/O operations for all applications"""
+        return sum(sum(app.read) + sum(app.write) for app in self.apps)
 
     def compute(self, placement=None):  # np.array([[0, 1], [0, 1]])
         self.__init__()
@@ -72,13 +100,63 @@ class ClusterBlackBox:
         for i_app, app in enumerate(self.apps):
             place_tier = placement[start_index: start_index + self.ios[i_app]]
             start_index = self.ios[i_app]
-            self.env.process(app.run(self.cluster, placement=place_tier))
+            use_bb = [True]*self.ios[i_app]
+            self.env.process(app.run(self.cluster, placement=place_tier, use_bb=use_bb))
             print(f"    | app#{i_app+1} : tier placement: {place_tier} ")
         # run the simulation
         self.env.run()
         fitness = app.get_fitness()
         print(f"    | runtime = {fitness} ")
         return app.get_fitness()
+
+
+
+    def display_placement(self, placement):
+        self.__init__()
+        start_index = 0
+        print(f"Displaying result for placement parameter = {placement}")
+        for i_app, app in enumerate(self.apps):
+            tier_placement = placement # get the placement param
+            use_bb = [True]*sum(self.ios) # get the use_bb param
+            place_tier = tier_placement[start_index: start_index + self.ios[i_app]]
+            # converting list of 0/1 values to False/True
+            start_index = self.ios[i_app]
+            self.env.process(app.run(self.cluster, placement=place_tier, use_bb=use_bb))
+            print(f"    | app#{i_app+1} : tier placement: {place_tier} | use_bb = {use_bb}")
+
+        # run the simulation
+        self.env.run()
+        fitness = app.get_fitness()
+        bb_size = app.get_ephemeral_size()
+        print(f"    | runtime = {fitness} |  BB_size = {convert_size(bb_size)}")
+        fig = display_run(self.data, self.cluster, width=800, height=900)
+        return fig
+
+
+    def save_experiment(self, filename=str(round(time.time()*1000)), save=False):
+        """Organise a dataframe with adequate number of columns to save experiment results.
+
+        Example:
+            param | app#1 tier place | app#1 use bb | ... | fitness | bb_size
+
+        Args:
+            row_list (list): parameter for black box optimization
+
+        Returns:
+            df (dataframe): dataframe containing the results of iterations over parameters.
+        """
+
+        columns = ["Param"] + list(chain.from_iterable((f"App#{i+1} tier place",
+                                                        f"App#{i+1} use bb") for i in range(len(self.apps)))) + ["Fitness", "BB_size"]
+
+        self.df = pd.DataFrame(self.experiment_data, columns=columns)
+        if save:
+            pathfile = os.path.join(os.getcwd(), filename)
+            self.df.to_pickle(pathfile)
+            print(f"dataframe saved to {pathfile}")
+        else:
+            return self.df
+
 
 
 if __name__ == '__main__':
@@ -103,3 +181,4 @@ if __name__ == '__main__':
     print("--- %s seconds ---" % (time.time() - start_time))
     bbopt.summarize()
     print(bbopt.history["fitness"])
+
