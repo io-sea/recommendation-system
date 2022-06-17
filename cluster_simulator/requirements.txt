@@ -5,4 +5,5 @@ numpy==1.18.0
 pandas==1.0.0
 plotly==4.6.0
 scikit_learn==1.1.1
+setuptools==45.1.0.post20200127
 simpy==4.0.1
