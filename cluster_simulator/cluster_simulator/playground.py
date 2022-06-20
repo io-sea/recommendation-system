@@ -1,14 +1,12 @@
+# imports
 import simpy
 from loguru import logger
-import numpy as np
-import pandas as pd
-import math
-from cluster import Cluster, Tier, bandwidth_share_model, compute_share_model, get_tier, convert_size
-from phase import DelayPhase, ComputePhase, IOPhase, name_app
-import copy
 import time
-import analytics
-from application import Application
+import numpy as np
+from cluster_simulator.cluster import Cluster, Tier, EphemeralTier, bandwidth_share_model, compute_share_model, get_tier, convert_size
+from cluster_simulator.phase import DelayPhase, ComputePhase, IOPhase
+from cluster_simulator.application import Application
+from cluster_simulator.analytics import display_run
 
 # imports for surrogate models
 from sklearn.gaussian_process import GaussianProcessRegressor
@@ -70,13 +68,16 @@ class ClusterBlackBox:
         self.__init__()
         # https://stackoverflow.com/questions/45061369/simpy-how-to-run-a-simulation-multiple-times
         start_index = 0
-        print(placement)
+        print(f"Displaying result for placement parameter = {placement}")
         for i_app, app in enumerate(self.apps):
             place_tier = placement[start_index: start_index + self.ios[i_app]]
             start_index = self.ios[i_app]
             self.env.process(app.run(self.cluster, placement=place_tier))
+            print(f"    | app#{i_app+1} : tier placement: {place_tier} ")
         # run the simulation
         self.env.run()
+        fitness = app.get_fitness()
+        print(f"    | runtime = {fitness} ")
         return app.get_fitness()
 
 
@@ -85,7 +86,7 @@ if __name__ == '__main__':
     cbb = ClusterBlackBox()
     PARAMETER_SPACE = cbb.parameter_space
     # combinations are self.n_tiers ** sum(self.ios)
-    NBR_ITERATION = 500  # cbb.n_tiers ** sum(cbb.ios)
+    NBR_ITERATION = 5  # cbb.n_tiers ** sum(cbb.ios)
 
     np.random.seed(5)
     bbopt = BBOptimizer(black_box=cbb,
@@ -100,6 +101,5 @@ if __name__ == '__main__':
     print("-----------------")
     print(NBR_ITERATION)
     print("--- %s seconds ---" % (time.time() - start_time))
-    print("-----------------")
     bbopt.summarize()
     print(bbopt.history["fitness"])

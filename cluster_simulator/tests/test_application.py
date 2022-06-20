@@ -85,8 +85,7 @@ class TestAppInit(unittest.TestCase):
         self.env.run()
         self.assertAlmostEqual(app.get_fitness(), 24, places=0)
 
-    def test_app_fitness_filter_name(self):
-        """Tests that app fitness routine filters by the specified application name."""
+    def test_app_fitness_start_not_zero(self):
         cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
         # record data
         data = simpy.Store(self.env)
@@ -96,17 +95,36 @@ class TestAppInit(unittest.TestCase):
         write = [0, 5e9]
         tiers = [0, 1]
         app = Application(self.env,
-                          name="appname",
                           compute=compute,
                           read=read,
                           write=write,
                           data=data)
-        self.env.process(app.run(cluster, placement=tiers))
-        self.env.run()
-        # fig = display_run(data, cluster, width=800, height=900)
-        # fig.show()
-        # self.assertAlmostEqual(app.get_fitness(app_name_filter="appname"), 24, places=0)
-        # self.assertEqual(app.get_fitness(app_name_filter="app_name"), 0)
+        sample_item = {'app': 'B8', 'type': 'read', 'cpu_usage': 1, 't_start': 12, 't_end': 14}
+        data.put(sample_item)
+        self.assertAlmostEqual(app.get_fitness(), 2)
+
+    # def test_app_fitness_filter_name(self):
+    #     """Tests that app fitness routine filters by the specified application name."""
+    #     cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
+    #     # record data
+    #     data = simpy.Store(self.env)
+    #     # Simple app: read 1GB -> compute 10s -> write 5GB
+    #     compute = [0, 10]
+    #     read = [1e9, 0]
+    #     write = [0, 5e9]
+    #     tiers = [0, 1]
+    #     app = Application(self.env,
+    #                       name="appname",
+    #                       compute=compute,
+    #                       read=read,
+    #                       write=write,
+    #                       data=data)
+    #     self.env.process(app.run(cluster, placement=tiers))
+    #     self.env.run()
+    #     # fig = display_run(data, cluster, width=800, height=900)
+    #     # fig.show()
+    #     # self.assertAlmostEqual(app.get_fitness(app_name_filter="appname"), 24, places=0)
+    #     # self.assertEqual(app.get_fitness(app_name_filter="app_name"), 0)
 
 
 class TestBasicApps(unittest.TestCase):
@@ -194,6 +212,9 @@ class TestPhaseSuperposition(unittest.TestCase):
                            'write': {'seq': 515, 'rand': 505}}
         ssd_bandwidth = {'read':  {'seq': 210, 'rand': 190},
                          'write': {'seq': 100, 'rand': 100}}
+        hdd_bandwidth = {'read':  {'seq': 80, 'rand': 80},
+                    'write': {'seq': 40, 'rand': 40}}
+        self.hdd_tier = Tier(self.env, 'HDD', bandwidth=hdd_bandwidth, capacity=1e12)
         self.ssd_tier = Tier(self.env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
         self.nvram_tier = Tier(self.env, 'NVRAM', bandwidth=nvram_bandwidth, capacity=80e9)
 
@@ -286,7 +307,7 @@ class TestPhaseSuperposition(unittest.TestCase):
 
     def test_2_IO_parallel_2(self):
         """Two I/O phases that should run in parallel because the cluster
-        has2 cores."""
+        has 2 cores."""
         data = simpy.Store(self.env)
         cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=3,
                           tiers=[self.ssd_tier, self.nvram_tier])
@@ -299,9 +320,47 @@ class TestPhaseSuperposition(unittest.TestCase):
         self.env.process(app2.run(cluster, placement=[1, 1]))
         self.env.run()
         # self.assertEqual(data.items[0]["t_start"], data.items[1]["t_start"])
+        fig = display_run(data, cluster, width=800, height=900)
+        fig.show()
+
+    def test_2_apps_parallel(self):
+        """Two I/O phases that should run in parallel because the cluster
+        has 2 cores."""
+        data = simpy.Store(self.env)
+        cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=3,
+                          tiers=[self.hdd_tier, self.ssd_tier])
+        app1 = Application(self.env, name="read4G->comp15s->write10G",
+                           compute=[0, 15], read=[4e9, 0],
+                           write=[0, 10e9], data=data)
+        app2 = Application(self.env, name="read7G->comp10s->write3G",
+                           compute=[0, 10], read=[7e9, 0],
+                           write=[0, 3e9], data=data)
+
+        self.env.process(app1.run(cluster, placement=[1, 1]))
+        self.env.process(app2.run(cluster, placement=[1, 1]))
+        self.env.run()
+        # self.assertEqual(data.items[0]["t_start"], data.items[1]["t_start"])
         # fig = display_run(data, cluster, width=800, height=900)
         # fig.show()
+    def test_2_apps_parallel_2(self):
+        """Two I/O phases that should run in parallel because the cluster
+        has 2 cores."""
+        data = simpy.Store(self.env)
+        cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=3,
+                          tiers=[self.hdd_tier, self.ssd_tier])
+        app1 = Application(self.env, name="read4G->comp10s->write10G",
+                           compute=[0, 10], read=[4e9, 0],
+                           write=[0, 10e9], data=data)
+        app2 = Application(self.env, name="read7G->comp15s->write3G",
+                           compute=[0, 15], read=[7e9, 0],
+                           write=[0, 3e9], data=data)
 
+        self.env.process(app1.run(cluster, placement=[1, 1]))
+        self.env.process(app2.run(cluster, placement=[1, 1]))
+        self.env.run()
+        # self.assertEqual(data.items[0]["t_start"], data.items[1]["t_start"])
+        # fig = display_run(data, cluster, width=800, height=900)
+        # fig.show()
 
 class TestBufferedApplications(unittest.TestCase):
     def setUp(self):
@@ -337,9 +396,12 @@ class TestBufferedApplications(unittest.TestCase):
                           data=self.data)
         self.env.process(app.run(cluster, placement=tiers, use_bb=use_bb))
         self.env.run()
+        # fig = display_run(self.data, cluster, width=800, height=900)
+        # fig.show()
         self.assertEqual(self.data.items[0]["type"], "read")
         self.assertEqual(self.data.items[1]["type"], "compute")
         self.assertEqual(self.data.items[2]["type"], "write")
+        self.assertEqual(app.get_fitness(), 147.5)
 
     def test_SBB_app_write_phase(self):
         """Test running simple apps in cluster having a datanode with BB and a write operation"""
@@ -364,6 +426,8 @@ class TestBufferedApplications(unittest.TestCase):
         self.assertEqual(self.data.items[1]["type"], "compute")
         self.assertEqual(self.data.items[2]["type"], "write")
         self.assertEqual(self.data.items[3]["type"], "movement")
+        self.assertEqual(app.get_fitness(), 47.5)
+        self.assertEqual(app.get_ephemeral_size(), 5e9)
 
     def test_prefetch_SBB_app_read_phase(self):
         """Test running simple apps in cluster having a datanode with BB and a prefetch operation """
@@ -382,10 +446,14 @@ class TestBufferedApplications(unittest.TestCase):
                           data=self.data)
         self.env.process(app.run(cluster, placement=tiers, use_bb=use_bb))
         self.env.run()
+        # fig = display_run(self.data, cluster, width=800, height=900)
+        # fig.show()
         self.assertEqual(self.data.items[0]["type"], "movement")
         self.assertEqual(self.data.items[1]["type"], "read")
         self.assertEqual(self.data.items[2]["type"], "compute")
         self.assertEqual(self.data.items[3]["type"], "write")
+        self.assertEqual(app.get_fitness(), 136.25)
+        self.assertEqual(app.get_ephemeral_size(), 1e9)
 
     def test_SBB_apps_with_concurrency(self):
         "Test running multiples apps concurrent in a single SBB."
@@ -409,6 +477,9 @@ class TestBufferedApplications(unittest.TestCase):
                                   use_bb=[False, True]))
 
         self.env.run()
+        self.assertEqual(app1.get_ephemeral_size(), 10e9)
+
+
 
 
 if __name__ == '__main__':

@@ -175,3 +175,91 @@ def convert_size(size_bytes):
 #     logger.info(
 #         f"App {lst["app"]} | Phase: {lst["type"]} | Time: {lst["t_start"]}-->{lst["t_end"]}"
 #         f"({lst["duration"]}s) | Volume = {lst["volume"]} in tier {placement}")
+
+def convex_hull(points):
+    """Computes the convex hull of a set of 2D points.
+
+    Input: an iterable sequence of (x, y) pairs representing the points.
+    Output: a list of vertices of the convex hull in counter-clockwise order,
+      starting from the vertex with the lexicographically smallest coordinates.
+    Implements Andrew's monotone chain algorithm. O(n log n) complexity.
+    """
+
+    # Sort the points lexicographically (tuples are compared lexicographically).
+    # Remove duplicates to detect the case we have just one unique point.
+    points = sorted(set(points))
+
+    # Boring case: no points or a single point, possibly repeated multiple times.
+    if len(points) <= 1:
+        return points
+
+    # 2D cross product of OA and OB vectors, i.e. z-component of their 3D cross product.
+    # Returns a positive value, if OAB makes a counter-clockwise turn,
+    # negative for clockwise turn, and zero if the points are collinear.
+    def cross(o, a, b):
+        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
+    # Build lower hull
+    lower = []
+    for p in points:
+        while len(lower) >= 2 and cross(lower[-2], lower[-1], p) <= 0:
+            lower.pop()
+        lower.append(p)
+
+    # Build upper hull
+    upper = []
+    for p in reversed(points):
+        while len(upper) >= 2 and cross(upper[-2], upper[-1], p) <= 0:
+            upper.pop()
+        upper.append(p)
+
+    # Concatenation of the lower and upper hulls gives the convex hull.
+    # Last point of each list is omitted because it is repeated at the beginning of the other list.
+    return lower[:-1]
+
+def get_fitness(data):
+        """Method to get execution duration of the applications. It iterate over records saved in data to find the phase having the latest timestamp.
+
+        Record example:
+        sample_item = {'app': 'B8', 'type': 'read', 'cpu_usage': 1, 't_start': 0, 't_end': 4.761904761904762, 'bandwidth': 210.0, 'phase_duration': 4.761904761904762, 'volume': 1000000000.0, 'tiers': ['SSD', 'NVRAM'], 'data_placement': {'placement': 'SSD'}, 'tier_level': {'SSD': 1000000000.0, 'NVRAM': 0}}
+
+        Returns:
+            float: the timestamp of the last event of the session.
+        """
+        t_min = math.inf
+        t_max = 0
+        if not data:
+            logger.debug("No data store provided")
+            return None
+        if not data.items:
+            logger.debug("no items in data")
+            return t_max - t_min
+        for phase in data.items:
+            if phase["type"] in ["read", "write", "compute"]:
+                t_max = max(t_max, phase["t_end"])
+                t_min = min(t_min, phase["t_start"])
+        return t_max - t_min
+
+def get_ephemeral_size(data):
+    """Method to get the maximum space used by an ephemeral tier. It iterate over records saved in data to find the if a tier is in tier_level but not in tiers and get its maximum level.
+
+    Record example:
+    | Monitoring| app: 1 | type: read | cpu_usage: 1 | t_start: 37.5 | t_end: 46.0 | bandwidth_concurrency: 2 | bandwidth: 40.0 MB/s | phase_duration: 8.5 | volume: 340.0 MB | tiers: ['HDD'] | data_placement: {'placement': 'HDD'} | init_level: {'HDD': 2170000000.0, 'BB': 1700000000.0} | tier_level: {'HDD': 2170000000.0, 'BB': 1700000000.0} | BB_level: 1700000000.0
+
+    Returns:
+        float: the maximum level reached by the ephemeral tier.
+    """
+    if not data:
+        logger.error("No data store provided")
+        return None
+    if not data.items:
+        return None
+    bb = list(set(data.items[0]["tier_level"].keys()) - set(data.items[0]["tiers"]))
+    if bb:
+        ephemeral_tier = bb[0]
+        max_level = 0
+        for phase in data.items:
+            max_level = max(max_level, phase["tier_level"][ephemeral_tier])
+        return max_level
+    else:
+        return None
