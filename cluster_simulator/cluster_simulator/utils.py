@@ -229,9 +229,10 @@ def get_fitness(data):
         t_min = math.inf
         t_max = 0
         if not data:
-            logger.error("No data store provided")
+            logger.debug("No data store provided")
             return None
         if not data.items:
+            logger.debug("no items in data")
             return t_max - t_min
         for phase in data.items:
             if phase["type"] in ["read", "write", "compute"]:
