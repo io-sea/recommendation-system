@@ -150,9 +150,12 @@ class DumpExtractor:
 if __name__ == '__main__':
     # take randomly 3 jobs and dumps them in separate csv file
     # dump_extractor = DumpExtractor(jobs = 3)
-    # take randomly a list of job_ids and dumps them in separate csv file
+    
+    # take a list of job_ids and dumps them in separate csv file
     # dump_extractor = DumpExtractor(jobs = [3800, 1310])
     # dump_extractor = DumpExtractor(absolute_dump_path = "/home_nfs/mimounis/iosea-wp3-recommandation-system/dataset_generation/dataset_name", jobs = [3800, 1310])
+    
+    # specifying the target_folder and number of jobs to extract randomly
     # dump_extractor = DumpExtractor(absolute_dump_path = "/home_nfs/mimounis/iosea-wp3-recommandation-system/dataset_generation/dataset_name",
     #                                target_folder="/home_nfs/mimounis/iosea-wp3-recommandation-system/hoops",
     #                                jobs = 2)
@@ -167,7 +170,7 @@ if __name__ == '__main__':
     # dump_extractor = DumpExtractor(absolute_dump_path = "/fs1/PUBLIC/bds_dm_datasets/general_purpose/spartan_dumps/gysela", jobs = 12)
     # dump_extractor.extract_job()
     
-    # Valid    
+    # Valid
     # dump_extractor = DumpExtractor(absolute_dump_path = "/fs1/PUBLIC/bds_dm_datasets/general_purpose/valid_dumps", jobs = 12)
     # dump_extractor.extract_job()
     
@@ -175,11 +178,11 @@ if __name__ == '__main__':
     # dump_extractor = DumpExtractor(absolute_dump_path = "/fs1/PUBLIC/bds_dm_datasets/clustering_experiences/shaman_experiment_clean/sop_db", jobs = 12)
     # dump_extractor.extract_job()
     
-    # Othmane 
+    # Othmane
     # dump_extractor = DumpExtractor(absolute_dump_path = "/fs1/PUBLIC/bds_dm_datasets/clustering_experiences/othmane_internship_clean/oth_db", jobs = 12)
     # dump_extractor.extract_job()
     
-    # Mathieu    
-    dump_extractor = DumpExtractor(absolute_dump_path = "/fs1/PUBLIC/bds_dm_datasets/clustering_experiences/mathieu_internship_clean/mat_db", jobs = 12)
-    dump_extractor.extract_job()
+    # Mathieu
+    # dump_extractor = DumpExtractor(absolute_dump_path = "/fs1/PUBLIC/bds_dm_datasets/clustering_experiences/mathieu_internship_clean/mat_db", jobs = 12)
+    # dump_extractor.extract_job()
     
