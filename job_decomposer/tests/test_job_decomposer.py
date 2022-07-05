@@ -10,7 +10,10 @@ from scipy import integrate
 
 from job_decomposer.job_decomposer import JobDecomposer
 
-random.seed(42)
+
+
+
+random.seed(52)
 
 def choose_random_job(dataset_path = "C:\\Users\\a770398\\IO-SEA\\io-sea-3.4-analytics\\dataset_generation\\dataset_generation"):
     job_files = []
@@ -20,6 +23,17 @@ def choose_random_job(dataset_path = "C:\\Users\\a770398\\IO-SEA\\io-sea-3.4-ana
                 job_files.append(os.path.join(root, csv_file))
     return random.choice(job_files)
 
+
+def plot_job_phases(x, signal, breakpoints):
+    plt.plot(x, signal, lw=2, label="IO")
+            
+    for i_brk, brk in enumerate(breakpoints[:-1]):
+        if i_brk % 2 == 0: # opening point
+            plt.plot(x[brk], signal[brk], '>g')
+        else:
+            plt.plot(x[brk], signal[brk], '<r')
+    plt.grid(True)
+    plt.show()
 class TestJobDecInit(unittest.TestCase):
     def setUp(self):
         """Prepare random job dataframe."""
@@ -29,28 +43,62 @@ class TestJobDecInit(unittest.TestCase):
        
     def test_job_decomposer_init(self):
         jd = JobDecomposer(self.df)
-        self.df.plot(x="timestamp", figsize=(16,4), sharex=True, grid=True, subplots=True, layout=(1, 4))
+        # self.df.plot(x="timestamp", figsize=(16,4), sharex=True, grid=True, subplots=True, layout=(1, 4))
         self.assertTrue(isinstance(jd.dataframe, pd.DataFrame))
         
         
-    def test_decompose(self):
+    def test_decompose_real_signal(self):
         jd = JobDecomposer(self.df)
-        breakpoints, loss = jd.decompose(self.df[["bytesWritten"]].to_numpy(),
-                                         rpt.Pelt, rpt.costs.CostNormal(), 10)
+        breakpoints, loss = jd.get_breakpoints(self.df[["bytesWritten"]].to_numpy(),
+                                         rpt.Pelt, rpt.costs.CostNormal(), 1e-3)
         
-        expected_breakpoints = [5, 70, 75, 122]
+        expected_breakpoints = [2, 5, 69, 71, 122]
+        plot_job_phases(self.df[["timestamp"]].to_numpy().tolist(),
+                   self.df[["bytesWritten"]].to_numpy().tolist(),
+                   breakpoints)
+        print(f"{breakpoints = } | {loss = }")
         self.assertListEqual(breakpoints, expected_breakpoints)
-        self.assertAlmostEqual(loss, -1260.0282214487108)
-        
-    def test_get_compute_write(self):
+        self.assertAlmostEqual(loss, -1424.5753100957786)
+    
+    def test_get_phases_synthetic_signal_1(self):
         jd = JobDecomposer(self.df)
-        signal = self.df[["bytesWritten"]].to_numpy().flatten()
-        breakpoints, loss = jd.decompose(signal, rpt.Pelt, rpt.costs.CostNormal(), 10)
-        compute, write = jd.get_compute_vector(signal, breakpoints)
-        print(compute)
-        print(write)
-        self.df.plot(x="timestamp", figsize=(16,4), sharex=True, grid=True, subplots=True, layout=(1, 4))
-        plt.show()
+        signal = [0, 0, 10, 10, 0, 0]
+        x = [0, 1, 2, 3, 4, 5]
+        breakpoints, loss = jd.get_breakpoints(np.array(signal), rpt.Pelt, rpt.costs.CostL2(), 1e-3)
+        print(f"{breakpoints = } | {loss = }")
+        compute, data, bandwidth = jd.get_phases(x, signal, breakpoints)
+        print(f"{compute = } | {data = } | {bandwidth=}")
+        plot_job_phases(x, signal, breakpoints)
+        self.assertListEqual(breakpoints[:-1], [2, 4])
+        self.assertListEqual(data, [0, 10])
+        self.assertListEqual(bandwidth, [0, 5])
+        
+        
+    def test_get_phases_synthetic_signal_2(self):
+        jd = JobDecomposer(self.df)
+        signal = [10, 10, 0, 0, 0, 0]
+        x = [0, 1, 2, 3, 4, 5]
+        breakpoints, loss = jd.get_breakpoints(np.array(signal), rpt.Pelt, rpt.costs.CostL2(), 1e-3)
+        print(f"{breakpoints = } | {loss = }")
+        compute, data, bandwidth = jd.get_phases(x, signal, breakpoints)
+        print(f"{compute = } | {data = } | {bandwidth=}")
+        plot_job_phases(x, signal, breakpoints)
+        
+        # self.assertListEqual(breakpoints[:-1], [2, 4])
+        # self.assertListEqual(write, [0, 10])
+        # self.assertListEqual(bandwidth, [0, 5])
+        
+    # def test_get_compute_write(self):
+    #     jd = JobDecomposer(self.df)
+    #     signal = self.df[["bytesWritten"]].to_numpy().flatten()
+    #     x = self.df[["timestamp"]].to_numpy().flatten()
+    #     breakpoints, loss = jd.decompose(signal, rpt.Pelt, rpt.costs.CostNormal(), 10)
+    #     compute, write, bandwidth = jd.get_compute_vector(x, signal, breakpoints)
+    #     print(compute)
+    #     print(write)
+    #     print(bandwidth)
+        # self.df.plot(x="timestamp", figsize=(16,4), sharex=True, grid=True, subplots=True, layout=(1, 4))
+        # plt.show()
 
        
 

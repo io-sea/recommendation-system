@@ -33,7 +33,7 @@ if __name__ == '__main__':
 
     algos_names = ["Pelt", "Binseg", "Botup", "Wind"]
     
-    output_file = os.path.join("/home_nfs/mimounis/iosea-wp3-recommandation-system/job_decomposer/job_decomposer", "_".join(algos_names) + "_bench.csv")
+    output_file = os.path.join("/home_nfs/mimounis/iosea-wp3-recommandation-system/job_decomposer/job_decomposer", "_".join(algos_names) + "_bench_2.csv")
     
     
     for job_file, job_id, dataset in zip(job_files, job_ids, datasets):
@@ -56,7 +56,7 @@ if __name__ == '__main__':
 
             penalties = np.logspace(-3, 3, num=6).tolist()
     
-            for algo, algo_name in zip(algos[0:3], algos_names):
+            for algo, algo_name in zip(algos, algos_names):
                 for cost, costs_name in zip(costs[0:3], costs_names):
                     for pen in penalties:
                         print(f"{job_id=} | {algo_name=} | {costs_name=} | {pen=}")
