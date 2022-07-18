@@ -31,7 +31,7 @@ class DumpExtractor:
         elif isinstance(jobs, list):
             self.jobs = jobs
         
-    def get_bson_path(self, dir_list=["dump", "mat_db"], filename="JobItem.bson"):
+    def get_bson_path(self, dir_list=["dump", "cmdb_database"], filename="JobItem.bson"):
         """Get the path to the JobItem.bson file or any specified bson path.
 
         Args:
@@ -72,8 +72,7 @@ class DumpExtractor:
         """
         # filepath = os.path.join(os.getcwd(), "dump", "cmdb_database", "FileIOSummaryGw.bson")
         df = pd.DataFrame(columns=["timestamp", "bytesRead", "bytesWritten"])
-        for filepath in [self.get_bson_path(filename="FileIOSummary.bson"),
-                         self.get_bson_path(filename="FileIOSummaryGw.bson")]:
+        for filepath in [self.get_bson_path(filename="FileIOSummaryGw.bson")]:
             
             with open(filepath,'rb') as f:
                 # Get a list of timestamps elements for all jobs
@@ -94,8 +93,7 @@ class DumpExtractor:
     def get_process_dataframe(self, job_id):
         # filepath = os.path.join(os.getcwd(), "dump", "cmdb_database", "FileIOSummaryGw.bson")
         df = pd.DataFrame(columns=["timestamp", "processCount", "ioActiveProcessCount"])
-        for filepath in [self.get_bson_path(filename="ProcessSummary.bson"),
-                         self.get_bson_path(filename="ProcessSummaryGw.bson")]:
+        for filepath in [self.get_bson_path(filename="ProcessSummaryGw.bson")]:
             
             with open(filepath,'rb') as f:
                 # Get a list of timestamps elements for all jobs
@@ -111,6 +109,32 @@ class DumpExtractor:
                                             "processCount": x,
                                             "ioActiveProcessCount": y})])
         return df.drop_duplicates().sort_values(by=['timestamp'])
+    
+    def get_event_dataframe(self, job_id):
+        """add ioi-event column to job dataframe"""
+        # check if JobEvent.bson exists
+        events_filepath = self.get_bson_path(filename="JobEvent.bson")
+        is_events = os.path.exists(events_filepath)
+        
+        #for filepath in [self.get_bson_path(filename="JobEvent.bson")]:
+        if is_events:
+            df = pd.DataFrame(columns=["timestamp", "event_type", "event_message"])
+            with open(events_filepath,'rb') as f:
+                # Get a list of timestamps elements for all jobs
+                # {'_id': ObjectId('62c6f63637b3c7ada1bfd9f9'), 'hostname': 'kiwi4', 'jobid': 4954, 'message': 'Start IO phase', 'serviceName': 'ioi-event', 'timeFrame': datetime.datetime(2022, 7, 7, 15, 5, 25), 'type': 'custom', 'version': '4.0.3-Bull.9'}
+                jdata = bson.decode_all(f.read())
+        
+        # Get specific ts from specific jobid with ts available in bson file
+        t = [dp["timeFrame"].timestamp() for dp in jdata if dp["jobid"]==job_id]
+        x = [dp["type"] for dp in jdata if dp["jobid"]==job_id]
+        y = [dp["message"] for dp in jdata if dp["jobid"]==job_id]
+        
+        df = pd.concat([df, pd.DataFrame({"timestamp": t,
+                                          "event_type": x,
+                                          "event_message": y})])
+        print(t)
+        return df.drop_duplicates().sort_values(by=['timestamp'])
+        
     
     def target_file(self, job_id):
         """Defines the path to the target file where to store the csv.
@@ -141,7 +165,10 @@ class DumpExtractor:
             print(f"\n Extracting job {job_id} step #{i+1}/{len(list_of_jobs)} from dataset {self.prefix} -> {self.target_file(job_id)}")
             df_io = self.get_io_dataframe(job_id)
             df_pr = self.get_process_dataframe(job_id)
+            df_ev = self.get_event_dataframe(job_id)
+            print(df_ev)
             df_job = df_io.merge(df_pr)
+            df_job = df_job.join(df_ev.set_index("timestamp"), on='timestamp')
             print(df_job)
             df_job.to_csv(self.target_file(job_id))
             
@@ -186,3 +213,8 @@ if __name__ == '__main__':
     # dump_extractor = DumpExtractor(absolute_dump_path = "/fs1/PUBLIC/bds_dm_datasets/clustering_experiences/mathieu_internship_clean/mat_db", jobs = 12)
     # dump_extractor.extract_job()
     
+    # NAMD
+    # C:\Users\a770398\IO-SEA\io-sea-3.4-analytics\dataset_generation\dump
+    jobids = [4911, 4912, 4913, 4949, 4950, 4951, 4952, 4953, 4954]
+    dump_extractor = DumpExtractor(absolute_dump_path = "C:\\Users\\a770398\\IO-SEA\\io-sea-3.4-analytics\\dataset_generation", target_folder="C:\\Users\\a770398\\IO-SEA\\io-sea-3.4-analytics\\dataset_generation\\dataset_generation\\dataset_namd", jobs=jobids)
+    dump_extractor.extract_job()
