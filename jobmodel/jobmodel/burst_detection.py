@@ -71,13 +71,19 @@ def burst_detection(r,d,n,s,gamma,smooth_win):
 
             #for the first timepoint, calculate the fit cost only
             if t == int((smooth_win-1)/2):
+                print(t)
+                print(r[t])
                 cost[t,j] = fit(d[t],r[t],p[j])
+                print(cost[t, j])
 
             #for all other timepoints, calculate the fit and transition cost
             else:
+                print(t)
                 cost[t,j] = tau(q[t-1],j,gamma,real_n) + fit(d[t],r[t],p[j])
+                print(cost[t, j])
 
         #add the state with the minimum cost to the optimal state sequence
+        
         q[t] = np.where(cost[t,:] == min(cost[t,:]))
 
     return q, d, r, p
