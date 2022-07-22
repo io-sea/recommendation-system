@@ -11,6 +11,7 @@ import time
 from sklearn.cluster import MiniBatchKMeans, KMeans
 from sklearn.metrics import silhouette_score
 from sklearn.cluster import KMeans
+import random
 
 def choose_random_job(dataset_path = "C:\\Users\\a770398\\IO-SEA\\io-sea-3.4-analytics\\dataset_generation\\dataset_generation"):
     job_files = []
@@ -165,7 +166,7 @@ def get_optimal_breakpoints(signal, algo=rpt.KernelCPD, kernel="linear"):
     return optimal_n_breakpoints, optimal_breakpoints, optimal_cost
 
 
-def get_kmeans_breakpoints(signal, v0_threshold = 0.05):
+def get_kmeans_breakpoints(signal, v0_threshold = 0.05, merge=False):
     """_summary_
 
     Args:
@@ -183,9 +184,16 @@ def get_kmeans_breakpoints(signal, v0_threshold = 0.05):
             break
         
     ab = np.arange(len(signal))
+    print(f"{n_clusters = }")
+    print(f"{v0_weight = }")
+    # changes=x[np.insert(np.where(np.diff(kmeans.labels_)!=0, True, False), 0, False)]
     # merge v1+ clusters together
-    labels = np.where(kmeans.labels_ > 0, 1, 0)
-    return  ab[np.insert(np.where(np.diff(kmeans.labels_)!=0, True, False), 0, False)]
+    if merge:
+        labels = np.where(kmeans.labels_ > 0, 1, 0)
+    else:
+        labels = kmeans.labels_
+    print(f"labels = {labels}")
+    return  ab[np.insert(np.where(np.diff(labels)!=0, True, False), 0, False)].tolist(), labels
 
 
 
@@ -199,7 +207,7 @@ def clustering(signal, n):
     #print(k_means_labels, t_batch)
     return k_means_labels
 
-def find_best_cluster(signal, min_diff=0.01, max_n=8):
+def find_best_cluster(signal, min_diff=0.02, max_n=50):
     step = 2
     n_clusters = step
     n_best = step
@@ -232,5 +240,54 @@ def changepoint_detection(changes):
 
 def get_kmeans_original_breakpoints(signal):
     k_means_labels, n = find_best_cluster(signal)
+    
+    print(f"n_clusters = {n}")
+    print(f"labels = {k_means_labels}")
     result = changepoint_detection(k_means_labels)
-    return result
+    return result, k_means_labels
+
+
+def reconstruct_pwlf(signal, breakpoints):
+    ab = np.arange(len(signal))
+    my_pwlf = pwlf.PiecewiseLinFit(ab, signal, degree=0)
+    my_pwlf.fit_with_breaks(breakpoints)
+    return my_pwlf.predict(ab)
+    
+
+def show_breakpoints(signal, breakpoints, breakpoints2=[], labels=[], labels2=[]):
+    signal = signal.flatten().tolist()
+    ab = np.arange(len(signal))
+    #p_signal = reconstruct_pwlf(signal, breakpoints)
+
+    #plt.plot(ab, p_signal, linestyle='dashed', linewidth=0.5)
+    for i, bpt in enumerate(breakpoints):
+        plt.axvline(x=bpt, linestyle='dashed',  color="black", alpha=0.5)
+        if labels.size:
+            plt.annotate(labels[bpt], (ab[bpt], signal[bpt]), color="black")
+            
+                
+    if breakpoints2:
+        for bpt in breakpoints2:
+            plt.axvline(x=bpt, linestyle='dotted', color="red", alpha=0.7)
+            if labels2.size:
+                plt.annotate(labels2[bpt], (ab[bpt], signal[bpt]*1.3), color="red")
+        
+    plt.plot(ab, signal, label="original signal")
+    plt.show()
+    
+    
+    
+def show_reconstruction(signal, p_signal):
+    ab = np.arange(len(signal))
+    plt.figure(0)
+    plt.plot(ab, signal, label="original signal")
+    plt.plot(ab, p_signal, label="decomposed signal", linewidth=0.7, linestyle="dashed", color="black")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+    plt.figure(1)
+    plt.plot(ab, np.cumsum(signal), label="original signal")
+    plt.plot(ab, np.cumsum(p_signal), label="decomposed signal",
+            linewidth=0.7, linestyle="dashed", color="black")
+    plt.grid(True)
+    plt.show()
