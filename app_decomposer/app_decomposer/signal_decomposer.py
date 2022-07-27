@@ -12,40 +12,70 @@ Please contact Bull S. A. S. for details about its license.
 """
 from abc import ABC, abstractmethod
 from sklearn.cluster import KMeans
+import numpy as np
 
 class SignalDecomposer(ABC):
-    """Abstract class for signal decomposer module. """
+    """Abstract class for signal decomposer module. A SignalDecomposer class provides essentially methods that delivers a list of breakpoints for a given one dimensional signal."""
     def __init__(self, *args, **kwargs):
         pass
-    
+
     @abstractmethod
     def decompose(self):
         """Method to return breakpoints."""
         pass
-    
+
 
 class KmeansSignalDecomposer(SignalDecomposer):
     """Implements signal decomposer based on kmeans clustering."""
     def __init__(self, signal):
-        self.signal = signal
-    
-    def get_optimal_n_clusters(self, v0_threshold = 0.05):
+        # convert any iterable into numpy array of size (n, 1)
+        self.signal = np.array(list(signal)).reshape(-1, 1)
+
+    def get_optimal_clustering(self, v0_threshold = 0.05):
+        """Get the optimal number of clusters when cluster0 average values are below v0_threshold comparing to total mean values. The clustering is done in the 1-dimension that carries the dataflow signal.
+
+        Args:
+            v0_threshold (float, optional): relative mean value of the average lowest level of cluster point oordinates. Defaults to 0.05.
+
+        Returns:
+            tuple (int, sklearn.cluster.KMeans): return the optimal number of cluster complying the threshold and the related KMeans object.
+        """
         n_clusters = 2
         v0_weight = 1
         while v0_weight > v0_threshold:
             kmeans = KMeans(n_clusters=n_clusters, random_state=0).fit(self.signal)
             v0_indexes = np.where(kmeans.labels_==0, True, False)
-            v0_weight = signal[v0_indexes].sum() / signal.sum()
+            v0_weight = self.signal[v0_indexes].sum() / self.signal.sum()
             n_clusters += 1
-            if n_clusters >= len(signal):
+            if n_clusters >= len(self.signal):
                 # if n_clusters equals signal points, exit the loop
                 break
-            
-        return n_clusters
-        
+
+        return n_clusters, kmeans
+
+    def get_breakpoints_and_labels(self, kmeans, merge=False):
+        """Returns breakpoints and labels from clustering algorithm. Labels could be merged
+        Args:
+            kmeans (sklearn.cluster.KMeans): clustering object
+            merge (bool, optional): if True labels > 0 will be merged into one label. Defaults to False.
+
+        Returns:
+            (breakpoints, labels): list of breakpoints where each element is the index that separates two phases. Each phase get assigned a label to identify its nature later.
+        """
+        ab = np.arange(len(self.signal))
+        labels = np.where(kmeans.labels_ > 0, 1, 0) if merge else kmeans.labels_
+        return  ab[np.insert(np.where(np.diff(labels)!=0, True, False), 0, False)].tolist(), labels
+
+
     def decompose(self):
-        """Method to return breakpoints."""
-        pass
-    
-        
-        
+        """Common method without proper arguments that wraps above custom methods in order to  decompose the signal accordingly.
+
+        Returns:
+            tuple: breakpoints, labels.
+        """
+        # get optimal clustering
+        n_clusters, clusterer = self.get_optimal_clustering()
+        return self.get_breakpoints_and_labels(clusterer, merge=False)
+
+
+

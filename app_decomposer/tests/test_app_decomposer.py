@@ -10,7 +10,7 @@ from app_decomposer import app_decomposer
 from app_decomposer import cli
 
 
-class TestApp_decomposer(unittest.TestCase):
+class TestAppDecomposer(unittest.TestCase):
     """Tests for `app_decomposer` package."""
 
     def setUp(self):
