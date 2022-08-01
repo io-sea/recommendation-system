@@ -1,9 +1,8 @@
 import unittest
 import time
 import numpy as np
-import simpy
 from loguru import logger
-import sklearn
+from sklearn.cluster import KMeans
 
 from app_decomposer.signal_decomposer import KmeansSignalDecomposer
 
@@ -32,6 +31,22 @@ class TestKmeansSignalDecomposer(unittest.TestCase):
         kd = KmeansSignalDecomposer(signal)
         self.assertEqual(kd.signal.shape, (10, 1))
 
+    def test_get_lowest_cluster_1(self):
+        """Test if get lowest cluster method works well."""
+        labels = np.array([1, 1, 7, 7, 1])
+        signal = np.array([3, 2, 1, 1, 4])
+        ksd = KmeansSignalDecomposer(signal)
+        label0 = ksd.get_lowest_cluster(labels, signal)
+        self.assertEqual(label0, 7)
+
+    def test_get_lowest_cluster_2(self):
+        """Test if get lowest cluster method works well."""
+        labels = np.array([0, 0, 1, 1, 0]) # two labels
+        signal = np.array([1, 2, 3, 4, 5]) # label0 avg~2, label1 avg~3.5
+        ksd = KmeansSignalDecomposer(signal)
+        label0 = ksd.get_lowest_cluster(labels, signal)
+        self.assertEqual(label0, 0)
+
 
     def test_kmeans_decomposer_signal_dim_lower_n_clusters(self):
         """Tests that kmeans decomposer stops incrementing n_clusters at signal length."""
@@ -45,8 +60,8 @@ class TestKmeansSignalDecomposer(unittest.TestCase):
         signal = np.arange(500).reshape(-1, 1) # shape is (n, 1)
         ksd = KmeansSignalDecomposer(signal)
         n_clusters, clusterer = ksd.get_optimal_clustering()
-        self.assertIsInstance(clusterer, sklearn.cluster._kmeans.KMeans)
-        self.assertEqual(12, n_clusters)
+        self.assertIsInstance(clusterer, KMeans)
+        self.assertEqual(5, n_clusters)
 
     def test_get_breakpoints_and_labels_merge(self):
         """Tests that returns are lists of breakpoints and labels when merge=True.
@@ -55,7 +70,7 @@ class TestKmeansSignalDecomposer(unittest.TestCase):
         ksd = KmeansSignalDecomposer(signal)
         n_clusters, clusterer = ksd.get_optimal_clustering()
         bkps, labels = ksd.get_breakpoints_and_labels(clusterer, merge=True)
-        self.assertEqual(len(bkps), 1)
+        self.assertEqual(len(bkps), 2)
         self.assertListEqual(np.unique(labels).tolist(), [0, 1])
 
     def test_get_breakpoints_and_labels(self):
@@ -73,11 +88,17 @@ class TestKmeansSignalDecomposer(unittest.TestCase):
         signal = np.arange(10).reshape(-1, 1)
         decomposer = KmeansSignalDecomposer(signal)
         breakpoints, labels = decomposer.decompose()
-        self.assertListEqual(breakpoints, [2, 3, 5, 6, 8])
-        self.assertListEqual(labels.tolist(), [0, 0, 4, 2, 2, 5, 3, 3, 1, 1])
+        self.assertListEqual(breakpoints, [2, 5, 7, 8])
+        self.assertListEqual(labels.tolist(), [1, 1, 3, 3, 3, 2, 2, 4, 0, 0])
 
-
-
+    def test_decompose_complexity(self):
+        """Functional test that decomposes a signal and returns a list of breakpoints and labels."""
+        N = 1000
+        signal = np.random.random(size=(N,1)).reshape(-1, 1)
+        start_time = time.time()
+        decomposer = KmeansSignalDecomposer(signal)
+        breakpoints, labels = decomposer.decompose()
+        print(f"elapsed_time for N={N} :  {time.time() - start_time}")
 
 
 

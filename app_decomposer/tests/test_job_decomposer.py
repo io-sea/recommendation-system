@@ -16,10 +16,10 @@ class TestJobDecomposer(unittest.TestCase):
     def test_get_job_timeseries_from_file_nojobid(self):
         """Test if getting timeseries from jobs data dumped into files works well."""
         jd = JobDecomposer()
-        self.assertList(jd.read_signal.flatten().tolist())
+        self.assertIsInstance(jd.read_signal.flatten().tolist(), list)
 
     def test_get_job_timeseries_from_file_no_jobid(self):
         """Test if getting timeseries from jobs data dumped into files works well."""
         jd = JobDecomposer(job_id=2301)
-        print(jd.read_signal.flatten().tolist())
+        #print(jd.read_signal.flatten().tolist())
 

@@ -31,25 +31,44 @@ class KmeansSignalDecomposer(SignalDecomposer):
         # convert any iterable into numpy array of size (n, 1)
         self.signal = np.array(list(signal)).reshape(-1, 1)
 
+    @staticmethod
+    def get_lowest_cluster(labels, signal):
+        """Look for the cluster label having the lowest ordinates values.
+
+        Args:
+            labels (ndarray): array of labels associated with each signal value.add()
+            signal (ndarray): array of signal values
+
+        Retuns:
+            label0: label with the lowest values.
+        """
+        unique_labels = np.unique(labels).tolist()
+        mean_cluster_values = [np.mean(signal[np.where(labels==label, True, False)]) for label in unique_labels]
+
+        return unique_labels[mean_cluster_values.index(np.min(mean_cluster_values))]
+
+
     def get_optimal_clustering(self, v0_threshold = 0.05):
         """Get the optimal number of clusters when cluster0 average values are below v0_threshold comparing to total mean values. The clustering is done in the 1-dimension that carries the dataflow signal.
 
         Args:
-            v0_threshold (float, optional): relative mean value of the average lowest level of cluster point oordinates. Defaults to 0.05.
+            v0_threshold (float, optional): relative mean value of the average lowest level of cluster point ordinates. Defaults to 0.05.
 
         Returns:
             tuple (int, sklearn.cluster.KMeans): return the optimal number of cluster complying the threshold and the related KMeans object.
         """
-        n_clusters = 2
+        n_clusters = 1
         v0_weight = 1
         while v0_weight > v0_threshold:
-            kmeans = KMeans(n_clusters=n_clusters, random_state=0).fit(self.signal)
-            v0_indexes = np.where(kmeans.labels_==0, True, False)
-            v0_weight = self.signal[v0_indexes].sum() / self.signal.sum()
             n_clusters += 1
-            if n_clusters >= len(self.signal):
-                # if n_clusters equals signal points, exit the loop
+            if n_clusters > len(self.signal):
+                # if n_clusters exceeds signal points, exit the loop
                 break
+            kmeans = KMeans(n_clusters=n_clusters, random_state=0).fit(self.signal)
+            label0 = self.get_lowest_cluster(kmeans.labels_, self.signal)
+            v0_indexes = np.where(kmeans.labels_==label0, True, False)
+            v0_weight = self.signal[v0_indexes].sum() / self.signal.sum()
+
 
         return n_clusters, kmeans
 
