@@ -14,7 +14,10 @@ Please contact Bull S. A. S. for details about its license.
 import os
 import pandas as pd
 import random
-from app_decomposer.signal_decomposer import KmeansSignalDecomposer
+import numpy as np
+from scipy import integrate
+from app_decomposer.signal_decomposer import KmeansSignalDecomposer, get_lowest_cluster
+
 
 class JobDecomposer:
     """This class takes separate read and write dataflow timeseries in order to extract separated phases for each type: compute, read and write phases."""
@@ -30,53 +33,74 @@ class JobDecomposer:
         self.timestamps, self.read_signal, self.write_signal = self.get_job_timeseries()
 
 
-    @staticmethod
-    def list_jobs(dataset_path):
-        """list all present jobs in the dataset folder and return list of files, ids and dataset names.
-
-        Args:
-            dataset (os.path): path to the dataset folder.
-
-        Returns:
-            job_files, job_ids, dataset_name (tuple): list of files, ids and dataset names.
-        """
-        job_files = []
-        job_ids = []
-        dataset_names = []
-        for root, dirs, files in os.walk(dataset_path):
-            for csv_file in files:
-                if csv_file.endswith(".csv"):
-                    job_files.append(os.path.join(root, csv_file))
-                    job_ids.append(csv_file.split("_")[-1].split(".csv")[0])
-                    dataset_names.append(os.path.split(root)[-1])
-        return job_files, job_ids, dataset_names
 
     def get_job_timeseries(self):
-        """Method to extract read and write timeseries from a job.
+        """Method to extract read and write timeseries for a job instrumented in IOI.
         TODO: connect this method directly to the IOI database.
         For the moment, data will be mocked by a csv file containing the timeseries.
 
         Returns:
             timestamps, read_signal, write_signal (numpy array): various arrays of the job timeseries.
         """
-        parent_dir = os.path.abspath(os.path.join(os.getcwd(), os.pardir))
-        dataset_path = os.path.join(parent_dir, "dataset_generation", "dataset_generation")
-
-        # Get list of jobs
-        job_files, job_ids, dataset_names = self.list_jobs(dataset_path=dataset_path)
-        if self.job_id is None:
-            csv_file = random.choice(job_files)
-        else:
-            csv_file = job_files[job_ids.index(str(self.job_id))]
-
-        df = pd.read_csv(csv_file, index_col=0)
-        return df[["timestamp"]].to_numpy(), df[["bytesRead"]].to_numpy(), df[["bytesWritten"]].to_numpy()
+        return 0, 0, 0
 
     def get_phases(self):
         """Get phases from each timeserie of the job."""
         read_decomposer = self.signal_decomposer(self.read_signal)
+        write_decomposer = self.signal_decomposer(self.write_signal)
         read_breakpoints, read_labels = read_decomposer.decompose()
-        return read_breakpoints, read_labels
+        write_breakpoints, write_labels = write_decomposer.decompose()
+        return read_breakpoints, read_labels, write_breakpoints, write_labels
+
+
+    def reduce_phase_merge_labels(self, timestamps, signal, labels):
+        """Get compute event list with the timeserie event from signal using labels. The odd breakpoint opens a phase, an even one closes it. In between we sum the amount of data. Each couple of breakpoints are squeezed into a dirac representation having only one timestamp event.
+
+        Args:
+            timestamps (numpy.array): timestamp array where for each value a measure was done.
+            signal (numpy.ndarray): _description_
+            breakpoints (list): indices of the detected changepoints.
+
+        Returns:
+            compute (list): list of timestamps events separated by compute phases.
+            data (list) : associates an amount of data for each timestamped event. Could be related to write or read I/O phase.
+            bandwidth : averaged bandwidth as a constant value through the phase.
+        """
+        compute = [0]
+        b = 0
+        data = []
+        bandwidth = []
+        dx = np.diff(timestamps).tolist()[0]
+        label0 = get_lowest_cluster(labels, signal)
+        ab = np.arange(len(signal))
+        labels = np.where(labels != label0, 1, 0)
+        diff_array = np.diff(np.insert(labels, 0, 0, axis=0))
+        print(diff_array)
+        print(dx)
+        start_points = np.where(diff_array==1)[0].tolist()
+        end_points = np.where(diff_array==-1)[0].tolist()
+        if len(end_points) == len(start_points) - 1:
+            end_points.append(len(signal))
+        assert len(start_points)==len(end_points)
+        for start_index, end_index in zip(start_points, end_points):
+            compute.append(compute[-1] + start_index - b)
+            b = end_index
+            phase_volume = integrate.trapz(y=signal[start_index: end_index], dx=dx)
+            #data.append(phase_volume)
+            data.append(np.sum(signal[start_index: end_index]))
+            #bandwidth.append(phase_volume/(end_index - start_index))
+            bandwidth.append(data[-1]/((end_index - start_index)*dx))
+
+        compute.pop(0)
+        #transition_points = ab[np.insert(np.where(np.diff(labels)!=0, True, False), 0, False)].tolist()
+        return compute, data, bandwidth
+
+
+
+
+
+
+
 
 
 

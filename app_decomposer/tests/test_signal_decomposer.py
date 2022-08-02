@@ -4,7 +4,7 @@ import numpy as np
 from loguru import logger
 from sklearn.cluster import KMeans
 
-from app_decomposer.signal_decomposer import KmeansSignalDecomposer
+from app_decomposer.signal_decomposer import KmeansSignalDecomposer, get_lowest_cluster
 
 class TestKmeansSignalDecomposer(unittest.TestCase):
     """Test that the app decomposer follows some pattern."""
@@ -35,16 +35,14 @@ class TestKmeansSignalDecomposer(unittest.TestCase):
         """Test if get lowest cluster method works well."""
         labels = np.array([1, 1, 7, 7, 1])
         signal = np.array([3, 2, 1, 1, 4])
-        ksd = KmeansSignalDecomposer(signal)
-        label0 = ksd.get_lowest_cluster(labels, signal)
+        label0 = get_lowest_cluster(labels, signal)
         self.assertEqual(label0, 7)
 
     def test_get_lowest_cluster_2(self):
         """Test if get lowest cluster method works well."""
         labels = np.array([0, 0, 1, 1, 0]) # two labels
         signal = np.array([1, 2, 3, 4, 5]) # label0 avg~2, label1 avg~3.5
-        ksd = KmeansSignalDecomposer(signal)
-        label0 = ksd.get_lowest_cluster(labels, signal)
+        label0 = get_lowest_cluster(labels, signal)
         self.assertEqual(label0, 0)
 
 
@@ -52,7 +50,7 @@ class TestKmeansSignalDecomposer(unittest.TestCase):
         """Tests that kmeans decomposer stops incrementing n_clusters at signal length."""
         signal = np.arange(3).reshape(-1, 1) # shape is (n, 1)
         ksd = KmeansSignalDecomposer(signal)
-        n_clusters = ksd.get_optimal_n_clusters()
+        n_clusters = get_optimal_n_clusters()
         self.assertEqual(3, n_clusters)
 
     def test_kmeans_decomposer_signal_dim_lower_n_clusters(self):
