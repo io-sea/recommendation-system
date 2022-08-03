@@ -66,33 +66,50 @@ class JobDecomposer:
             data (list) : associates an amount of data for each timestamped event. Could be related to write or read I/O phase.
             bandwidth : averaged bandwidth as a constant value through the phase.
         """
-        compute = [0]
-        b = 0
+        compute = []
         data = []
         bandwidth = []
         dx = np.diff(timestamps).tolist()[0]
         label0 = get_lowest_cluster(labels, signal)
         ab = np.arange(len(signal))
-        labels = np.where(labels != label0, 1, 0)
-        diff_array = np.diff(np.insert(labels, 0, 0, axis=0))
-        print(diff_array)
-        print(dx)
+        # binarise labels
+        bin_labels = np.where(labels != label0, 1, 0)
+        diff_array = np.diff(np.insert(bin_labels, 0, 0, axis=0))
+        print(f"diff array = {diff_array}")
         start_points = np.where(diff_array==1)[0].tolist()
         end_points = np.where(diff_array==-1)[0].tolist()
-        if len(end_points) == len(start_points) - 1:
+        if len(end_points) == len(start_points) - 1: # if there is an open phase at the end of the signal
             end_points.append(len(signal))
         assert len(start_points)==len(end_points)
-        for start_index, end_index in zip(start_points, end_points):
-            compute.append(compute[-1] + start_index - b)
-            b = end_index
-            phase_volume = integrate.trapz(y=signal[start_index: end_index], dx=dx)
-            #data.append(phase_volume)
-            data.append(np.sum(signal[start_index: end_index]))
-            #bandwidth.append(phase_volume/(end_index - start_index))
-            bandwidth.append(data[-1]/((end_index - start_index)*dx))
 
-        compute.pop(0)
-        #transition_points = ab[np.insert(np.where(np.diff(labels)!=0, True, False), 0, False)].tolist()
+        last_excess_duration = 0
+        total_phase_length = 0
+
+        if start_points[0] > 0:
+            compute.append(0)
+            data.append(0)
+            bandwidth.append(0)
+        #iterating over phases
+        for start_index, end_index in zip(start_points, end_points):
+            # the IO between indexes will be reduced to dirac at start_index
+            print(f"start_index={start_index}, end_index={end_index}, duration={last_excess_duration}")
+            compute.append(start_index - last_excess_duration)
+            #phase_volume = integrate.trapz(y=signal[start_index: end_index], dx=dx)
+            phase_volume = np.sum(signal[start_index: end_index])
+            data.append(phase_volume)
+            bandwidth.append(phase_volume/((end_index - start_index)*dx))
+            # should be min = 1
+
+            last_excess_duration = end_index - start_index - 1
+            print(f"duration={last_excess_duration}")
+            total_phase_length += last_excess_duration
+
+        print(f"total_phase_length={total_phase_length}")
+        if end_points[-1] < len(signal):
+            compute.append(len(signal) - 1 - total_phase_length)
+            data.append(0)
+            bandwidth.append(0)
+
         return compute, data, bandwidth
 
 

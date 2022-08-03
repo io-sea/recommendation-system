@@ -13,7 +13,9 @@ Please contact Bull S. A. S. for details about its license.
 from abc import ABC, abstractmethod
 from sklearn.cluster import KMeans
 import numpy as np
+import warnings
 
+# TODO: implement and hdbscan version for clustering
 class SignalDecomposer(ABC):
     """Abstract class for signal decomposer module. A SignalDecomposer class provides essentially methods that delivers a list of breakpoints for a given one dimensional signal."""
     def __init__(self, *args, **kwargs):
@@ -91,7 +93,9 @@ class KmeansSignalDecomposer(SignalDecomposer):
             tuple: breakpoints, labels.
         """
         # get optimal clustering
-        n_clusters, clusterer = self.get_optimal_clustering()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            n_clusters, clusterer = self.get_optimal_clustering()
         return self.get_breakpoints_and_labels(clusterer, merge=False)
 
 
