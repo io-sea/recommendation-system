@@ -6,10 +6,11 @@ import simpy
 from loguru import logger
 import sklearn
 import os
+from os.path import dirname, abspath
 import pandas as pd
 import random
 
-from app_decomposer.job_decomposer import JobDecomposer
+from app_decomposer.job_decomposer import JobDecomposer, get_phase_volume
 
 def list_jobs(dataset_path):
     """list all present jobs in the dataset folder and return list of files, ids and dataset names.
@@ -39,9 +40,9 @@ def get_job_timeseries_from_file(job_id=None):
     Returns:
         timestamps, read_signal, write_signal (numpy array): various arrays of the job timeseries.
     """
-    parent_dir = os.path.abspath(os.path.join(os.getcwd(), os.pardir))
-    dataset_path = os.path.join(parent_dir, "dataset_generation", "dataset_generation")
-
+    # get out tests, and package folder
+    current_dir = dirname(dirname(dirname(abspath(__file__))))
+    dataset_path = os.path.join(current_dir, "dataset_generation", "dataset_generation")
     # Get list of jobs
     job_files, job_ids, dataset_names = list_jobs(dataset_path=dataset_path)
     if job_id is None:
@@ -88,24 +89,21 @@ class TestJobDecomposer(unittest.TestCase):
         self.assertIsInstance(labels, np.ndarray)
         self.assertEqual(len(jd.timestamps), len(labels))
 
+    def test_get_volume(self):
+        """Tests if method that computes phase volume from signal works well."""
+        self.assertEqual(get_phase_volume(np.array([1])), 1)
+        self.assertEqual(get_phase_volume(np.arange(10),
+                                          method="sum",
+                                          start_index=2,
+                                          end_index=5), 9)
+        self.assertEqual(get_phase_volume(np.arange(10), method="sum"), 45)
+        self.assertEqual(get_phase_volume(np.arange(10), method="trapz"), 40.5)
+        self.assertEqual(get_phase_volume(np.arange(10), method="simps"), 40.5)
 
-    # @patch.object(JobDecomposer, 'get_job_timeseries')
-    # def test_job_dec_and_combine(self, mock_get_timeseries):
-    #     """Test combining phases from read and write signals."""
-    #     timestamps = np.arange(10)
-    #     read_signal = np.array([0, 0, 5, 7, 0, 0, 0, 0, 0, 0])
-    #     write_signal = np.array([0, 0, 0, 0, 0, 0, 0, 25, 20, 0])
-    #     mock_get_timeseries.return_value = timestamps, read_signal, write_signal
-    #     # init the job decomposer
-    #     jd = JobDecomposer()
-    #     #r_breakpoints, r_labels, w_breakpoints, w_labels = jd.get_phases()
-    #     results = jd.get_phases()
-    #     for result in results:
-    #         print(result)
 
     @patch.object(JobDecomposer, 'get_job_timeseries')
-    def test_job_dec_and_combine_1(self, mock_get_timeseries):
-        """Test combining phases from read and write signals. Pattern here has IO at the begining and end of the job."""
+    def test_read_signal_decomposer_pattern_1(self, mock_get_timeseries):
+        """Test extracting representation from read signal having different type of patterns. Pattern here has IO at the begining and end of the job."""
         timestamps = np.arange(10)
         read_signal = np.array([60, 30, 7, 0, 0, 0, 0, 0, 7, 10])
         write_signal = np.array([0, 0, 0, 0, 0, 0, 0, 25, 20, 0])
@@ -117,14 +115,15 @@ class TestJobDecomposer(unittest.TestCase):
         read_breakpoints, read_labels, _, _ = jd.get_phases()
         print(f"signal = {read_signal}")
         print(f"labels = {read_labels}")
-        compute, read, bandwidth = jd.reduce_phase_merge_labels(timestamps, read_signal, read_labels)
+        compute, read, bandwidth = jd.get_signal_representation(timestamps, read_signal, read_labels)
         print(f"compute={compute}, read={read}, bandwidth={bandwidth}")
         self.assertEqual(len(compute), 2) # should be compute = [0, 6]
         self.assertListEqual(compute, [0, 6])
+        self.assertListEqual(read, [97, 17])
 
     @patch.object(JobDecomposer, 'get_job_timeseries')
-    def test_job_dec_and_combine_2(self, mock_get_timeseries):
-        """Test combining phases from read and write signals. Pattern here has an IO in the middle of the job."""
+    def test_read_signal_decomposer_pattern_2(self, mock_get_timeseries):
+        """Test extracting representation from read signal having different type of patterns. Pattern here has an IO in the middle of the job."""
         timestamps = np.arange(6)
         read_signal = np.array([0, 0, 10, 8, 0, 0])
         write_signal = np.array([0, 0, 0, 0, 0, 0])
@@ -136,15 +135,16 @@ class TestJobDecomposer(unittest.TestCase):
         read_breakpoints, read_labels, _, _ = jd.get_phases()
         print(f"signal = {read_signal}")
         print(f"labels = {read_labels}")
-        compute, read, bandwidth = jd.reduce_phase_merge_labels(timestamps, read_signal, read_labels)
+        compute, read, bandwidth = jd.get_signal_representation(timestamps, read_signal, read_labels)
         print(f"compute={compute}, read={read}, bandwidth={bandwidth}")
         self.assertEqual(len(compute), 3) # should be compute = [0, 2, 4]
         self.assertListEqual(compute, [0, 2, 4])
+        self.assertListEqual(read, [0, 18, 0])
 
 
     @patch.object(JobDecomposer, 'get_job_timeseries')
-    def test_job_dec_and_combine_3(self, mock_get_timeseries):
-        """Test combining phases from read and write signals. Pattern here has complex IO pattern."""
+    def test_read_signal_decomposer_pattern_3(self, mock_get_timeseries):
+        """Test extracting representation from read signal having different type of patterns. Pattern here has complex IO pattern."""
         timestamps = np.arange(6)
         read_signal = np.array([12, 0, 10, 8, 0, 19, 0])
         write_signal = np.array([0, 0, 0, 0, 0, 0, 0])
@@ -156,7 +156,66 @@ class TestJobDecomposer(unittest.TestCase):
         read_breakpoints, read_labels, _, _ = jd.get_phases()
         print(f"signal = {read_signal}")
         print(f"labels = {read_labels}")
-        compute, read, bandwidth = jd.reduce_phase_merge_labels(timestamps, read_signal, read_labels)
+        compute, read, bandwidth = jd.get_signal_representation(timestamps, read_signal, read_labels)
         print(f"compute={compute}, read={read}, bandwidth={bandwidth}")
         self.assertEqual(len(compute), 4) # should be compute = [0, 2, 4, 5]
         self.assertListEqual(compute, [0, 2, 4, 5])
+        self.assertListEqual(read, [12, 18, 19, 0])
+
+
+    @patch.object(JobDecomposer, 'get_job_timeseries')
+    def test_read_signal_decomposer_pattern_4(self, mock_get_timeseries):
+        """Test getting phases from read and write signals. Pattern here has complex IO pattern."""
+        timestamps = np.arange(6)
+        read_signal = np.array([0, 0, 10, 8, 0, 19, 20])
+        write_signal = np.array([0, 0, 0, 0, 0, 0, 0])
+        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        # init the job decomposer
+        jd = JobDecomposer()
+        #r_breakpoints, r_labels, w_breakpoints, w_labels = jd.get_phases()
+        #results = jd.get_phases()
+        read_breakpoints, read_labels, _, _ = jd.get_phases()
+        print(f"signal = {read_signal}")
+        print(f"labels = {read_labels}")
+        compute, read, bandwidth = jd.get_signal_representation(timestamps, read_signal, read_labels)
+        print(f"compute={compute}, read={read}, bandwidth={bandwidth}")
+        self.assertEqual(len(compute), 3) # should be compute = [0, 2, 4]
+        self.assertListEqual(compute, [0, 2, 4])
+        self.assertListEqual(read, [0, 18, 39])
+
+
+    @patch.object(JobDecomposer, 'get_job_timeseries')
+    def test_read_signal_decomposer_pattern_5(self, mock_get_timeseries):
+        """Test extracting representation from read signal having different type of patterns. Pattern here has complex IO pattern."""
+        timestamps = np.arange(5)
+        read_signal = np.array([0, 1, 1, 0, 0])
+        write_signal = np.array([0, 0, 0, 0, 1])
+        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        # init the job decomposer
+        jd = JobDecomposer()
+        #r_breakpoints, r_labels, w_breakpoints, w_labels = jd.get_phases()
+        #results = jd.get_phases()
+        read_breakpoints, read_labels, _, write_labels = jd.get_phases()
+        print(f"signal = {read_signal}")
+        print(f"labels = {read_labels}")
+        compute, read, bandwidth = jd.get_signal_representation(timestamps, read_signal, read_labels)
+        compute_, write, write_bandwidth = jd.get_signal_representation(timestamps, write_signal, write_labels)
+        print(f"compute={compute}, read={read}, bandwidth={bandwidth}")
+        print(f"compute={compute_}, write={write}, write_bandwidth={write_bandwidth}")
+        self.assertEqual(len(compute), 3) # should be compute = [0, 2, 4]
+        self.assertListEqual(compute, [0, 1, 3])
+        self.assertEqual(read, [0, 2, 0])
+        self.assertEqual(write, [0, 1])
+
+
+    @patch.object(JobDecomposer, 'get_job_timeseries')
+    def test_job_decomposer_pattern_1(self, mock_get_timeseries):
+        """Test combining phases from read and write signals to get a representation."""
+        timestamps = np.arange(5)
+        read_signal = np.array([0, 1, 1, 0, 0, 0, 0])
+        write_signal = np.array([0, 0, 0, 0, 1, 1, 0])
+        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        # init the job decomposer
+        jd = JobDecomposer()
+        events, reads, writes = jd.get_job_representation()
+        print(f"compute={events}, read={reads}, writes={writes}")
