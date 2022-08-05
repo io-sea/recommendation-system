@@ -82,12 +82,12 @@ class JobDecomposer:
         Returns:
             tuple: two lists of indexes for starting and ending points for each detected phase within the signal.
         """
+        # TODO: version where do not mix labels > 0
 
         label0 = get_lowest_cluster(labels, signal)
         # binarize labels to 0 (compute) and 1 (data phase)
         bin_labels = np.where(labels != label0, 1, 0)
         diff_array = np.diff(np.insert(bin_labels, 0, 0, axis=0))
-        #print(f"diff array = {diff_array}")
         start_points = np.where(diff_array==1)[0].tolist()
         end_points = np.where(diff_array==-1)[0].tolist()
         # if there is an open phase at the end of the signal
@@ -128,16 +128,11 @@ class JobDecomposer:
         # iterating over phases
         for start_index, end_index in zip(start_points, end_points):
             # the IO between indexes will be reduced to dirac at start_index
-            # print(f"start_index={start_index}, end_index={end_index}, duration={phase_duration}")
             compute.append(start_index - phase_duration)
-            #phase_volume =
             phase_volume = np.sum(signal[start_index: end_index])
             data.append(phase_volume)
             bandwidth.append(phase_volume/((end_index - start_index)*dx))
-            # should be min = 1
-
             phase_duration = end_index - start_index - 1
-            # print(f"duration={phase_duration}")
             total_phase_durations += phase_duration
 
         #print(f"total_phase_durations={total_phase_durations}")
@@ -152,29 +147,39 @@ class JobDecomposer:
 
 
     def get_job_representation(self):
+        """Uses jobs data signals to produce a formal representation as an events list with either compute or data phases. Other arrays are produced to indicate the amount of data for each phase, the recorder bandwidth and (TODO) the pattern of the phases.
+
+        Returns:
+            events (list): list of indexes/timestamps for each phase. If it is marked by non zero value in the read_volumes or write_volumes lists, then it is read/write or both I/O phase. If not, a compute phase until the next event.
+            read_volumes (list): list of amount of data for each read phase.
+            write_volumes (list): list of amount of data for each write phase.
+        """
         _, read_labels, _, write_labels = self.get_phases()
-        read_events, read_volumes, read_bandwidths = self.get_signal_representation(self.timestamps, self.read_signal, read_labels)
-        print(f"compute={read_events}, read={read_volumes}")
-        write_events, write_volumes, write_bandwidths = self.get_signal_representation(self.timestamps, self.write_signal, write_labels)
-        print(f"compute={write_events}, write={write_volumes}")
+        read_events, read_volumes_, read_bandwidths = self.get_signal_representation(self.timestamps, self.read_signal, read_labels)
+        # print(f"compute={read_events}, read={read_volumes_}")
+        write_events, write_volumes_, write_bandwidths = self.get_signal_representation(self.timestamps, self.write_signal, write_labels)
+        # print(f"compute={write_events}, write={write_volumes_}")
 
         events = np.unique(sorted(read_events + write_events)).tolist()
-        reads = []
-        writes = []
-        bw = []
+        read_volumes = []
+        write_volumes = []
+        read_bw = []
+        write_bw = []
 
         for event in events:
             if event in read_events:
-                reads.append(read_volumes[read_events.index(event)])
-                #bw.append(read_bandwidths.index(event))
+                read_volumes.append(read_volumes_[read_events.index(event)])
+                read_bw.append(read_bandwidths[read_events.index(event)])
             else:
-                reads.append(0)
+                read_volumes.append(0)
+                read_bw.append(0)
             if event in write_events:
-                writes.append(write_volumes[write_events.index(event)])
-                #bw.append(write_events.index(event))
+                write_volumes.append(write_volumes_[write_events.index(event)])
+                write_bw.append(write_bandwidths[write_events.index(event)])
             else:
-                writes.append(0)
-        return events, reads, writes
+                write_volumes.append(0)
+                write_bw.append(0)
+        return events, read_volumes, write_volumes, read_bw, write_bw
 
 
 

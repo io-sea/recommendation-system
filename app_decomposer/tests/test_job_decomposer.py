@@ -217,5 +217,88 @@ class TestJobDecomposer(unittest.TestCase):
         mock_get_timeseries.return_value = timestamps, read_signal, write_signal
         # init the job decomposer
         jd = JobDecomposer()
-        events, reads, writes = jd.get_job_representation()
+        events, reads, writes, _, _ = jd.get_job_representation()
+        #print(f"compute={events}, read={reads}, writes={writes}")
+        self.assertListEqual(events, [0, 1, 4, 5])
+        self.assertListEqual(reads, [0, 2, 0, 0])
+        self.assertListEqual(writes, [0, 0, 2, 0])
+
+    @patch.object(JobDecomposer, 'get_job_timeseries')
+    def test_job_decomposer_pattern_2(self, mock_get_timeseries):
+        """Test combining phases from read and write signals to get a representation."""
+        timestamps = np.arange(5)
+        read_signal = np.array([0, 1, 1, 0, 0, 0, 0])
+        write_signal = np.array([0, 0, 0, 0, 0, 1, 0])
+        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        # init the job decomposer
+        jd = JobDecomposer()
+        events, reads, writes, _, _ = jd.get_job_representation()
+        #print(f"compute={events}, read={reads}, writes={writes}")
+        self.assertListEqual(events, [0, 1, 5, 6])
+        self.assertListEqual(reads, [0, 2, 0, 0])
+        self.assertListEqual(writes, [0, 0, 1, 0])
+
+    @patch.object(JobDecomposer, 'get_job_timeseries')
+    def test_job_decomposer_pattern_3(self, mock_get_timeseries):
+        """Test combining phases from read and write signals to get a representation."""
+        timestamps = np.arange(5)
+        read_signal = np.array([1, 1, 1, 0, 0, 0])
+        write_signal = np.array([0, 0, 0, 1, 1, 1])
+        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        # init the job decomposer
+        jd = JobDecomposer()
+        events, reads, writes, _, _ = jd.get_job_representation()
         print(f"compute={events}, read={reads}, writes={writes}")
+        self.assertListEqual(events, [0, 3])
+        self.assertListEqual(reads, [3, 0])
+        self.assertListEqual(writes, [0, 3])
+
+    @patch.object(JobDecomposer, 'get_job_timeseries')
+    def test_job_decomposer_pattern_simulataneous_read_write(self, mock_get_timeseries):
+        """Test combining phases from read and write signals to get a representation."""
+        timestamps = np.arange(5)
+        read_signal = np.array([1, 1, 1, 0, 0, 0])
+        write_signal = np.array([1, 1, 1, 0, 0, 1])
+        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        # init the job decomposer
+        jd = JobDecomposer()
+        events, reads, writes, _, _ = jd.get_job_representation()
+        print(f"compute={events}, read={reads}, writes={writes}")
+        self.assertListEqual(events, [0, 3])
+        self.assertListEqual(reads, [3, 0])
+        self.assertListEqual(writes, [3, 1])
+
+    @patch.object(JobDecomposer, 'get_job_timeseries')
+    def test_job_decomposer_pattern_bw_1(self, mock_get_timeseries):
+        """Test combining phases from read and write signals to get a representation with bandwidths."""
+        timestamps = np.arange(5)
+        read_signal = np.array([0, 10, 12, 0, 0, 0, 0])
+        write_signal = np.array([0, 0, 0, 0, 10, 30, 0])
+        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        # init the job decomposer
+        jd = JobDecomposer()
+        events, reads, writes, read_bw, write_bw = jd.get_job_representation()
+        print(f"compute={events}, read_bw={read_bw}, write_bw={write_bw}")
+        self.assertListEqual(events, [0, 1, 4, 5])
+        self.assertListEqual(reads, [0, 22, 0, 0])
+        self.assertListEqual(writes, [0, 0, 40, 0])
+        self.assertListEqual(read_bw, [0, 11, 0, 0])
+        self.assertListEqual(write_bw, [0, 0, 20, 0])
+
+
+    # @patch.object(JobDecomposer, 'get_job_timeseries')
+    # def test_job_decomposer_pattern_bw_2(self, mock_get_timeseries):
+    #     """Test combining phases from read and write signals to get a representation with bandwidths."""
+    #     timestamps = np.arange(5)
+    #     read_signal = np.array([0, 10, 12, 0, 0, 0, 0])
+    #     write_signal = np.array([0, 0, 5, 0, 10, 30, 0])
+    #     mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+    #     # init the job decomposer
+    #     jd = JobDecomposer()
+    #     events, reads, writes, read_bw, write_bw = jd.get_job_representation()
+    #     print(f"compute={events}, reads={reads}, read_bw={read_bw}, writes={writes}, write_bw={write_bw}")
+    #     self.assertListEqual(events, [0, 1, 4, 5])
+    #     self.assertListEqual(reads, [0, 22, 0, 0])
+    #     self.assertListEqual(writes, [0, 0, 40, 0])
+    #     self.assertListEqual(read_bw, [0, 11, 0, 0])
+    #     self.assertListEqual(write_bw, [0, 0, 20, 0])
