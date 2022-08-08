@@ -40,37 +40,7 @@ def get_phase_volume(signal, method="sum", start_index=0, end_index=-1, dx=1):
     elif method == "simps":
         return integrate.simps(y=signal[start_index: end_index], dx=dx)
 
-def combine_representation(representation1, representation2):
-    """Considers I/O phase exhibiting various clusters levels (levels of bandwidths) to be segmented accoringgly.
-
-    Args:
-        representation1 (tuple): contains list of event timestamps, their relative volumes and bandwidths.
-        representation2 (tuple): contains list of event timestamps, their relative volumes and bandwidths.
-
-    Returns:
-        _type_: _description_
-    """
-    events1, data1, bw1 = representation1
-    events2, data2, bw2 = representation2
-
-    events = np.unique(sorted(events1 + events2)).tolist()
-    data = [0]*len(events)
-    bw = [0]*len(events)
-
-    for idx, event in enumerate(events):
-        if event in events1:
-            data[idx] = data1[events1.index(event)]
-            bw[idx] = bw1[events1.index(event)]
-        # else:
-        #     data.append(0)
-        #     bw.append(0)
-        if event in events2:
-            data[idx] = data2[events2.index(event)]
-            bw[idx] = bw2[events2.index(event)]
-        # else:
-        #     data.append(0)
-        #     bw.append(0)
-    return events, data, bw
+#
 
 def get_events_indexes(labels, signal):
     """Extract starting and ending indexes for each phase from the dataflow signal. The indexes are computed from the labels. All labels different from label0 are merged into label1.
@@ -82,7 +52,6 @@ def get_events_indexes(labels, signal):
     Returns:
         tuple: two lists of indexes for starting and ending points for each detected phase within the signal.
     """
-    # TODO: version where do not mix labels > 0
 
     label0 = get_lowest_cluster(labels, signal)
     # binarize labels to 0 (compute) and 1 (data phase)
@@ -92,8 +61,34 @@ def get_events_indexes(labels, signal):
     end_points = np.where(diff_array==-1)[0].tolist()
     # if there is an open phase at the end of the signal
     if len(end_points) == len(start_points) - 1:
-        end_points.append(len(signal)) # TODO : length(signal) - 1 ?
+        end_points.append(len(signal))
     assert len(start_points)==len(end_points)
+
+    return start_points, end_points
+
+def get_events_indexes_no_merge(labels, signal):
+    """Extract starting and ending indexes for each phase from the dataflow signal. The indexes are computed from the labels. All labels different from label0 are considered as I/O phases.
+
+    Args:
+        labels (list): list of labels associated with each signal point.
+        signal (numpy.ndarray): the dataflow signal from which the events are extracted.
+
+    Returns:
+        tuple: two lists of indexes for starting and ending points for each detected phase within the signal.
+    """
+    label0 = get_lowest_cluster(labels, signal)
+    # adjust labels to 0 for compute phases and >1 for data phase
+    ref_labels = np.where(labels != label0, labels + 1, 0) # avoiding previous labeled 0
+    diff_array = np.diff(np.insert(ref_labels, 0, 0, axis=0))
+    print(f"diff_array={diff_array}")
+    start_points = np.where(diff_array != 0)[0].tolist()
+    end_points = np.where(diff_array != 0)[0][1::].tolist()
+    # if there is an open phase at the end of the signal
+    if len(end_points) == len(start_points) - 1:
+        end_points.append(len(signal))
+    assert len(start_points)==len(end_points)
+    print(f"start points = {start_points}")
+    print(f"ending points = {end_points}")
 
     return start_points, end_points
 
@@ -141,13 +136,14 @@ def phases_to_representation(start_points, end_points, signal, dx=1):
 
     return compute, data, bandwidth
 
-def get_signal_representation(timestamps, signal, labels):
+def get_signal_representation(timestamps, signal, labels, merge_clusters=False):
     """Get compute event list with the timeserie event from signal using labels. The odd breakpoint opens a phase, an even one closes it. In between we sum the amount of data. Each couple of breakpoints are squeezed into a dirac representation having only one timestamp event.
 
     Args:
         timestamps (numpy.array): timestamp array where for each value a measure was done.
         signal (numpy.ndarray): _description_
-        breakpoints (list): indices of the detected changepoints.
+        labels (list): indices to distinguish each ordinate value from the signal.
+        merge_cluster (bool): merge all labels different from label0 into label 1 if true, else keep distinguishing between ordinates value. Defaults to False
 
     Returns:
         compute (list): list of timestamps events separated by compute phases.
@@ -156,7 +152,10 @@ def get_signal_representation(timestamps, signal, labels):
     """
 
     dx = np.diff(timestamps).tolist()[0]
-    start_points, end_points = get_events_indexes(labels, signal)
+    if merge_clusters:
+        start_points, end_points = get_events_indexes(labels, signal)
+    else:
+        start_points, end_points = get_events_indexes_no_merge(labels, signal)
     compute, data, bandwidth = phases_to_representation(start_points, end_points, signal, dx)
 
     return compute, data, bandwidth
@@ -197,44 +196,7 @@ class JobDecomposer:
         return read_breakpoints, read_labels, write_breakpoints, write_labels
 
 
-
-
-    # def get_events_indexes_no_merge(self, labels, signal):
-    #     """Extract starting and ending indexes for each phase from the dataflow signal. Clusters with different values will be taken into account separately.
-
-    #     Args:
-    #         labels (list): list of labels associated with each signal point.
-    #         signal (numpy.ndarray): the dataflow signal from which the events are extracted.
-
-    #     Returns:
-    #         tuple: two lists of indexes for starting and ending points for each detected phase within the signal.
-    #     """
-    #     # TODO: version where do not mix labels > 0
-
-    #     label0 = get_lowest_cluster(labels, signal)
-    #     # binarize labels to 0 (compute) and !=0 (data phase)
-    #     data_values = np.unique(labels).tolist()
-    #     for data_value in data_values:
-
-
-
-
-
-    #     bin_labels = np.where(labels != label0, labels, 0)
-    #     diff_array = np.diff(np.insert(bin_labels, 0, 0, axis=0))
-    #     start_points = np.where(diff_array==1)[0].tolist()
-    #     end_points = np.where(diff_array==-1)[0].tolist()
-    #     # if there is an open phase at the end of the signal
-    #     if len(end_points) == len(start_points) - 1:
-    #         end_points.append(len(signal))
-    #     #assert len(start_points)==len(end_points)
-
-    #     return start_points, end_points
-
-
-
-
-    def get_job_representation(self):
+    def get_job_representation(self, merge_clusters=False):
         """Uses jobs data signals to produce a formal representation as an events list with either compute or data phases. Other arrays are produced to indicate the amount of data for each phase, the recorder bandwidth and (TODO) the pattern of the phases.
 
         Returns:
@@ -243,9 +205,9 @@ class JobDecomposer:
             write_volumes (list): list of amount of data for each write phase.
         """
         _, read_labels, _, write_labels = self.get_phases()
-        read_events, read_volumes_, read_bandwidths = get_signal_representation(self.timestamps, self.read_signal, read_labels)
+        read_events, read_volumes_, read_bandwidths = get_signal_representation(self.timestamps, self.read_signal, read_labels, merge_clusters=merge_clusters)
         # print(f"compute={read_events}, read={read_volumes_}")
-        write_events, write_volumes_, write_bandwidths = get_signal_representation(self.timestamps, self.write_signal, write_labels)
+        write_events, write_volumes_, write_bandwidths = get_signal_representation(self.timestamps, self.write_signal, write_labels, merge_clusters=merge_clusters)
         # print(f"compute={write_events}, write={write_volumes_}")
 
         events = np.unique(sorted(read_events + write_events)).tolist()
@@ -271,7 +233,37 @@ class JobDecomposer:
 
 
 
+# def combine_representation(representation1, representation2):
+#     """Considers I/O phase exhibiting various clusters levels (levels of bandwidths) to be segmented accoringgly.
 
+#     Args:
+#         representation1 (tuple): contains list of event timestamps, their relative volumes and bandwidths.
+#         representation2 (tuple): contains list of event timestamps, their relative volumes and bandwidths.
+
+#     Returns:
+#         _type_: _description_
+#     """
+#     events1, data1, bw1 = representation1
+#     events2, data2, bw2 = representation2
+
+#     events = np.unique(sorted(events1 + events2)).tolist()
+#     data = [0]*len(events)
+#     bw = [0]*len(events)
+
+#     for idx, event in enumerate(events):
+#         if event in events1:
+#             data[idx] = data1[events1.index(event)]
+#             bw[idx] = bw1[events1.index(event)]
+#         # else:
+#         #     data.append(0)
+#         #     bw.append(0)
+#         if event in events2:
+#             data[idx] = data2[events2.index(event)]
+#             bw[idx] = bw2[events2.index(event)]
+#         # else:
+#         #     data.append(0)
+#         #     bw.append(0)
+#     return events, data, bw
 
 
 
