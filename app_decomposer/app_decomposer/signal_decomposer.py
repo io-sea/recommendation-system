@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-This module proposes a class and methods to slice a 1D timserie (signal) into a set of parts (phases) separated by breakpoints.
+This module proposes a class and methods to slice a 1D timeserie (signal) into a set of parts (phases) separated by breakpoints.
 """
 
 

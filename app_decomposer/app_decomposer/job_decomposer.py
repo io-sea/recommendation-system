@@ -175,8 +175,6 @@ class JobDecomposer:
         self.signal_decomposer = signal_decomposer
         self.timestamps, self.read_signal, self.write_signal = self.get_job_timeseries()
 
-
-
     def get_job_timeseries(self):
         """Method to extract read and write timeseries for a job instrumented in IOI.
         TODO: connect this method directly to the IOI database.
@@ -230,42 +228,6 @@ class JobDecomposer:
                 write_volumes.append(0)
                 write_bw.append(0)
         return events, read_volumes, write_volumes, read_bw, write_bw
-
-
-
-# def combine_representation(representation1, representation2):
-#     """Considers I/O phase exhibiting various clusters levels (levels of bandwidths) to be segmented accoringgly.
-
-#     Args:
-#         representation1 (tuple): contains list of event timestamps, their relative volumes and bandwidths.
-#         representation2 (tuple): contains list of event timestamps, their relative volumes and bandwidths.
-
-#     Returns:
-#         _type_: _description_
-#     """
-#     events1, data1, bw1 = representation1
-#     events2, data2, bw2 = representation2
-
-#     events = np.unique(sorted(events1 + events2)).tolist()
-#     data = [0]*len(events)
-#     bw = [0]*len(events)
-
-#     for idx, event in enumerate(events):
-#         if event in events1:
-#             data[idx] = data1[events1.index(event)]
-#             bw[idx] = bw1[events1.index(event)]
-#         # else:
-#         #     data.append(0)
-#         #     bw.append(0)
-#         if event in events2:
-#             data[idx] = data2[events2.index(event)]
-#             bw[idx] = bw2[events2.index(event)]
-#         # else:
-#         #     data.append(0)
-#         #     bw.append(0)
-#     return events, data, bw
-
-
 
 
 

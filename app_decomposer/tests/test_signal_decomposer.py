@@ -53,7 +53,7 @@ class TestKmeansSignalDecomposer(unittest.TestCase):
         n_clusters = get_optimal_n_clusters()
         self.assertEqual(3, n_clusters)
 
-    def test_kmeans_decomposer_signal_dim_lower_n_clusters(self):
+    def test_kmeans_decomposer_signal_dim_lower_n_clusters_long_signal(self):
         """Tests that kmeans decomposer stops incrementing n_clusters at signal length."""
         signal = np.arange(500).reshape(-1, 1) # shape is (n, 1)
         ksd = KmeansSignalDecomposer(signal)

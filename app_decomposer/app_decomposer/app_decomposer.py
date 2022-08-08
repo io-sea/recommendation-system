@@ -17,16 +17,16 @@ class SignalDecomposer:
         pass
 
 class AppDecomposer:
-    
+
     def __init__():
         pass
-    
+
     def get_breakpoints(self):
         pass
-    
+
     def get_phases(self):
         pass
-    
+
     def get_representation(self):
         pass
 

@@ -1,22 +1,19 @@
-==============
-app_decomposer
-==============
+==========
+Quickstart
+==========
+It is a part of the Recommandation System called **App Decomposer**. The big picture of the Recommandation System is shown below.
+
+.. image:: ../notebooks/recommendation_system_diagram.png
 
 
-.. image:: https://img.shields.io/pypi/v/app_decomposer.svg
-        :target: https://pypi.python.org/pypi/app_decomposer
 
-.. image:: https://img.shields.io/travis/physics-programmer/app_decomposer.svg
-        :target: https://travis-ci.com/physics-programmer/app_decomposer
-
-.. image:: https://readthedocs.org/projects/app-decomposer/badge/?version=latest
-        :target: https://app-decomposer.readthedocs.io/en/latest/?version=latest
-        :alt: Documentation Status
+A package that detect for an instrumented app compute, read I/O and write I/O phases and encodes the sequential behavior as event-based numerical arrays.
 
 
 
 
-Transform IOI timeseries traces into a sequential representation of an HPC application
+
+Transform IOI timeseries traces into a sequential representation of an HPC application.
 
 
 * Free software: MIT license
