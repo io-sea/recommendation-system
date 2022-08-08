@@ -10,7 +10,9 @@ from os.path import dirname, abspath
 import pandas as pd
 import random
 
-from app_decomposer.job_decomposer import JobDecomposer, get_phase_volume
+from app_decomposer.job_decomposer import JobDecomposer, get_events_indexes, get_signal_representation, get_phase_volume, phases_to_representation, get_events_indexes, combine_representation, get_phase_volume
+
+from app_decomposer.signal_decomposer import KmeansSignalDecomposer, get_lowest_cluster
 
 def list_jobs(dataset_path):
     """list all present jobs in the dataset folder and return list of files, ids and dataset names.
@@ -102,6 +104,77 @@ class TestJobDecomposer(unittest.TestCase):
 
 
     @patch.object(JobDecomposer, 'get_job_timeseries')
+    def test_get_events_indexes(self, mock_get_timeseries):
+        """Test if get_events_indexes and variant no_merge works well."""
+        timestamps = np.arange(10)
+        read_signal = np.array([60, 30, 7, 0, 0, 0, 0, 0, 7, 10])
+        write_signal = np.array([0, 0, 0, 0, 0, 0, 0, 25, 20, 0])
+        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        # init the job decomposer
+        jd = JobDecomposer()
+        _, read_labels, _, write_labels = jd.get_phases()
+        start_points, end_points = get_events_indexes(read_labels, read_signal)
+        w_start_points, w_end_points = get_events_indexes(write_labels, write_signal)
+        self.assertListEqual(start_points, [0, 8])
+        self.assertListEqual(end_points, [3, 10])
+        self.assertListEqual(w_start_points, [7])
+        self.assertListEqual(w_end_points, [9])
+
+    def test_combine_representation_1(self):
+        """Test if combine representation for labels separation works well."""
+        timestamps = np.arange(5)
+        signal1 = np.array([0, 1, 0, 1, 0])
+        signal2 = np.array([0, 0, 2, 0, 0])
+        _, labels1 = KmeansSignalDecomposer(signal1).decompose()
+        compute1, data1, bw1 = get_signal_representation(timestamps, signal1, labels1)
+        _, labels2 = KmeansSignalDecomposer(signal2).decompose()
+        compute2, data2, bw2 = get_signal_representation(timestamps, signal2, labels2)
+        print(f"compute={compute1}, data={data1}, bandwidth={bw1}")
+        print(f"compute={compute2}, data={data2}, bandwidth={bw2}")
+        events, data, bw = combine_representation(get_signal_representation(timestamps, signal1, labels1), get_signal_representation(timestamps, signal2, labels2))
+        print(f"compute={events}, data={data}, bandwidth={bw}")
+        self.assertListEqual(events, [0, 1, 2, 3, 4])
+        self.assertListEqual(data, [0,1,2,1,0])
+        self.assertListEqual(bw, [0,1,2,1,0])
+
+    def test_combine_representation_2(self):
+        """Test if combine representation for labels separation works well."""
+        timestamps = np.arange(5)
+        signal1 = np.array([3, 3, 0, 0, 0])
+        signal2 = np.array([0, 0, 2, 2, 2])
+        _, labels1 = KmeansSignalDecomposer(signal1).decompose()
+        compute1, data1, bw1 = get_signal_representation(timestamps, signal1, labels1)
+        _, labels2 = KmeansSignalDecomposer(signal2).decompose()
+        compute2, data2, bw2 = get_signal_representation(timestamps, signal2, labels2)
+        print(f"compute={compute1}, data={data1}, bandwidth={bw1}")
+        print(f"compute={compute2}, data={data2}, bandwidth={bw2}")
+        events, data, bw = combine_representation(get_signal_representation(timestamps, signal1, labels1), get_signal_representation(timestamps, signal2, labels2))
+        print(f"compute={events}, data={data}, bandwidth={bw}")
+        self.assertListEqual(events, [0, 1])
+        self.assertListEqual(data, [6, 6])
+        self.assertListEqual(bw, [3, 2])
+
+
+    # @patch.object(JobDecomposer, 'get_job_timeseries')
+    # def test_get_events_indexes_no_merge(self, mock_get_timeseries):
+    #     """Test if get_events_indexes and variant merge works well."""
+    #     timestamps = np.arange(10)
+    #     read_signal = np.array([60, 30, 7, 0, 0, 0, 0, 0, 7, 10])
+    #     write_signal = np.array([0, 0, 0, 0, 0, 0, 0, 25, 20, 0])
+    #     mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+    #     # init the job decomposer
+    #     jd = JobDecomposer()
+    #     _, read_labels, _, write_labels = jd.get_phases()
+    #     start_points, end_points = jd.get_events_indexes_no_merge(read_labels, read_signal)
+    #     w_start_points, w_end_points = jd.get_events_indexes_no_merge(write_labels, write_signal)
+    #     print(start_points)
+    #     # self.assertListEqual(start_points, [0, 8])
+    #     # self.assertListEqual(end_points, [3, 10])
+    #     # self.assertListEqual(w_start_points, [7])
+    #     # self.assertListEqual(w_end_points, [9])
+
+
+    @patch.object(JobDecomposer, 'get_job_timeseries')
     def test_read_signal_decomposer_pattern_1(self, mock_get_timeseries):
         """Test extracting representation from read signal having different type of patterns. Pattern here has IO at the begining and end of the job."""
         timestamps = np.arange(10)
@@ -115,7 +188,7 @@ class TestJobDecomposer(unittest.TestCase):
         read_breakpoints, read_labels, _, _ = jd.get_phases()
         print(f"signal = {read_signal}")
         print(f"labels = {read_labels}")
-        compute, read, bandwidth = jd.get_signal_representation(timestamps, read_signal, read_labels)
+        compute, read, bandwidth = get_signal_representation(timestamps, read_signal, read_labels)
         print(f"compute={compute}, read={read}, bandwidth={bandwidth}")
         self.assertEqual(len(compute), 2) # should be compute = [0, 6]
         self.assertListEqual(compute, [0, 6])
@@ -135,7 +208,7 @@ class TestJobDecomposer(unittest.TestCase):
         read_breakpoints, read_labels, _, _ = jd.get_phases()
         print(f"signal = {read_signal}")
         print(f"labels = {read_labels}")
-        compute, read, bandwidth = jd.get_signal_representation(timestamps, read_signal, read_labels)
+        compute, read, bandwidth = get_signal_representation(timestamps, read_signal, read_labels)
         print(f"compute={compute}, read={read}, bandwidth={bandwidth}")
         self.assertEqual(len(compute), 3) # should be compute = [0, 2, 4]
         self.assertListEqual(compute, [0, 2, 4])
@@ -156,7 +229,7 @@ class TestJobDecomposer(unittest.TestCase):
         read_breakpoints, read_labels, _, _ = jd.get_phases()
         print(f"signal = {read_signal}")
         print(f"labels = {read_labels}")
-        compute, read, bandwidth = jd.get_signal_representation(timestamps, read_signal, read_labels)
+        compute, read, bandwidth = get_signal_representation(timestamps, read_signal, read_labels)
         print(f"compute={compute}, read={read}, bandwidth={bandwidth}")
         self.assertEqual(len(compute), 4) # should be compute = [0, 2, 4, 5]
         self.assertListEqual(compute, [0, 2, 4, 5])
@@ -177,7 +250,7 @@ class TestJobDecomposer(unittest.TestCase):
         read_breakpoints, read_labels, _, _ = jd.get_phases()
         print(f"signal = {read_signal}")
         print(f"labels = {read_labels}")
-        compute, read, bandwidth = jd.get_signal_representation(timestamps, read_signal, read_labels)
+        compute, read, bandwidth = get_signal_representation(timestamps, read_signal, read_labels)
         print(f"compute={compute}, read={read}, bandwidth={bandwidth}")
         self.assertEqual(len(compute), 3) # should be compute = [0, 2, 4]
         self.assertListEqual(compute, [0, 2, 4])
@@ -198,8 +271,8 @@ class TestJobDecomposer(unittest.TestCase):
         read_breakpoints, read_labels, _, write_labels = jd.get_phases()
         print(f"signal = {read_signal}")
         print(f"labels = {read_labels}")
-        compute, read, bandwidth = jd.get_signal_representation(timestamps, read_signal, read_labels)
-        compute_, write, write_bandwidth = jd.get_signal_representation(timestamps, write_signal, write_labels)
+        compute, read, bandwidth = get_signal_representation(timestamps, read_signal, read_labels)
+        compute_, write, write_bandwidth = get_signal_representation(timestamps, write_signal, write_labels)
         print(f"compute={compute}, read={read}, bandwidth={bandwidth}")
         print(f"compute={compute_}, write={write}, write_bandwidth={write_bandwidth}")
         self.assertEqual(len(compute), 3) # should be compute = [0, 2, 4]

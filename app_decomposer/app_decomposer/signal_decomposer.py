@@ -35,7 +35,7 @@ def get_lowest_cluster(labels, signal):
         signal (ndarray): array of signal values
 
     Retuns:
-        label0: label with the lowest values.
+        label0 (int): label with the lowest values.
     """
     unique_labels = np.unique(labels).tolist()
     mean_cluster_values = [np.mean(signal[np.where(labels==label, True, False)]) for label in unique_labels]
