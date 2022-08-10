@@ -125,7 +125,6 @@ def phases_to_representation(start_points, end_points, signal, dx=1):
         bandwidth.append(phase_volume/((end_index - start_index)*dx))
         phase_duration = end_index - start_index - 1
         total_phase_durations += phase_duration
-
     #print(f"total_phase_durations={total_phase_durations}")
 
     # if phase end is not marked in signal, end it
@@ -148,10 +147,10 @@ def get_signal_representation(timestamps, signal, labels, merge_clusters=False):
     Returns:
         compute (list): list of timestamps events separated by compute phases.
         data (list) : associates an amount of data for each timestamped event. Could be related to write or read I/O phase.
-        bandwidth : averaged bandwidth as a constant value through the phase.
+        bandwidth (list) : averaged bandwidth as a constant value through the phase.
     """
 
-    dx = np.diff(timestamps).tolist()[0]
+    dx = np.diff(timestamps.flatten()).tolist()[0]
     if merge_clusters:
         start_points, end_points = get_events_indexes(labels, signal)
     else:
@@ -207,7 +206,6 @@ class JobDecomposer:
         # print(f"compute={read_events}, read={read_volumes_}")
         write_events, write_volumes_, write_bandwidths = get_signal_representation(self.timestamps, self.write_signal, write_labels, merge_clusters=merge_clusters)
         # print(f"compute={write_events}, write={write_volumes_}")
-
         events = np.unique(sorted(read_events + write_events)).tolist()
         read_volumes = []
         write_volumes = []
@@ -230,7 +228,37 @@ class JobDecomposer:
         return events, read_volumes, write_volumes, read_bw, write_bw
 
 
+# def combine_representation(representation1, representation2):
+#     """Considers I/O phase exhibiting various clusters levels (levels of bandwidths) to be segmented accoringgly.
 
+#     Args:
+#         representation1 (tuple): contains list of event timestamps, their relative volumes and bandwidths.
+#         representation2 (tuple): contains list of event timestamps, their relative volumes and bandwidths.
+
+#     Returns:
+#         _type_: _description_
+#     """
+#     events1, data1, bw1 = representation1
+#     events2, data2, bw2 = representation2
+
+#     events = np.unique(sorted(events1 + events2)).tolist()
+#     data = [0]*len(events)
+#     bw = [0]*len(events)
+
+#     for idx, event in enumerate(events):
+#         if event in events1:
+#             data[idx] = data1[events1.index(event)]
+#             bw[idx] = bw1[events1.index(event)]
+#         # else:
+#         #     data.append(0)
+#         #     bw.append(0)
+#         if event in events2:
+#             data[idx] = data2[events2.index(event)]
+#             bw[idx] = bw2[events2.index(event)]
+#         # else:
+#         #     data.append(0)
+#         #     bw.append(0)
+#     return events, data, bw
 
 
 
