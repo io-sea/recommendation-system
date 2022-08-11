@@ -113,6 +113,69 @@ class TestFigGenerator(unittest.TestCase):
 
 
     @patch.object(JobDecomposer, 'get_job_timeseries')
+    def test_generate_simple_compare_app_0(self, mock_get_timeseries):
+        """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
+        # mock the method to return some dataset file content
+        # mock_get_timeseries.return_value = get_job_timeseries_from_file(job_id=457344)
+        timestamps = np.arange(7)
+        read_signal = np.array([0, 1, 1, 0, 0, 0, 0])
+        write_signal = np.array([0, 0, 0, 0, 1, 1, 0])
+        app_signal = timestamps, read_signal, write_signal
+        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        # init the job decomposer
+        jd = JobDecomposer()
+        compute, reads, writes, read_bw, write_bw = jd.get_job_representation(merge_clusters=True)
+        # This is the app encoding representation for Execution Simulator
+        print(f"compute={compute}, reads={reads}, read_bw={read_bw}")
+        print(f"compute={compute}, writes={writes}, write_bw={write_bw}")
+
+        data = simpy.Store(self.env)
+        cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=2,
+                          tiers=[self.ssd_tier, self.nvram_tier])
+        app = Application(self.env, name="#read-compute-write", compute=compute,
+                           read=list(map(lambda x:x*1e6, reads)),
+                           write=list(map(lambda x:x*1e6, writes)), data=data)
+        self.env.process(app.run(cluster, placement=[0, 0, 0, 0, 0, 0]))
+
+        self.env.run()
+        fig = display_run_with_signal(data, cluster, app_signal=app_signal, width=800, height=900)
+        fig.show()
+
+        #print(f"compute={events}, read={reads}, writes={writes}")
+
+    @patch.object(JobDecomposer, 'get_job_timeseries')
+    def test_generate_simple_compare_app_1(self, mock_get_timeseries):
+        """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
+        # mock the method to return some dataset file content
+        # mock_get_timeseries.return_value = get_job_timeseries_from_file(job_id=457344)
+        timestamps = np.linspace(0, 100, 101)
+        read_signal = np.where(abs(timestamps-10)<=5, 1, 0)
+        write_signal = np.where(abs(timestamps-60)<=5, 1, 0)
+        app_signal = timestamps, read_signal, write_signal
+        # mock the method to return previous arrays
+        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        # init the job decomposer
+        jd = JobDecomposer()
+        compute, reads, writes, read_bw, write_bw = jd.get_job_representation(merge_clusters=True)
+        # This is the app encoding representation for Execution Simulator
+        print(f"read signal={read_signal}")
+        print(f"write signal={write_signal}")
+        print(f"compute={compute}, reads={reads}, read_bw={read_bw}")
+        print(f"compute={compute}, writes={writes}, write_bw={write_bw}")
+
+        data = simpy.Store(self.env)
+        cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=2,
+                          tiers=[self.ssd_tier, self.nvram_tier])
+        app = Application(self.env, name="#read-compute-write", compute=compute,
+                           read=list(map(lambda x:x*1e6, reads)),
+                           write=list(map(lambda x:x*1e6, writes)), data=data)
+        self.env.process(app.run(cluster, placement=[0, 0, 0, 0, 0, 0]))
+
+        self.env.run()
+        fig = display_run_with_signal(data, cluster, app_signal=app_signal, width=800, height=900)
+        fig.show()
+
+    @patch.object(JobDecomposer, 'get_job_timeseries')
     def test_generate_simple_compare_app_2(self, mock_get_timeseries):
         """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
         # mock the method to return some dataset file content

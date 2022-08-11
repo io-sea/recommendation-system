@@ -105,7 +105,7 @@ class TestJobDecomposer(unittest.TestCase):
 
     @patch.object(JobDecomposer, 'get_job_timeseries')
     def test_get_events_indexes(self, mock_get_timeseries):
-        """Test if get_events_indexes and variant no_merge works well."""
+        """Test if get_events_indexes and variant with merge works well."""
         timestamps = np.arange(10)
         read_signal = np.array([60, 30, 7, 0, 0, 0, 0, 0, 7, 10])
         write_signal = np.array([0, 0, 0, 0, 0, 0, 0, 25, 20, 0])
@@ -117,6 +117,23 @@ class TestJobDecomposer(unittest.TestCase):
         w_start_points, w_end_points = get_events_indexes(write_labels, write_signal)
         self.assertListEqual(start_points, [0, 8])
         self.assertListEqual(end_points, [3, 10])
+        self.assertListEqual(w_start_points, [7])
+        self.assertListEqual(w_end_points, [9])
+
+    @patch.object(JobDecomposer, 'get_job_timeseries')
+    def test_get_events_indexes_no_merge(self, mock_get_timeseries):
+        """Test if get_events_indexes and variant with no_merge works well."""
+        timestamps = np.arange(10)
+        read_signal = np.array([60, 30, 7, 0, 0, 0, 0, 0, 7, 10])
+        write_signal = np.array([0, 0, 0, 0, 0, 0, 0, 25, 20, 0])
+        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        # init the job decomposer
+        jd = JobDecomposer()
+        _, read_labels, _, write_labels = jd.get_phases()
+        start_points, end_points = get_events_indexes_no_merge(read_labels, read_signal)
+        w_start_points, w_end_points = get_events_indexes_no_merge(write_labels, write_signal)
+        self.assertListEqual(start_points, [0, 1, 2, 8])
+        self.assertListEqual(end_points, [1, 2, 3, 10])
         self.assertListEqual(w_start_points, [7])
         self.assertListEqual(w_end_points, [9])
 
@@ -135,8 +152,8 @@ class TestJobDecomposer(unittest.TestCase):
         compute, data, bw = phases_to_representation(start_points, end_points, read_signal, dx=1)
         print(f"compute={compute}, data={data}, bandwidth={bw}")
 
-        self.assertListEqual(start_points, [1, 2, 4])
-        self.assertListEqual(end_points, [2, 4, 5])
+        self.assertListEqual(start_points, [1, 2])
+        self.assertListEqual(end_points, [2, 4])
         self.assertListEqual(compute, [0, 1, 2, 3])
         self.assertListEqual(data, [0, 1, 4, 0])
         self.assertListEqual(bw, [0, 1, 2, 0])
@@ -173,8 +190,8 @@ class TestJobDecomposer(unittest.TestCase):
         start_points, end_points = get_events_indexes_no_merge(read_labels, read_signal)
         compute, data, bw = phases_to_representation(start_points, end_points, read_signal, dx=1)
         print(f"compute={compute}, data={data}, bandwidth={bw}")
-        self.assertListEqual(start_points, [0, 3])
-        self.assertListEqual(end_points, [3, 4])
+        self.assertListEqual(start_points, [0])
+        self.assertListEqual(end_points, [3])
         self.assertListEqual(compute, [0, 1])
         self.assertListEqual(data, [3, 0])
         self.assertListEqual(bw, [1, 0])
@@ -193,9 +210,9 @@ class TestJobDecomposer(unittest.TestCase):
         start_points, end_points = get_events_indexes_no_merge(read_labels, read_signal)
         compute, data, bw = phases_to_representation(start_points, end_points, read_signal, dx=1)
         print(f"compute={compute}, data={data}, bandwidth={bw}")
-        self.assertListEqual(start_points, [0, 1, 3, 4])
-        self.assertListEqual(end_points, [1, 3, 4, 5])
-        self.assertListEqual(compute, [0, 1, 2, 4])
+        self.assertListEqual(start_points, [0, 1, 3])
+        self.assertListEqual(end_points, [1, 3, 4])
+        self.assertListEqual(compute, [0, 1, 2, 3])
         self.assertListEqual(data, [1, 6, 1, 0])
         self.assertListEqual(bw, [1, 3, 1, 0])
 
@@ -235,9 +252,9 @@ class TestJobDecomposer(unittest.TestCase):
         print(f"labels = {read_labels}")
         compute, read, bandwidth = get_signal_representation(timestamps, read_signal, read_labels, merge_clusters=False)
         print(f"compute={compute}, read={read}, bandwidth={bandwidth}")
-        self.assertListEqual(compute, [0, 1, 2, 3, 4])
-        self.assertListEqual(read, [60, 30, 7, 0, 17])
-        self.assertListEqual(bandwidth, [60.0, 30.0, 7.0, 0.0, 8.5])
+        self.assertListEqual(compute, [0, 1, 2, 8])
+        self.assertListEqual(read, [60, 30, 7, 17])
+        self.assertListEqual(bandwidth, [60.0, 30.0, 7.0, 8.5])
 
     @patch.object(JobDecomposer, 'get_job_timeseries')
     def test_read_signal_decomposer_pattern_2(self, mock_get_timeseries):
@@ -315,9 +332,9 @@ class TestJobDecomposer(unittest.TestCase):
         print(f"labels = {read_labels}")
         compute, read, bandwidth = get_signal_representation(timestamps, read_signal, read_labels, merge_clusters=False)
         print(f"compute={compute}, read={read}, bandwidth={bandwidth}")
-        self.assertListEqual(compute, [0, 1, 2, 3, 5, 6])
-        self.assertListEqual(read, [12, 0, 18, 0, 19, 0])
-        self.assertListEqual(bandwidth, [12.0, 0.0, 9.0, 0.0, 19.0, 0.0])
+        self.assertListEqual(compute, [0, 2, 4, 5])
+        self.assertListEqual(read, [12, 18, 19, 0])
+        self.assertListEqual(bandwidth, [12.0, 9.0, 19.0, 0.0])
 
 
     @patch.object(JobDecomposer, 'get_job_timeseries')
@@ -356,9 +373,9 @@ class TestJobDecomposer(unittest.TestCase):
         print(f"labels = {read_labels}")
         compute, read, bandwidth = get_signal_representation(timestamps, read_signal, read_labels, merge_clusters=False)
         print(f"compute={compute}, read={read}, bandwidth={bandwidth}")
-        self.assertListEqual(compute, [0, 2, 3, 5])
-        self.assertListEqual(read, [0, 18, 0, 39])
-        self.assertListEqual(bandwidth, [0, 9.0, 0.0, 19.5])
+        self.assertListEqual(compute, [0, 2, 4])
+        self.assertListEqual(read, [0, 18, 39])
+        self.assertListEqual(bandwidth, [0, 9.0, 19.5])
 
 
 
@@ -380,7 +397,7 @@ class TestJobDecomposer(unittest.TestCase):
         compute_, write, write_bandwidth = get_signal_representation(timestamps, write_signal, write_labels, merge_clusters=False)
         print(f"compute={compute}, read={read}, bandwidth={bandwidth}")
         print(f"compute={compute_}, write={write}, write_bandwidth={write_bandwidth}")
-        self.assertListEqual(compute, [0, 1, 2])
+        self.assertListEqual(compute, [0, 1, 3])
         self.assertListEqual(read, [0, 2, 0])
         self.assertListEqual(bandwidth, [0, 1, 0])
 
@@ -395,8 +412,8 @@ class TestJobDecomposer(unittest.TestCase):
         # init the job decomposer
         jd = JobDecomposer()
         events, reads, writes, _, _ = jd.get_job_representation(merge_clusters=True)
-        #print(f"compute={events}, read={reads}, writes={writes}")
-        self.assertListEqual(events, [0, 1, 4, 5])
+        print(f"compute={events}, read={reads}, writes={writes}")
+        self.assertListEqual(events, [0, 1, 3, 4])
         self.assertListEqual(reads, [0, 2, 0, 0])
         self.assertListEqual(writes, [0, 0, 2, 0])
 
@@ -411,9 +428,9 @@ class TestJobDecomposer(unittest.TestCase):
         jd = JobDecomposer()
         events, reads, writes, _, _ = jd.get_job_representation(merge_clusters=False)
         print(f"compute={events}, read={reads}, writes={writes}")
-        # self.assertListEqual(events, [0, 1, 4, 5])
-        # self.assertListEqual(reads, [0, 2, 0, 0])
-        # self.assertListEqual(writes, [0, 0, 2, 0])
+        self.assertListEqual(events, [0, 1, 3, 4])
+        self.assertListEqual(reads, [0, 2, 0, 0])
+        self.assertListEqual(writes, [0, 0, 2, 0])
 
     @patch.object(JobDecomposer, 'get_job_timeseries')
     def test_job_decomposer_pattern_2(self, mock_get_timeseries):
@@ -426,7 +443,7 @@ class TestJobDecomposer(unittest.TestCase):
         jd = JobDecomposer()
         events, reads, writes, _, _ = jd.get_job_representation(merge_clusters=True)
         print(f"compute={events}, read={reads}, writes={writes}")
-        self.assertListEqual(events, [0, 1, 5, 6])
+        self.assertListEqual(events, [0, 1, 4, 6])
         self.assertListEqual(reads, [0, 2, 0, 0])
         self.assertListEqual(writes, [0, 0, 1, 0])
 

@@ -56,14 +56,17 @@ def get_events_indexes(labels, signal):
     label0 = get_lowest_cluster(labels, signal)
     # binarize labels to 0 (compute) and 1 (data phase)
     bin_labels = np.where(labels != label0, 1, 0)
+    print(f"labels={bin_labels}")
     diff_array = np.diff(np.insert(bin_labels, 0, 0, axis=0))
+    print(f"diff_array={diff_array}")
     start_points = np.where(diff_array==1)[0].tolist()
     end_points = np.where(diff_array==-1)[0].tolist()
     # if there is an open phase at the end of the signal
     if len(end_points) == len(start_points) - 1:
         end_points.append(len(signal))
     assert len(start_points)==len(end_points)
-
+    print(f"start points = {start_points}")
+    print(f"ending points = {end_points}")
     return start_points, end_points
 
 def get_events_indexes_no_merge(labels, signal):
@@ -79,18 +82,44 @@ def get_events_indexes_no_merge(labels, signal):
     label0 = get_lowest_cluster(labels, signal)
     # adjust labels to 0 for compute phases and >1 for data phase
     ref_labels = np.where(labels != label0, labels + 1, 0) # avoiding previous labeled 0
-    diff_array = np.diff(np.insert(ref_labels, 0, 0, axis=0))
-    print(f"diff_array={diff_array}")
-    start_points = np.where(diff_array != 0)[0].tolist()
-    end_points = np.where(diff_array != 0)[0][1::].tolist()
-    # if there is an open phase at the end of the signal
-    if len(end_points) == len(start_points) - 1:
-        end_points.append(len(signal))
-    assert len(start_points)==len(end_points)
-    print(f"start points = {start_points}")
-    print(f"ending points = {end_points}")
+    print(f"labels={ref_labels}")
 
-    return start_points, end_points
+    starting_points = []
+    ending_points = []
+
+    diff_array = np.diff(np.insert(ref_labels, 0, 0, axis=0))
+    for label_value in np.unique(ref_labels):
+        # combinations = []
+        # for start, end in zip(starting_points, ending_points):
+        #     combinations.append((start, end))
+        # print(combinations)
+        if label_value != label0:
+
+            sub_labels = np.where(ref_labels == label_value, 1, 0)
+            diff_array = np.diff(np.insert(sub_labels, 0, 0, axis=0))
+            print(f"sub_labels={sub_labels}")
+            print(f"diff_array={diff_array}")
+            start_points = np.where(diff_array==1)[0].tolist()
+            end_points = np.where(diff_array==-1)[0].tolist()
+            # if there is an open phase at the end of the signal
+            if len(end_points) == len(start_points) - 1:
+                end_points.append(len(signal))
+            assert len(start_points)==len(end_points)
+
+            print(f"start points = {start_points}")
+            print(f"end points = {end_points}")
+            # adding sub phases to slicing
+            for start_point, end_point in zip(start_points, end_points):
+                #if (start_point, end_point) not in combinations:
+                starting_points.append(start_point)
+                ending_points.append(end_point)
+    # sorting together
+    starting_points, ending_points = (list(t) for t in zip(*sorted(zip(starting_points, ending_points))))
+
+    print(f"starting points = {starting_points}")
+    print(f"ending points = {ending_points}")
+
+    return starting_points, ending_points
 
 
 def phases_to_representation(start_points, end_points, signal, dx=1):
@@ -202,6 +231,7 @@ class JobDecomposer:
             write_volumes (list): list of amount of data for each write phase.
         """
         _, read_labels, _, write_labels = self.get_phases()
+        print(f"read_labels={read_labels}, write_labels={write_labels}")
         read_events, read_volumes_, read_bandwidths = get_signal_representation(self.timestamps, self.read_signal, read_labels, merge_clusters=merge_clusters)
         # print(f"compute={read_events}, read={read_volumes_}")
         write_events, write_volumes_, write_bandwidths = get_signal_representation(self.timestamps, self.write_signal, write_labels, merge_clusters=merge_clusters)
@@ -211,17 +241,30 @@ class JobDecomposer:
         write_volumes = []
         read_bw = []
         write_bw = []
-
-        for event in events:
+        read_spread = 0
+        write_spread = 0
+        # TODO : add cumulative removal of spread of the last event.
+        for i_event, event in enumerate(events):
+            print(f"compute={events}, read={read_volumes}, writes={write_volumes}")
+            print(f"read_spread={read_spread}")
+            print(f"write_spread={write_spread}")
             if event in read_events:
+                events[i_event] -= write_spread
+                write_spread = 0
                 read_volumes.append(read_volumes_[read_events.index(event)])
                 read_bw.append(read_bandwidths[read_events.index(event)])
+                if read_bw[-1]:
+                    read_spread = read_volumes[-1]/read_bw[-1] - 1
             else:
                 read_volumes.append(0)
                 read_bw.append(0)
             if event in write_events:
+                events[i_event] -= read_spread
+                read_spread = 0
                 write_volumes.append(write_volumes_[write_events.index(event)])
                 write_bw.append(write_bandwidths[write_events.index(event)])
+                if write_bw[-1]:
+                    write_spread = write_volumes[-1]/write_bw[-1] - 1
             else:
                 write_volumes.append(0)
                 write_bw.append(0)

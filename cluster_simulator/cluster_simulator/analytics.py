@@ -438,9 +438,9 @@ def display_run_with_signal(data, cluster, app_signal, width=1200, height=600):
                                     textposition="top center",
                                     name="App Modeled by Execution Sim"+app, line_shape='linear'), row=i, col=1)
         # plot original signals
-        fig.append_trace(go.Scatter(x=np.array(x_app), y=read_signal, line_dash='dash',
+        fig.append_trace(go.Scatter(x=timestamps, y=read_signal, line_dash='dash',
                                     name="read signal from original data", line_shape='linear'), row=i, col=1)
-        fig.append_trace(go.Scatter(x=np.array(x_app), y=write_signal, line_dash='dash',
+        fig.append_trace(go.Scatter(x=timestamps, y=write_signal, line_dash='dash',
                                     name="write signal from original data", line_shape='linear'), row=i, col=1)
         fig.append_trace(go.Scatter(x=np.array(x_mvt), y=np.array(y_mvt),
                                     text=text_mvt,

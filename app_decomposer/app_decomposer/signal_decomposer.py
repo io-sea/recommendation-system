@@ -67,8 +67,6 @@ def arrange_labels(labels, label0):
     return labels
 
 
-
-
 class KmeansSignalDecomposer(SignalDecomposer):
     """Implements signal decomposer based on kmeans clustering."""
     def __init__(self, signal):
@@ -112,7 +110,7 @@ class KmeansSignalDecomposer(SignalDecomposer):
         label0 = get_lowest_cluster(kmeans.labels_, self.signal)
         labels =arrange_labels(kmeans.labels_, label0)
 
-        labels = np.where(labels > 0, 1, 0) if merge else kmeans.labels_
+        labels = np.where(labels > 0, 1, 0) if merge else labels
         return  ab[np.insert(np.where(np.diff(labels)!=0, True, False), 0, False)].tolist(), labels
 
 
