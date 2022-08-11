@@ -42,6 +42,33 @@ def get_lowest_cluster(labels, signal):
 
     return unique_labels[mean_cluster_values.index(np.min(mean_cluster_values))]
 
+
+def arrange_labels(labels, label0):
+    """Rearrange labels so that label0 get the 0-label.
+
+    Args:
+        labels (ndarray): rearranged labels
+        label0 (int): number of the label having le lowest values in signal
+
+    Retuns:
+        label0 (int): label with the lowest values.
+    """
+    min_label = min(np.unique(labels))
+    max_label = max(np.unique(labels))
+    # do arrangement if not already done
+    if label0 != 0:
+        # replace min_label by max_label+1
+        labels = np.array([max_label+1 if item == min_label else item for item in labels])
+        # replace label0 by 0
+        labels = np.array([0 if item == label0 else item for item in labels])
+        # replace max_label+1 by label0
+        labels = np.array([label0 if item == max_label+1 else item for item in labels])
+
+    return labels
+
+
+
+
 class KmeansSignalDecomposer(SignalDecomposer):
     """Implements signal decomposer based on kmeans clustering."""
     def __init__(self, signal):

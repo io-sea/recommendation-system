@@ -4,7 +4,7 @@ import numpy as np
 from loguru import logger
 from sklearn.cluster import KMeans
 
-from app_decomposer.signal_decomposer import KmeansSignalDecomposer, get_lowest_cluster
+from app_decomposer.signal_decomposer import KmeansSignalDecomposer, get_lowest_cluster, arrange_labels
 
 class TestKmeansSignalDecomposer(unittest.TestCase):
     """Test that the app decomposer follows some pattern."""
@@ -45,12 +45,44 @@ class TestKmeansSignalDecomposer(unittest.TestCase):
         label0 = get_lowest_cluster(labels, signal)
         self.assertEqual(label0, 0)
 
+    def test_arrange_labels_0(self):
+        """Test that labels arrangement works properly."""
+        labels = np.array([0, 0, 1, 1, 2, 2])
+        label0 = 1
+        arranged_labels =arrange_labels(labels, label0)
+        # step1: [3, 3, 1, 1, 2, 2]
+        # step2: [3, 3, 0, 0, 2, 2]
+        # step3: [1, 1, 0, 0, 2, 2]
+        self.assertListEqual(arranged_labels.tolist(), [1, 1, 0, 0, 2, 2])
+
+    def test_arrange_labels_1(self):
+        """Test that labels arrangement works properly when labels0 = 0."""
+        labels = np.array([0, 0, 1, 1, 2, 2])
+        label0 = 0
+        arranged_labels =arrange_labels(labels, label0)
+        # step1: [3, 3, 1, 1, 2, 2]
+        # step2: [3, 3, 0, 0, 2, 2]
+        # step3: [1, 1, 0, 0, 2, 2]
+        print(arranged_labels)
+        self.assertListEqual(arranged_labels.tolist(), [0, 0, 1, 1, 2, 2])
+
+    def test_arrange_labels_with_get_lowest(self):
+        """Test that labels arranges the lowest to 0."""
+        signal = np.array([10, 12, 4, 5, 20, 25])
+        labels = np.array([1, 1, 2, 2, 0, 0])
+        label0 = get_lowest_cluster(labels, signal)
+        arranged_labels =arrange_labels(labels, label0)
+        # step1: [1, 1, 2, 2, 3, 3]
+        # step2: [1, 1, 0, 0, 3, 3]
+        # step3: [1, 1, 0, 0, 2, 2]
+        self.assertEqual(label0, 2)
+        self.assertListEqual(arranged_labels.tolist(), [1, 1, 0, 0, 2, 2])
 
     def test_kmeans_decomposer_signal_dim_lower_n_clusters(self):
         """Tests that kmeans decomposer stops incrementing n_clusters at signal length."""
         signal = np.arange(3).reshape(-1, 1) # shape is (n, 1)
         ksd = KmeansSignalDecomposer(signal)
-        n_clusters = get_optimal_n_clusters()
+        n_clusters, _ = ksd.get_optimal_clustering()
         self.assertEqual(3, n_clusters)
 
     def test_kmeans_decomposer_signal_dim_lower_n_clusters_long_signal(self):
