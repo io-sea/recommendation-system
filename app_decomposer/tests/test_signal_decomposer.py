@@ -78,6 +78,19 @@ class TestKmeansSignalDecomposer(unittest.TestCase):
         self.assertEqual(label0, 2)
         self.assertListEqual(arranged_labels.tolist(), [1, 1, 0, 0, 2, 2])
 
+    def test_arrange_labels_with_get_lowest_no_zero(self):
+        """Test that labels arranges the lowest to 0."""
+        signal = np.array([10, 12, 4, 5, 20, 25])
+        labels = np.array([1, 1, 4, 4, 2, 2])
+        label0 = get_lowest_cluster(labels, signal)
+        arranged_labels =arrange_labels(labels, label0)
+        # step1: [1, 1, 2, 2, 3, 3]
+        # step2: [1, 1, 0, 0, 3, 3]
+        # step3: [1, 1, 0, 0, 2, 2]
+        self.assertEqual(label0, 4)
+        self.assertListEqual(arranged_labels.tolist(), [4, 4, 0, 0, 2, 2])
+
+
     def test_kmeans_decomposer_signal_dim_lower_n_clusters(self):
         """Tests that kmeans decomposer stops incrementing n_clusters at signal length."""
         signal = np.arange(3).reshape(-1, 1) # shape is (n, 1)

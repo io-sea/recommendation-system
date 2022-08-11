@@ -109,7 +109,10 @@ class KmeansSignalDecomposer(SignalDecomposer):
             (breakpoints, labels): list of breakpoints where each element is the index that separates two phases. Each phase get assigned a label to identify its nature later.
         """
         ab = np.arange(len(self.signal))
-        labels = np.where(kmeans.labels_ > 0, 1, 0) if merge else kmeans.labels_
+        label0 = get_lowest_cluster(kmeans.labels_, self.signal)
+        labels =arrange_labels(kmeans.labels_, label0)
+
+        labels = np.where(labels > 0, 1, 0) if merge else kmeans.labels_
         return  ab[np.insert(np.where(np.diff(labels)!=0, True, False), 0, False)].tolist(), labels
 
 
