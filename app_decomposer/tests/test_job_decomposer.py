@@ -443,7 +443,7 @@ class TestJobDecomposer(unittest.TestCase):
         jd = JobDecomposer()
         events, reads, writes, _, _ = jd.get_job_representation(merge_clusters=True)
         print(f"compute={events}, read={reads}, writes={writes}")
-        self.assertListEqual(events, [0, 1, 4, 6])
+        self.assertListEqual(events, [0, 1, 4, 5])
         self.assertListEqual(reads, [0, 2, 0, 0])
         self.assertListEqual(writes, [0, 0, 1, 0])
 
@@ -456,9 +456,16 @@ class TestJobDecomposer(unittest.TestCase):
         mock_get_timeseries.return_value = timestamps, read_signal, write_signal
         # init the job decomposer
         jd = JobDecomposer()
-        events, reads, writes, _, _ = jd.get_job_representation(merge_clusters=True)
+
+        read_bkps, read_labels, write_bkps, write_labels = jd.get_phases()
+        compute, read, bandwidth = get_signal_representation(timestamps, read_signal, read_labels, merge_clusters=False)
+        print(f"read signal : compute={compute}, read={read}, bw={bandwidth}")
+        compute, write, bandwidth = get_signal_representation(timestamps, write_signal, write_labels, merge_clusters=False)
+        print(f"write signal : compute={compute}, write={write}, bw={bandwidth}")
+        events, reads, writes, _, _ = jd.get_job_representation(merge_clusters=False)
+
         print(f"compute={events}, read={reads}, writes={writes}")
-        self.assertListEqual(events, [0, 1, 5, 6])
+        self.assertListEqual(events, [0, 1, 4, 5])
         self.assertListEqual(reads, [0, 2, 0, 0])
         self.assertListEqual(writes, [0, 0, 1, 0])
 
