@@ -480,7 +480,7 @@ class TestJobDecomposer(unittest.TestCase):
         jd = JobDecomposer()
         events, reads, writes, _, _ = jd.get_job_representation(merge_clusters=True)
         print(f"compute={events}, read={reads}, writes={writes}")
-        self.assertListEqual(events, [0, 3])
+        self.assertListEqual(events, [0, 1])
         self.assertListEqual(reads, [3, 0])
         self.assertListEqual(writes, [0, 3])
 
@@ -495,9 +495,9 @@ class TestJobDecomposer(unittest.TestCase):
         jd = JobDecomposer()
         events, reads, writes, _, _ = jd.get_job_representation(merge_clusters=False)
         print(f"compute={events}, read={reads}, writes={writes}")
-        self.assertListEqual(events, [0, 1, 3])
-        self.assertListEqual(reads, [3, 0, 0])
-        self.assertListEqual(writes, [0, 0, 3])
+        self.assertListEqual(events, [0, 1])
+        self.assertListEqual(reads, [3, 0])
+        self.assertListEqual(writes, [0, 3])
 
     @patch.object(JobDecomposer, 'get_job_timeseries')
     def test_job_decomposer_pattern_simulataneous_read_write(self, mock_get_timeseries):
@@ -510,7 +510,7 @@ class TestJobDecomposer(unittest.TestCase):
         jd = JobDecomposer()
         events, reads, writes, _, _ = jd.get_job_representation(merge_clusters=True)
         print(f"compute={events}, read={reads}, writes={writes}")
-        self.assertListEqual(events, [0, 3])
+        self.assertListEqual(events, [0, 1])
         self.assertListEqual(reads, [3, 0])
         self.assertListEqual(writes, [3, 1])
 
@@ -525,7 +525,7 @@ class TestJobDecomposer(unittest.TestCase):
         jd = JobDecomposer()
         events, reads, writes, read_bw, write_bw = jd.get_job_representation(merge_clusters=True)
         print(f"compute={events}, read_bw={read_bw}, write_bw={write_bw}")
-        self.assertListEqual(events, [0, 1, 4, 5])
+        self.assertListEqual(events, [0, 1, 3, 4])
         self.assertListEqual(reads, [0, 22, 0, 0])
         self.assertListEqual(writes, [0, 0, 40, 0])
         self.assertListEqual(read_bw, [0, 11, 0, 0])

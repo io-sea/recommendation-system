@@ -256,7 +256,8 @@ class JobDecomposer:
             # check if event is read
             if event in read_events:
                 print(f"old_event : {event} read_spread={read_spread} write_spread={write_spread}")
-                event_value = event - np.cumsum(write_spread).tolist()[i_event - 1] if i_event > 0 else 0
+                spread_offset = np.cumsum(write_spread).tolist()[i_event - 1] if i_event > 0 else 0
+                event_value = event - spread_offset
                 print(f"new_event : {event_value} read_spread={read_spread} write_spread={write_spread}")
                 read_volumes.append(read_volumes_[read_events.index(event)])
                 read_bw.append(read_bandwidths[read_events.index(event)])
@@ -269,7 +270,8 @@ class JobDecomposer:
             # check if event is read
             if event in write_events:
                 print(f"old_event : {event} read_spread={read_spread} write_spread={write_spread}")
-                event_value = event - np.cumsum(read_spread).tolist()[i_event - 1] if i_event > 0 else 0
+                spread_offset = np.cumsum(read_spread).tolist()[i_event - 1] if i_event > 0 else 0
+                event_value = event - spread_offset
                 print(f"new_event : {event_value} read_spread={read_spread} write_spread={write_spread}")
                 write_volumes.append(write_volumes_[write_events.index(event)])
                 write_bw.append(write_bandwidths[write_events.index(event)])
