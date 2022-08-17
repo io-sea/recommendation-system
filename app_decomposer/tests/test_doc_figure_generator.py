@@ -9,7 +9,8 @@ import os
 from os.path import dirname, abspath
 import pandas as pd
 import random
-
+import plotly.express as px
+import plotly.graph_objects as go
 import unittest
 import time
 import numpy as np
@@ -46,7 +47,7 @@ def list_jobs(dataset_path):
                 dataset_names.append(os.path.split(root)[-1])
     return job_files, job_ids, dataset_names
 
-def get_job_timeseries_from_file(job_id=None):
+def get_job_timeseries_from_file(job_id=None, df=None):
     """Method to extract read and write timeseries from a job.
     TODO: connect this method directly to the IOI database.
     For the moment, data will be mocked by a csv file containing the timeseries.
@@ -65,6 +66,7 @@ def get_job_timeseries_from_file(job_id=None):
         csv_file = job_files[job_ids.index(str(job_id))]
 
     df = pd.read_csv(csv_file, index_col=0)
+
     return df[["timestamp"]].to_numpy(), df[["bytesRead"]].to_numpy(), df[["bytesWritten"]].to_numpy()
 
 class TestFigGenerator(unittest.TestCase):
@@ -179,8 +181,8 @@ class TestFigGenerator(unittest.TestCase):
         # fig = display_run_with_signal(data, cluster, app_signal=app_signal, width=800, height=900)
         # fig.show()
 
-
-    def test_generate_simple_compare_app_2(self):
+    @patch.object(JobDecomposer, 'get_job_timeseries')
+    def test_generate_simple_compare_app_2(self, mock_get_timeseries):
         """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
         # readlabels=[1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 0 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 1 0 0 0 0 0 0 0 0 0 0 1 1 0 0 0 0 0 0]
         # [1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 1 0 0 0 0 0 0 0 0 0 0 1  0 0 0 0 0 0]
@@ -199,34 +201,48 @@ class TestFigGenerator(unittest.TestCase):
         # write   =[0, 12, 0,  17,  0, 11, 7,  0 ]
 
         # results:
-        compute = [0, 1, 8, 12, 16, 17, 18, 34, 45, 51]
-        read = [3, 0, 0, 0, 2, 0, 3, 4, 2, 0]
-        write = [0, 12, 17, 11, 7, 0, 0, 0, 0, 0]
+        # compute = [0, 1, 8, 12, 16, 17, 18, 34, 45, 51]
+        # read = [3, 0, 0, 0, 2, 0, 3, 4, 2, 0]
+        # write = [0, 12, 17, 11, 7, 0, 0, 0, 0, 0]
+        ssd_bandwidth = {'read':  {'seq': 100, 'rand': 100},
+                         'write': {'seq': 60, 'rand': 60}}
+        self.ssd_tier = Tier(self.env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
+        mock_get_timeseries.return_value = get_job_timeseries_from_file(job_id=2537) #457344
 
-        # mock_get_timeseries.return_value = get_job_timeseries_from_file(job_id=2537) #457344
+        # init the job decomposer
+        jd = JobDecomposer()
+        #app_signal = jd.timestamps.flatten(), jd.read_signal.flatten(), jd.write_signal.flatten()
+        compute, reads, writes, read_bw, write_bw = jd.get_job_representation(merge_clusters=True)
 
-        # # init the job decomposer
-        # jd = JobDecomposer()
-        # app_signal = jd.timestamps.flatten(), jd.read_signal.flatten(), jd.write_signal.flatten()
-        # compute, reads, writes, read_bw, write_bw = jd.get_job_representation(merge_clusters=True)
         # This is the app encoding representation for Execution Simulator
         # for sig in app_signal:
         #     print(f"min = {min(sig)}")
         #     print(f"max = {max(sig)}")
         #     print(f"mean = {np.mean(sig)}")
-        # print(f"compute={compute}, reads={reads}, read_bw={read_bw}")
-        # print(f"compute={compute}, writes={writes}, write_bw={write_bw}")
+        print(f"compute={compute}, reads={reads}, read_bw={read_bw}")
+        print(f"compute={compute}, writes={writes}, write_bw={write_bw}")
 
         data = simpy.Store(self.env)
         cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=2,
                           tiers=[self.ssd_tier, self.nvram_tier])
         app = Application(self.env, name="#read-compute-write", compute=compute,
-                           read=list(map(lambda x:x*1e6, read)),
-                           write=list(map(lambda x:x*1e6, write)), data=data)
-        self.env.process(app.run(cluster, placement=[0]*len(read)))
+                           read=list(map(lambda x:x, reads)),
+                           write=list(map(lambda x:x, writes)), data=data)
+
+        self.env.process(app.run(cluster, placement=[0]*len(reads)))
 
         self.env.run()
-        # fig = display_run(data, cluster, width=800, height=900)
-        # fig.show()
+        fig = display_run(data, cluster, width=800, height=900)
+        fig.show()
+
+        timestamps, reads, writes = get_job_timeseries_from_file(job_id=2537)
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=timestamps.flatten(), y=reads.flatten(), mode='lines', name='bytesRead'))
+        fig.add_trace(go.Scatter(x=timestamps.flatten(), y=writes.flatten(), mode='lines', name='bytesWritten'))
+        fig.show()
+        current_dir = dirname(dirname(dirname(abspath(__file__))))
+        file_path = os.path.join(current_dir, "app_decomposer", "docs", "figure_timeseries_ioi_signal.html")
+        fig.write_html(file_path)
+
 
 

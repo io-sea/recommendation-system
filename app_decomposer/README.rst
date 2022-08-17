@@ -84,5 +84,10 @@ Now we will feed this representation to the cluster_simulator module:
     :file: docs/figure_synthetic_signal.html
 
 
+.. raw:: html
+    :file: docs/figure_timeseries_ioi_signal.html
+
+
+
 * TODO
 
