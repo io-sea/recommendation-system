@@ -243,47 +243,29 @@ class JobDecomposer:
         write_volumes = []
         read_bw = []
         write_bw = []
-        read_spread = []
-        write_spread = []
-        # TODO : add cumulative removal of spread of the last event.
-        # TODO : rename events variable
         for i_event, event in enumerate(events):
-            event_value = event
             print(f"event idx = {i_event} = ===================")
             print(f"event list = {events} = ===================")
             print(f"compute={events}, read={read_volumes}, writes={write_volumes}")
 
             # check if event is read
             if event in read_events:
-                print(f"old_event : {event} read_spread={read_spread} write_spread={write_spread}")
-                spread_offset = np.cumsum(write_spread).tolist()[i_event - 1] if i_event > 0 else 0
-                event_value = event - spread_offset
-                print(f"new_event : {event_value} read_spread={read_spread} write_spread={write_spread}")
                 read_volumes.append(read_volumes_[read_events.index(event)])
                 read_bw.append(read_bandwidths[read_events.index(event)])
-                read_spread.append(read_volumes[-1]/(read_bw[-1]*dx) - 1 if read_bw[-1] else 0)
             else:
                 read_volumes.append(0)
                 read_bw.append(0)
-                read_spread.append(0)
 
             # check if event is read
             if event in write_events:
-                print(f"old_event : {event} read_spread={read_spread} write_spread={write_spread}")
-                spread_offset = np.cumsum(read_spread).tolist()[i_event - 1] if i_event > 0 else 0
-                event_value = event - spread_offset
-                print(f"new_event : {event_value} read_spread={read_spread} write_spread={write_spread}")
                 write_volumes.append(write_volumes_[write_events.index(event)])
                 write_bw.append(write_bandwidths[write_events.index(event)])
-                write_spread.append(write_volumes[-1]/(write_bw[-1]*dx) - 1 if write_bw[-1] else 0)
             else:
                 write_volumes.append(0)
                 write_bw.append(0)
-                write_spread.append(0)
-            job_compute.append(event_value)
+            job_compute.append(event)
             print(f"compute={job_compute}, read={read_volumes}, writes={write_volumes}")
-            print(f"read_spread={read_spread}")
-            print(f"write_spread={write_spread}")
+
         return job_compute, read_volumes, write_volumes, read_bw, write_bw
 
 

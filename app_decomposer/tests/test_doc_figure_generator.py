@@ -175,41 +175,54 @@ class TestFigGenerator(unittest.TestCase):
         fig = display_run_with_signal(data, cluster, app_signal=app_signal, width=800, height=900)
         fig.show()
 
-    @patch.object(JobDecomposer, 'get_job_timeseries')
-    def test_generate_simple_compare_app_2(self, mock_get_timeseries):
-        """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
-        # mock the method to return some dataset file content
-        # mock_get_timeseries.return_value = get_job_timeseries_from_file(job_id=457344)
-        # timestamps = np.arange(6)
-        # read_signal = np.array([1, 1, 0, 0, 0, 0])
-        # write_signal = np.array([0, 0, 0, 0, 1, 1])
-        # app_signal = timestamps, read_signal, write_signal
-        # mock the method to return previous arrays
-        # mock_get_timeseries.return_value = timestamps, read_signal, write_signal
-        mock_get_timeseries.return_value = get_job_timeseries_from_file(job_id=2537) #457344
 
-        # init the job decomposer
-        jd = JobDecomposer()
-        app_signal = jd.timestamps.flatten(), jd.read_signal.flatten(), jd.write_signal.flatten()
-        compute, reads, writes, read_bw, write_bw = jd.get_job_representation(merge_clusters=True)
+    def test_generate_simple_compare_app_2(self):
+        """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
+        # readlabels=[1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 0 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 1 0 0 0 0 0 0 0 0 0 0 1 1 0 0 0 0 0 0]
+        # [1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 1 0 0 0 0 0 0 0 0 0 0 1  0 0 0 0 0 0]
+        # writlabels=[0 1 1 1 1 1 1 1 1 1 1 1 1 0 0 0 0 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0 0 1 1 1 1 1 1 1 1 1 1 1 0 0 0 1 1 1 1 1 1 1 0]
+
+        # read:
+        #     events: [0, 15, 17, 32, 42, 48]
+        #     volume: [3,  2,  3,  4,  2,  0]
+
+        # write:
+        #     events: [0, 1, 7, 10, 13, 14]
+        #     volume: [0,12, 17,11,  7,  0]
+
+        # compute =[0, 1 , 18, 19, 21, 39, 53, 59]
+        # read    =[3, 0 , 2,   0,  3,  4, 2 , 0 ]
+        # write   =[0, 12, 0,  17,  0, 11, 7,  0 ]
+
+        # results:
+        compute = [0, 1, 8, 12, 16, 17, 18, 34, 45, 51]
+        read = [3, 0, 0, 0, 2, 0, 3, 4, 2, 0]
+        write = [0, 12, 17, 11, 7, 0, 0, 0, 0, 0]
+
+        # mock_get_timeseries.return_value = get_job_timeseries_from_file(job_id=2537) #457344
+
+        # # init the job decomposer
+        # jd = JobDecomposer()
+        # app_signal = jd.timestamps.flatten(), jd.read_signal.flatten(), jd.write_signal.flatten()
+        # compute, reads, writes, read_bw, write_bw = jd.get_job_representation(merge_clusters=True)
         # This is the app encoding representation for Execution Simulator
-        for sig in app_signal:
-            print(f"min = {min(sig)}")
-            print(f"max = {max(sig)}")
-            print(f"mean = {np.mean(sig)}")
-        print(f"compute={compute}, reads={reads}, read_bw={read_bw}")
-        print(f"compute={compute}, writes={writes}, write_bw={write_bw}")
+        # for sig in app_signal:
+        #     print(f"min = {min(sig)}")
+        #     print(f"max = {max(sig)}")
+        #     print(f"mean = {np.mean(sig)}")
+        # print(f"compute={compute}, reads={reads}, read_bw={read_bw}")
+        # print(f"compute={compute}, writes={writes}, write_bw={write_bw}")
 
         data = simpy.Store(self.env)
         cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=2,
                           tiers=[self.ssd_tier, self.nvram_tier])
         app = Application(self.env, name="#read-compute-write", compute=compute,
-                           read=list(map(lambda x:x*1e6/max(reads), reads)),
-                           write=list(map(lambda x:x*1e6/max(writes), writes)), data=data)
-        self.env.process(app.run(cluster, placement=[0]*len(reads)))
+                           read=list(map(lambda x:x*1e6, read)),
+                           write=list(map(lambda x:x*1e6, write)), data=data)
+        self.env.process(app.run(cluster, placement=[0]*len(read)))
 
         self.env.run()
-        fig = display_run_with_signal(data, cluster, app_signal=app_signal, width=800, height=900)
+        fig = display_run(data, cluster, width=800, height=900)
         fig.show()
 
 

@@ -113,7 +113,7 @@ class TestKmeansSignalDecomposer(unittest.TestCase):
         ksd = KmeansSignalDecomposer(signal)
         n_clusters, clusterer = ksd.get_optimal_clustering()
         bkps, labels = ksd.get_breakpoints_and_labels(clusterer, merge=True)
-        self.assertEqual(len(bkps), 2)
+        self.assertEqual(len(bkps), 1)
         self.assertListEqual(np.unique(labels).tolist(), [0, 1])
 
     def test_get_breakpoints_and_labels(self):
@@ -132,7 +132,7 @@ class TestKmeansSignalDecomposer(unittest.TestCase):
         decomposer = KmeansSignalDecomposer(signal)
         breakpoints, labels = decomposer.decompose()
         self.assertListEqual(breakpoints, [2, 5, 7, 8])
-        self.assertListEqual(labels.tolist(), [1, 1, 3, 3, 3, 2, 2, 4, 0, 0])
+        self.assertListEqual(labels.tolist(), [0, 0, 3, 3, 3, 2, 2, 4, 1, 1])
 
     def test_decompose_complexity(self):
         """Functional test that decomposes a signal and returns a list of breakpoints and labels."""
