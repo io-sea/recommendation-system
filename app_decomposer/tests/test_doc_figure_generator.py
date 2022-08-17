@@ -108,8 +108,12 @@ class TestFigGenerator(unittest.TestCase):
         self.env.process(app.run(cluster, placement=[0, 0, 0, 0, 0, 0]))
 
         self.env.run()
-        # fig = display_run_with_signal(data, cluster, app_signal=app_signal, width=800, height=900)
-        # fig.show()
+        #fig = display_run_with_signal(data, cluster, app_signal=app_signal, width=800, height=900)
+        fig = display_run(data, cluster, width=800, height=900)
+        fig.show()
+        current_dir = dirname(dirname(dirname(abspath(__file__))))
+        file_path = os.path.join(current_dir, "app_decomposer", "docs", "figure_synthetic_signal.html")
+        fig.write_html(file_path)
 
 
     @patch.object(JobDecomposer, 'get_job_timeseries')
