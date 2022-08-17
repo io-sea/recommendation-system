@@ -31,7 +31,7 @@ import app_decomposer
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
-extensions = ['sphinx.ext.autodoc', 'sphinx.ext.viewcode']
+extensions = ['sphinx.ext.autodoc', 'sphinx.ext.viewcode', 'sphinx.ext.coverage', 'sphinx.ext.napoleon']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -46,9 +46,14 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = 'app_decomposer'
-copyright = "2022, Salim Mimouni"
-author = "Salim Mimouni"
+project = 'Cluster Simulator'
+copyright = """
+Copyright(C) 2022 Bull S. A. S. - All rights reserved
+Bull, Rue Jean Jaures, B.P.68, 78340, Les Clayes-sous-Bois, France
+This is not Free or Open Source software.
+Please contact Bull S. A. S. for details about its license.
+"""
+author = 'Salim Mimouni, Bull SAS'
 
 # The version info for the project you're documenting, acts as replacement
 # for |version| and |release|, also used in various other places throughout
