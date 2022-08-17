@@ -108,8 +108,8 @@ class TestFigGenerator(unittest.TestCase):
         self.env.process(app.run(cluster, placement=[0, 0, 0, 0, 0, 0]))
 
         self.env.run()
-        fig = display_run_with_signal(data, cluster, app_signal=app_signal, width=800, height=900)
-        fig.show()
+        # fig = display_run_with_signal(data, cluster, app_signal=app_signal, width=800, height=900)
+        # fig.show()
 
 
     @patch.object(JobDecomposer, 'get_job_timeseries')
@@ -138,8 +138,8 @@ class TestFigGenerator(unittest.TestCase):
         self.env.process(app.run(cluster, placement=[0, 0, 0, 0, 0, 0]))
 
         self.env.run()
-        fig = display_run_with_signal(data, cluster, app_signal=app_signal, width=800, height=900)
-        fig.show()
+        # fig = display_run_with_signal(data, cluster, app_signal=app_signal, width=800, height=900)
+        # fig.show()
 
         #print(f"compute={events}, read={reads}, writes={writes}")
 
@@ -172,8 +172,8 @@ class TestFigGenerator(unittest.TestCase):
         self.env.process(app.run(cluster, placement=[0, 0, 0, 0, 0, 0]))
 
         self.env.run()
-        fig = display_run_with_signal(data, cluster, app_signal=app_signal, width=800, height=900)
-        fig.show()
+        # fig = display_run_with_signal(data, cluster, app_signal=app_signal, width=800, height=900)
+        # fig.show()
 
 
     def test_generate_simple_compare_app_2(self):
@@ -222,7 +222,7 @@ class TestFigGenerator(unittest.TestCase):
         self.env.process(app.run(cluster, placement=[0]*len(read)))
 
         self.env.run()
-        fig = display_run(data, cluster, width=800, height=900)
-        fig.show()
+        # fig = display_run(data, cluster, width=800, height=900)
+        # fig.show()
 
 
