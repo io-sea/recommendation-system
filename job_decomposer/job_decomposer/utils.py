@@ -262,14 +262,14 @@ def show_breakpoints(signal, breakpoints, breakpoints2=[], labels=[], labels2=[]
     #plt.plot(ab, p_signal, linestyle='dashed', linewidth=0.5)
     for i, bpt in enumerate(breakpoints):
         plt.axvline(x=bpt, linestyle='dashed',  color="black", alpha=0.5)
-        if labels.size:
+        if labels:
             plt.annotate(labels[bpt], (ab[bpt], signal[bpt]), color="black")
             
                 
     if breakpoints2:
         for bpt in breakpoints2:
             plt.axvline(x=bpt, linestyle='dotted', color="red", alpha=0.7)
-            if labels2.size:
+            if labels2:
                 plt.annotate(labels2[bpt], (ab[bpt], signal[bpt]*1.3), color="red")
         
     plt.plot(ab, signal, label="original signal")
