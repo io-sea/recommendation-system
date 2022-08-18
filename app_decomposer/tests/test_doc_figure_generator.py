@@ -181,6 +181,104 @@ class TestFigGenerator(unittest.TestCase):
         # fig = display_run_with_signal(data, cluster, app_signal=app_signal, width=800, height=900)
         # fig.show()
 
+    def test_generate_figure_show_decomposition_read_no_merge(self):
+        """Generates figures to show how AppDecomposer slices the signal into representation."""
+        timestamps, read_signal, write_signal = get_job_timeseries_from_file(job_id=2537) #457344
+        ab = np.arange(len(read_signal))
+        read_dec = KmeansSignalDecomposer(read_signal, v0_threshold=0.4)
+        read_bkps, read_labels = read_dec.decompose()
+        rec_signal = read_dec.reconstruct(read_bkps)
+        compute, volume, bandwidth = get_signal_representation(timestamps, read_signal, read_labels)
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=ab.flatten(), y=read_signal.flatten(),
+                                 mode='lines+markers', name='original bytesRead signal from IOI', line_width=1,
+                                 text=list(map(lambda x: "class="+str(x), read_labels))))
+        fig.add_trace(go.Scatter(x=ab.flatten(), y=rec_signal.flatten(), mode='lines', name='signal slices with constant bw', line_width=0.5))
+        fig.add_trace(go.Scatter(x=ab.flatten(), y=rec_signal.flatten(), mode='lines', name='phase model preview for execution simulation', line_shape='vh', line_width=0.5, line_dash='longdash'))
+        fig.update_layout(
+            title=  "Read signal decomposition",
+            legend=dict(orientation="h", yanchor="top"),
+            #xaxis_title="timestamps",
+            yaxis_title="volume conveyed by the application",
+            legend_title="Signals",
+            )
+        fig.show()
+        current_dir = dirname(dirname(dirname(abspath(__file__))))
+        file_path = os.path.join(current_dir, "app_decomposer", "docs", "decomposing_read_signal.html")
+        fig.write_html(file_path)
+        decomposition = f"""Representation: events = {compute},
+                        volumes = {volume},
+                        bandwidth = {bandwidth}"""
+        print(decomposition)
+        # fig = go.Figure()
+        # x = np.arange(len(signal))
+        # fig.add_trace(go.Scatter(x=x.flatten(), y=signal.flatten(), mode='lines', name='signal'))
+        # fig.add_trace(go.Scatter(x=x.flatten(), y=rec_signal.flatten(), mode='lines', name='reconstructed signal'))
+        # fig.show()
+    def test_generate_figure_show_decomposition_read_merge(self):
+        """Generates figures to show how AppDecomposer slices the signal into representation."""
+        timestamps, read_signal, write_signal = get_job_timeseries_from_file(job_id=2537) #457344
+        ab = np.arange(len(read_signal))
+        read_dec = KmeansSignalDecomposer(read_signal, merge=True)
+        read_bkps, read_labels = read_dec.decompose()
+        rec_signal = read_dec.reconstruct(read_bkps)
+        compute, volume, bandwidth = get_signal_representation(timestamps, read_signal, read_labels)
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=ab.flatten(), y=read_signal.flatten(),
+                                 mode='lines+markers', name='original bytesRead signal from IOI', line_width=1,
+                                 text=list(map(lambda x: "class="+str(x), read_labels))))
+        fig.add_trace(go.Scatter(x=ab.flatten(), y=rec_signal.flatten(), mode='lines', name='signal slices with constant bw', line_width=0.5))
+        fig.add_trace(go.Scatter(x=ab.flatten(), y=rec_signal.flatten(), mode='lines', name='phase model preview for execution simulation', line_shape='vh', line_width=0.5, line_dash='longdash'))
+        fig.update_layout(
+            title=  "Read signal decomposition",
+            legend=dict(orientation="h", yanchor="top"),
+            #xaxis_title="timestamps",
+            yaxis_title="volume conveyed by the application",
+            legend_title="Signals",
+            )
+        fig.show()
+        current_dir = dirname(dirname(dirname(abspath(__file__))))
+        file_path = os.path.join(current_dir, "app_decomposer", "docs", "decomposing_read_signal_merge.html")
+        fig.write_html(file_path)
+        decomposition = f"""Representation: events = {compute},
+                        volumes = {volume},
+                        bandwidth = {bandwidth}"""
+        print(decomposition)
+
+    def test_generate_figure_show_decomposition_2(self):
+        """Generates figures to show how AppDecomposer slices the signal into representation."""
+        timestamps, read_signal, write_signal = get_job_timeseries_from_file(job_id=2537) #457344
+        ab = np.arange(len(write_signal))
+        write_dec = KmeansSignalDecomposer(write_signal)
+        write_bkps, write_labels = write_dec.decompose()
+        rec_signal = write_dec.reconstruct(write_bkps)
+        compute, volume, bandwidth = get_signal_representation(timestamps, write_signal, write_labels)
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=ab.flatten(), y=write_signal.flatten(),
+                                 mode='lines+markers', name='original bytesRead signal from IOI', line_width=1,
+                                 text=list(map(lambda x: "class="+str(x), write_labels))))
+        fig.add_trace(go.Scatter(x=ab.flatten(), y=rec_signal.flatten(), mode='lines', name='signal slices with constant bw', line_width=0.5))
+        fig.add_trace(go.Scatter(x=ab.flatten(), y=rec_signal.flatten(), mode='lines', name='phase model preview for execution simulation', line_shape='vh', line_width=0.5, line_dash='longdash'))
+        fig.update_layout(
+            title=  "Write signal decomposition",
+            legend=dict(orientation="h", yanchor="top"),
+            #xaxis_title="timestamps",
+            yaxis_title="volume conveyed by the application",
+            legend_title="Signals",
+            )
+        fig.show()
+        current_dir = dirname(dirname(dirname(abspath(__file__))))
+        file_path = os.path.join(current_dir, "app_decomposer", "docs", "decomposing_write_signal.html")
+        fig.write_html(file_path)
+        decomposition = f"""Representation: events = {compute},
+                        volumes = {volume},
+                        bandwidth = {bandwidth}"""
+        print(decomposition)
+        # fig = go.Figure()
+        # x = np.arange(len(signal))
+        # fig.add_trace(go.Scatter(x=x.flatten(), y=signal.flatten(), mode='lines', name='signal'))
+        # fig.add_trace(go.Scatter(x=x.flatten(), y=rec_signal.flatten(), mode='lines', name='reconstructed signal'))
+        # fig.show()
     @patch.object(JobDecomposer, 'get_job_timeseries')
     def test_generate_simple_compare_app_2(self, mock_get_timeseries):
         """Test if JobDecomposer initializes well from dumped files containing job timeseries."""

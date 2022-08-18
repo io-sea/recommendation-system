@@ -16,8 +16,8 @@ Features
 - Transform single dimensional signal into events with associated timestamps, volume and bandwidths
 
 
-Synthetic example
-=================
+Principle illustration
+======================
 As seen in Cluster Simulator package, to simulate an execution of an application, one needs to provide a basic formalism to describe the app behavior.
 It consists of mainly three arrays of values:
 
@@ -83,10 +83,51 @@ Now we will feed this representation to the cluster_simulator module:
 .. raw:: html
     :file: docs/figure_synthetic_signal.html
 
+Decomposition steps
+===================
+
+Here is and example of an application traces collected from IO-Instrumentation database.
+We can see on the figure below the collected data volume in MB for read and write accesses of the application.
 
 .. raw:: html
     :file: docs/figure_timeseries_ioi_signal.html
 
+Let's first extract the read signal and decomposes it into phases with I/O or compute phases.
+The AppDecomposer will automatically detect I/O activity and spikes by classifying each signal point. If one hovers mouse above a signal point, the class shows up.
+
+.. raw:: html
+    :file: docs/decomposing_read_signal.html
+
+Following the upper decomposition we get the event-based representation:
+
+.. topic:: Representation elements
+
+    events = [0, 1, 17, 19, 35, 36, 47, 48, 54],
+
+    these are timestamps at which an I/O event is expected. These timestamps do not take into account the width of I/O spikes, as they are supposed to be infinitely narrow (dirac distribution). Between each two consecutive events, it is supposed that there is a pure compute phase.
+
+    volumes = [22539772, 25123014, 166522759, 27021171, 152762756, 15660482, 130355500, 33094134, 0],
+
+    the volumes are the sum of collected volume for each phase
+
+    bandwidth = [2253977.2, 5024602.8, 16652275.9, 1801411.4, 15276275.6, 1566048.2, 26071100.0, 6618826.8, 0]
+
+    in this example, the sampling period = 5s, so an I/O spike reaching 1MB for two consequent points will collect 2MB in 10s and reaches a bandwidth of 0.2MB/s.
+
+We apply the same process for the write signal.
+
+.. raw:: html
+    :file: docs/decomposing_write_signal.html
+
+And it detailed representation:
+
+.. topic:: Representation elements
+
+    events = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 33, 34, 35, 36, 37, 38, 39, 40, 44, 45, 46, 47, 48, 49, 50]
+
+    volumes = [0, 33068580, 73718411, 85482955, 39079032, 19204163, 22885166, 17794806, 12256739, 9045658, 10721933, 91289590, 90606733, 153142483, 17539498, 14972723, 16343069, 9816493, 14389077, 37970011, 8593287, 11060167, 8889613, 20927905, 23732530, 34655496, 45001180, 36068500, 19717086, 24719515, 15545906, 25512431, 12743845, 40467940, 13129635, 46422630, 7074681, 12118344, 0]
+
+    bandwidth = [0, 6613716.0, 14743682.2, 8548295.5, 7815806.4, 3840832.6, 2288516.6, 3558961.2, 2451347.8, 1809131.6, 2144386.6, 9128959.0, 18121346.6, 15314248.3, 3507899.6, 2994544.6, 3268613.8, 1963298.6, 2877815.4, 3797001.1, 1718657.4, 2212033.4, 1777922.6, 2092790.5, 4746506.0, 6931099.2, 9000236.0, 7213700.0, 3943417.2, 2471951.5, 3109181.2, 1700828.7333333334, 2548769.0, 8093588.0, 2625927.0, 4642263.0, 1414936.2, 2423668.8, 0]
 
 
 * TODO
