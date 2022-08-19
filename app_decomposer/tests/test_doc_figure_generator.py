@@ -341,6 +341,71 @@ class TestFigGenerator(unittest.TestCase):
         # fig.add_trace(go.Scatter(x=x.flatten(), y=signal.flatten(), mode='lines', name='signal'))
         # fig.add_trace(go.Scatter(x=x.flatten(), y=rec_signal.flatten(), mode='lines', name='reconstructed signal'))
         # fig.show()
+
+    def test_generate_figure_show_decomposition_read_large_v0(self):
+        """Generates figures to show how AppDecomposer slices the signal into representation."""
+        timestamps, read_signal, write_signal = get_job_timeseries_from_file(job_id=2537) #457344
+        ab = np.arange(len(read_signal))
+        read_dec = KmeansSignalDecomposer(read_signal, v0_threshold=0.4)
+        read_bkps, read_labels = read_dec.decompose()
+        rec_signal = read_dec.reconstruct(read_bkps)
+        compute, volume, bandwidth = get_signal_representation(timestamps, read_signal, read_labels)
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=ab.flatten(), y=read_signal.flatten(),
+                                 mode='lines+markers', name='original bytesRead signal from IOI', line_width=1.5,
+                                 text=list(map(lambda x: "class="+str(x), read_labels))))
+        fig.add_trace(go.Scatter(x=ab.flatten(), y=rec_signal.flatten(), mode='lines', name='signal slices with constant bw', line_width=1))
+        fig.add_trace(go.Scatter(x=ab.flatten(), y=rec_signal.flatten(), mode='lines', name='phase model preview for execution simulation', line_shape='vh', line_width=1))
+        # , line_dash='longdash'
+        fig.update_layout(
+            title=  "Read signal decomposition with threshold=40%",
+            legend=dict(orientation="h", yanchor="top"),
+            #xaxis_title="timestamps",
+            yaxis_title="volume conveyed by the application",
+            legend_title="Signals",
+            )
+        fig.show()
+        current_dir = dirname(dirname(dirname(abspath(__file__))))
+        file_path = os.path.join(current_dir, "app_decomposer", "docs", "decomposing_read_signal_high_threshold.html")
+        fig.write_html(file_path)
+        decomposition = f"""Representation: events = {compute},
+                        volumes = {volume},
+                        bandwidth = {bandwidth}"""
+        print(decomposition)
+
+
+    def test_generate_figure_show_decomposition_read_compare_low_large_v0(self):
+        """Generates figures to show how AppDecomposer slices the signal into representation."""
+        timestamps, read_signal, write_signal = get_job_timeseries_from_file(job_id=2537) #457344
+        ab = np.arange(len(read_signal))
+
+        high_read_dec = KmeansSignalDecomposer(read_signal, v0_threshold=0.4)
+        high_read_bkps, high_read_labels = high_read_dec.decompose()
+        high_rec_signal = high_read_dec.reconstruct(high_read_bkps)
+
+        low_read_dec = KmeansSignalDecomposer(read_signal, v0_threshold=0.05)
+        low_read_bkps, low_read_labels = low_read_dec.decompose()
+        low_rec_signal = low_read_dec.reconstruct(low_read_bkps)
+
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=ab.flatten(), y=read_signal.flatten(),
+                                 mode='markers', name='original bytesRead signal from IOI', line_width=1.5))
+        fig.add_trace(go.Scatter(x=ab.flatten(), y=high_rec_signal.flatten(), mode='lines', name='signal decomposition with high cluster-0-threshold=40%', line_width=1))
+        fig.add_trace(go.Scatter(x=ab.flatten(), y=low_rec_signal.flatten(), mode='lines', name='signal decomposition with low cluster-0-threshold=5%', line_width=1))
+        fig.update_layout(
+            title=  "Comparing signal decomposition with threshold=40% and threshold=5%",
+            legend=dict(orientation="h", yanchor="top"),
+            #xaxis_title="timestamps",
+            yaxis_title="volume conveyed by the application",
+            legend_title="Signals",
+            )
+        fig.show()
+        current_dir = dirname(dirname(dirname(abspath(__file__))))
+        file_path = os.path.join(current_dir, "app_decomposer", "docs", "compare_decomposing_signal_high_low_threshold.html")
+        fig.write_html(file_path)
+
+
+
     @patch.object(JobDecomposer, 'get_job_timeseries')
     def test_generate_simple_compare_app_2(self, mock_get_timeseries):
         """Test if JobDecomposer initializes well from dumped files containing job timeseries."""

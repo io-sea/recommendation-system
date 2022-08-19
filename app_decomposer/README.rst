@@ -162,6 +162,36 @@ In order to validate that the volume conveyed by the application is kept consist
 .. raw:: html
     :file: docs/decomposing_cumvol_write_signal_with_merge.html
 
+Another decomposition parameter worth citing is the ``cluster-0-threshold`` that fine tunes the ordinates classification from signal levels. The default value is 0.05, which means that cluster-0 points overall weight proportions among other ordinates should average below 5% of the total ordinate values. If this value is greater, the algorithm will group lower points with higher value ones to not exceed 40%.
 
-* TODO
+The lower the ``cluster-0-threshold`` the more severe the selection of pure compute point will be.
+
+.. code-block:: python
+    :caption: Decomposition with cluster-0-threshold = 0.4
+
+    read_dec = SignalDecomposer(read_signal, v0_threshold=0.4)
+    read_bkps, read_labels = read_dec.decompose()
+
+
+.. raw:: html
+    :file: docs/decomposing_read_signal_high_threshold.html
+
+In this graph we can see that points 0, 1, 2, 20, 21, 22, 23,... are considered as part of cluster-0 class, representing a pure compute phase with no data.
+This is a coarse approximation of the timeseries and leads to a greater error in the decomposition as well as in the cumulative volume curves.
+
+To compare the effect of ``cluster-0-threshold`` value on the decomposition, generated decomposition are plotted with values of 40% and 5% for the threshold. The figure below is obtained.
+
+
+
+.. raw:: html
+    :file: docs/compare_decomposing_signal_high_low_threshold.html
+
+Introducing such parameter for the decomposition algorithm allow to :
+
+* adapt the decomposition resolution to the complexity and to the length of the application runtime
+
+* avoid having a ordinate level threshold because conveyed volumes can vary in absolute and relative values within the application.
+
+
+
 
