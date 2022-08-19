@@ -119,7 +119,7 @@ We apply the same process for the write signal.
 .. raw:: html
     :file: docs/decomposing_write_signal.html
 
-And it detailed representation:
+And its detailed representation:
 
 .. topic:: Representation elements
 
@@ -128,6 +128,39 @@ And it detailed representation:
     volumes = [0, 33068580, 73718411, 85482955, 39079032, 19204163, 22885166, 17794806, 12256739, 9045658, 10721933, 91289590, 90606733, 153142483, 17539498, 14972723, 16343069, 9816493, 14389077, 37970011, 8593287, 11060167, 8889613, 20927905, 23732530, 34655496, 45001180, 36068500, 19717086, 24719515, 15545906, 25512431, 12743845, 40467940, 13129635, 46422630, 7074681, 12118344, 0]
 
     bandwidth = [0, 6613716.0, 14743682.2, 8548295.5, 7815806.4, 3840832.6, 2288516.6, 3558961.2, 2451347.8, 1809131.6, 2144386.6, 9128959.0, 18121346.6, 15314248.3, 3507899.6, 2994544.6, 3268613.8, 1963298.6, 2877815.4, 3797001.1, 1718657.4, 2212033.4, 1777922.6, 2092790.5, 4746506.0, 6931099.2, 9000236.0, 7213700.0, 3943417.2, 2471951.5, 3109181.2, 1700828.7333333334, 2548769.0, 8093588.0, 2625927.0, 4642263.0, 1414936.2, 2423668.8, 0]
+
+As we can see on the ``write`` timeseries, a unique I/O activity can have multiple sub-phases and levels of bandwidths. A user could want to group them into one unique and average checkpoint. The AppDecomposer has a specific ``merge`` option  for this:
+
+.. code-block:: python
+    :caption: enabling merge of same class points into unique spike
+
+    # enabling merge of same class points
+    write_dec = SignalDecomposer(write_signal, merge=True)
+    write_bkps, write_labels = write_dec.decompose()
+
+
+
+.. raw:: html
+    :file: docs/decomposing_write_signal_with_merge.html
+
+Now we can see that the write signal is decomposed into four distinct big checkpoints, with an averaged bandwidth for each. The checkpoints are separated by 0-class points.
+
+This simplify drastically the representation (for the write signal) which becomes human-readible.
+
+.. topic:: Representation elements
+
+    events = [0, 1, 8, 12, 16, 17]
+
+    volumes = [0, 323257443, 495540649, 224952644, 131957075, 0]
+
+    bandwidth = [0, 5387624.05, 5829889.988235294, 4090048.0727272728, 3770202.1428571427, 0]
+
+
+In order to validate that the volume conveyed by the application is kept consistent by the decomposition, we plot the cumulative volumes of the decomposition model in line with the cumulative volume of the original signal collected from IO-Instrumentation.
+
+
+.. raw:: html
+    :file: docs/decomposing_cumvol_write_signal_with_merge.html
 
 
 * TODO
