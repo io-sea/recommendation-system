@@ -3,6 +3,7 @@ import time
 import numpy as np
 from loguru import logger
 from sklearn.cluster import KMeans
+import plotly.graph_objects as go
 
 from app_decomposer.signal_decomposer import KmeansSignalDecomposer, get_lowest_cluster, arrange_labels
 
@@ -110,9 +111,9 @@ class TestKmeansSignalDecomposer(unittest.TestCase):
         """Tests that returns are lists of breakpoints and labels when merge=True.
         In this case, there is 1 breakpoint and two values for labels."""
         signal = np.arange(500).reshape(-1, 1) # shape is (n, 1)
-        ksd = KmeansSignalDecomposer(signal)
+        ksd = KmeansSignalDecomposer(signal, merge=True)
         n_clusters, clusterer = ksd.get_optimal_clustering()
-        bkps, labels = ksd.get_breakpoints_and_labels(clusterer, merge=True)
+        bkps, labels = ksd.get_breakpoints_and_labels(clusterer)
         self.assertEqual(len(bkps), 1)
         self.assertListEqual(np.unique(labels).tolist(), [0, 1])
 
@@ -120,7 +121,7 @@ class TestKmeansSignalDecomposer(unittest.TestCase):
         """Tests that returns are lists of breakpoints and labels when merge=False.
         In this case, there is 1 breakpoint and two values for labels."""
         signal = np.array([0]*10+[1]*30).reshape(1, -1) # shape is (n, 1)
-        ksd = KmeansSignalDecomposer(signal)
+        ksd = KmeansSignalDecomposer(signal, merge=False)
         n_clusters, clusterer = ksd.get_optimal_clustering()
         bkps, labels = ksd.get_breakpoints_and_labels(clusterer)
         self.assertEqual(len(bkps), 1)
@@ -143,6 +144,33 @@ class TestKmeansSignalDecomposer(unittest.TestCase):
         breakpoints, labels = decomposer.decompose()
         print(f"elapsed_time for N={N} :  {time.time() - start_time}")
 
+    def test_reconstruct_1(self):
+        """Test if reconstruction algorithm works well with some identified signals."""
+        signal = np.array([1, 1, 1, 0, 0, 0])
+        decomposer = KmeansSignalDecomposer(signal)
+        breakpoints, labels = decomposer.decompose()
+        rec_signal = decomposer.reconstruct(breakpoints)
+        np.testing.assert_array_almost_equal(rec_signal.flatten(), signal.flatten())
+
+    def test_reconstruct_2(self):
+        """Test if reconstruction algorithm works well with some identified signals."""
+        signal = np.array([1, 1, 0, 0])
+        decomposer = KmeansSignalDecomposer(signal)
+        breakpoints, labels = decomposer.decompose()
+        rec_signal = decomposer.reconstruct(breakpoints)
+        np.testing.assert_array_almost_equal(rec_signal.flatten(), signal.flatten())
+
+    def test_reconstruct_3(self):
+        """Test if reconstruction algorithm works well with some identified signals."""
+        signal = np.array([0, 1, 0, 0])
+        decomposer = KmeansSignalDecomposer(signal)
+        breakpoints, labels = decomposer.decompose()
+        rec_signal = decomposer.reconstruct(breakpoints)
+        print(f"labels= {labels}")
+        print(f"bkps= {breakpoints}")
+        print(f"signal={rec_signal.flatten()}")
+        #self.assertTrue(isinstance(rec_signal, np.ndarray))
+        np.testing.assert_array_almost_equal(rec_signal.flatten(), signal.flatten())
 
 
 if __name__ == '__main__':

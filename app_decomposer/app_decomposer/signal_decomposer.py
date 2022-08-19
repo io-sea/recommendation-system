@@ -13,6 +13,7 @@ Please contact Bull S. A. S. for details about its license.
 from abc import ABC, abstractmethod
 from sklearn.cluster import KMeans
 import numpy as np
+import pwlf
 import warnings
 
 # TODO: implement and hdbscan version for clustering
@@ -69,11 +70,21 @@ def arrange_labels(labels, label0):
 
 class KmeansSignalDecomposer(SignalDecomposer):
     """Implements signal decomposer based on kmeans clustering."""
-    def __init__(self, signal):
+    def __init__(self, signal, v0_threshold=0.05, merge=False):
+        """Initializes a kmeans clustering based decomposer.
+
+        Args:
+            signal (iterable): 1d signal to decompose.
+            v0_threshold (float, optional): relative mean value of the weight of the lowest level of cluster point ordinates. Defaults to 0.05.
+            merge (bool, optional): If True merges all labels > 0 into one label. Defaults to False.
+        """
         # convert any iterable into numpy array of size (n, 1)
         self.signal = np.array(list(signal)).reshape(-1, 1)
+        self.v0_threshold = v0_threshold
+        self.merge = merge
 
-    def get_optimal_clustering(self, v0_threshold = 0.05):
+
+    def get_optimal_clustering(self):
         """Get the optimal number of clusters when cluster0 average values are below v0_threshold comparing to total mean values. The clustering is done in the 1-dimension that carries the dataflow signal.
 
         Args:
@@ -84,7 +95,7 @@ class KmeansSignalDecomposer(SignalDecomposer):
         """
         n_clusters = 1
         v0_weight = 1
-        while v0_weight > v0_threshold:
+        while v0_weight > self.v0_threshold:
             n_clusters += 1
             if n_clusters > len(self.signal):
                 # if n_clusters exceeds signal points, exit the loop
@@ -97,7 +108,7 @@ class KmeansSignalDecomposer(SignalDecomposer):
 
         return n_clusters, kmeans
 
-    def get_breakpoints_and_labels(self, kmeans, merge=False):
+    def get_breakpoints_and_labels(self, kmeans):
         """Returns breakpoints and labels from clustering algorithm. Labels could be merged
         Args:
             kmeans (sklearn.cluster.KMeans): clustering object
@@ -110,7 +121,7 @@ class KmeansSignalDecomposer(SignalDecomposer):
         label0 = get_lowest_cluster(kmeans.labels_, self.signal)
         labels =arrange_labels(kmeans.labels_, label0)
 
-        labels = np.where(labels > 0, 1, 0) if merge else labels
+        labels = np.where(labels > 0, 1, 0) if self.merge else labels
         return  ab[np.insert(np.where(np.diff(labels)!=0, True, False), 0, False)].tolist(), labels
 
 
@@ -124,7 +135,22 @@ class KmeansSignalDecomposer(SignalDecomposer):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             n_clusters, clusterer = self.get_optimal_clustering()
-        return self.get_breakpoints_and_labels(clusterer, merge=False)
+        return self.get_breakpoints_and_labels(clusterer)
+
+    def reconstruct(self, breakpoints):
+        """Method to get a reconstructed piecewise linear signal from breakpoints.
+
+        Args:
+            breakpoints (list): list of indices where labels changes.
+
+        Returns:
+            _type_: _description_
+        """
+        ab = np.arange(len(self.signal))
+        my_pwlf = pwlf.PiecewiseLinFit(ab, self.signal, degree=0)
+        bkps = np.array([min(ab)] + list(map(lambda x: x-1, breakpoints)) + [max(ab)])
+        my_pwlf.fit_with_breaks(bkps)
+        return my_pwlf.predict(ab)
 
 
 
