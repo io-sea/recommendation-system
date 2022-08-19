@@ -185,16 +185,17 @@ class TestFigGenerator(unittest.TestCase):
         """Generates figures to show how AppDecomposer slices the signal into representation."""
         timestamps, read_signal, write_signal = get_job_timeseries_from_file(job_id=2537) #457344
         ab = np.arange(len(read_signal))
-        read_dec = KmeansSignalDecomposer(read_signal, v0_threshold=0.4)
+        read_dec = KmeansSignalDecomposer(read_signal, v0_threshold=0.05)
         read_bkps, read_labels = read_dec.decompose()
         rec_signal = read_dec.reconstruct(read_bkps)
         compute, volume, bandwidth = get_signal_representation(timestamps, read_signal, read_labels)
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=ab.flatten(), y=read_signal.flatten(),
-                                 mode='lines+markers', name='original bytesRead signal from IOI', line_width=1,
+                                 mode='lines+markers', name='original bytesRead signal from IOI', line_width=1.5,
                                  text=list(map(lambda x: "class="+str(x), read_labels))))
-        fig.add_trace(go.Scatter(x=ab.flatten(), y=rec_signal.flatten(), mode='lines', name='signal slices with constant bw', line_width=0.5))
-        fig.add_trace(go.Scatter(x=ab.flatten(), y=rec_signal.flatten(), mode='lines', name='phase model preview for execution simulation', line_shape='vh', line_width=0.5, line_dash='longdash'))
+        fig.add_trace(go.Scatter(x=ab.flatten(), y=rec_signal.flatten(), mode='lines', name='signal slices with constant bw', line_width=1))
+        fig.add_trace(go.Scatter(x=ab.flatten(), y=rec_signal.flatten(), mode='lines', name='phase model preview for execution simulation', line_shape='vh', line_width=1))
+        # , line_dash='longdash'
         fig.update_layout(
             title=  "Read signal decomposition",
             legend=dict(orientation="h", yanchor="top"),
@@ -225,10 +226,10 @@ class TestFigGenerator(unittest.TestCase):
         compute, volume, bandwidth = get_signal_representation(timestamps, read_signal, read_labels)
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=ab.flatten(), y=read_signal.flatten(),
-                                 mode='lines+markers', name='original bytesRead signal from IOI', line_width=1,
+                                 mode='lines+markers', name='original bytesRead signal from IOI', line_width=1.5,
                                  text=list(map(lambda x: "class="+str(x), read_labels))))
-        fig.add_trace(go.Scatter(x=ab.flatten(), y=rec_signal.flatten(), mode='lines', name='signal slices with constant bw', line_width=0.5))
-        fig.add_trace(go.Scatter(x=ab.flatten(), y=rec_signal.flatten(), mode='lines', name='phase model preview for execution simulation', line_shape='vh', line_width=0.5, line_dash='longdash'))
+        fig.add_trace(go.Scatter(x=ab.flatten(), y=rec_signal.flatten(), mode='lines', name='signal slices with constant bw', line_width=1))
+        fig.add_trace(go.Scatter(x=ab.flatten(), y=rec_signal.flatten(), mode='lines', name='phase model preview for execution simulation', line_shape='vh', line_width=1))#line_dash='longdash'))
         fig.update_layout(
             title=  "Read signal decomposition",
             legend=dict(orientation="h", yanchor="top"),
@@ -255,10 +256,10 @@ class TestFigGenerator(unittest.TestCase):
         compute, volume, bandwidth = get_signal_representation(timestamps, write_signal, write_labels)
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=ab.flatten(), y=write_signal.flatten(),
-                                 mode='lines+markers', name='original bytesRead signal from IOI', line_width=1,
+                                 mode='lines+markers', name='original bytesRead signal from IOI', line_width=1.5,
                                  text=list(map(lambda x: "class="+str(x), write_labels))))
-        fig.add_trace(go.Scatter(x=ab.flatten(), y=rec_signal.flatten(), mode='lines', name='signal slices with constant bw', line_width=0.5))
-        fig.add_trace(go.Scatter(x=ab.flatten(), y=rec_signal.flatten(), mode='lines', name='phase model preview for execution simulation', line_shape='vh', line_width=0.5, line_dash='longdash'))
+        fig.add_trace(go.Scatter(x=ab.flatten(), y=rec_signal.flatten(), mode='lines', name='signal slices with constant bw', line_width=1))
+        fig.add_trace(go.Scatter(x=ab.flatten(), y=rec_signal.flatten(), mode='lines', name='phase model preview for execution simulation', line_shape='vh', line_width=1)) #line_dash='longdash'))
         fig.update_layout(
             title=  "Write signal decomposition",
             legend=dict(orientation="h", yanchor="top"),
@@ -337,6 +338,13 @@ class TestFigGenerator(unittest.TestCase):
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=timestamps.flatten(), y=reads.flatten(), mode='lines', name='bytesRead'))
         fig.add_trace(go.Scatter(x=timestamps.flatten(), y=writes.flatten(), mode='lines', name='bytesWritten'))
+        fig.update_layout(
+            title=  "Signal sample from real application instrumented with IOI",
+            legend=dict(orientation="h", yanchor="top"),
+            #xaxis_title="timestamps",
+            yaxis_title="volume conveyed by the application",
+            legend_title="Signals",
+            )
         fig.show()
         current_dir = dirname(dirname(dirname(abspath(__file__))))
         file_path = os.path.join(current_dir, "app_decomposer", "docs", "figure_timeseries_ioi_signal.html")
