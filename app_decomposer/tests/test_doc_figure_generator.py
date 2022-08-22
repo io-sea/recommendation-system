@@ -104,7 +104,7 @@ class TestFigGenerator(unittest.TestCase):
         data = simpy.Store(self.env)
         cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=2,
                           tiers=[self.ssd_tier, self.nvram_tier])
-        app = Application(self.env, name="#read-compute-write", compute=compute,
+        app = Application(self.env, name="#read-compute-write", compute=[0, 2],
                            read=list(map(lambda x:x*1e6, reads)),
                            write=list(map(lambda x:x*1e6, writes)), data=data)
         self.env.process(app.run(cluster, placement=[0, 0, 0, 0, 0, 0]))

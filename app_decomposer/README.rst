@@ -7,13 +7,14 @@ It is a part of the Recommandation System called **App Decomposer**. The big pic
 
 
 
-A package that detect for an instrumented app compute, read I/O and write I/O phases and encodes the sequential behavior as event-based numerical arrays.
+A package that detects from an instrumented app signals, the compute, read I/O and write I/O phases events and encodes them as sequential numerical arrays.
 
 Features
 --------
 
 - Transform IOI timeseries traces into a sequential representation of an HPC application.
 - Transform single dimensional signal into events with associated timestamps, volume and bandwidths
+- Combine multi dimensional signal into events with associated timestamps, volume and bandwidths
 
 
 Principle illustration
@@ -35,7 +36,7 @@ It consists of mainly three arrays of values:
     write=[0, 5e9],  # write 5GB at first event, and 10GB at the second, after compute phase
     data=data)        # collected data for monitoring
 
-The role of the app decomposer module is to provide a complete application description from signals retrieved by the IO-Instrumentation (IOI) product. The IOI instruments job execution in an HPC cluster and collects many timeseries. Typically, each 5 seconds, IOI records in database the amount of data read by the application (summing all nodes volumes) et save it in the database, as well as the amount of total data written by the application. This will issue two timeseries ``read_volume`` and ``write_volume`` among others.
+The role of the app decomposer module is to provide a data driven description of the application from signals retrieved by the IO-Instrumentation (IOI) product. The IOI instruments job execution in an HPC cluster and collects many timeseries. Typically, each 5 seconds, IOI records in database the amount of data read by the application (summing all nodes volumes) et save it in the database, as well as the amount of total data written by the application. This will issue two timeseries ``read_volume`` and ``write_volume`` among others.
 
 To illustrate this package ability, we will focus on the following synthetic signal sample.
 
@@ -64,19 +65,21 @@ We get the following representation output:
     # then waits 4 timestamps of compute phase for next event
     # at next event : writes 2MB of data at 1MB/s
     compute=[0, 4], writes=[0, 2], write_bw=[0, 1.0]
+    # when combined, the application is described as follows:
+    compute=[0, 2], reads=[2, 0], writes=[0, 2]
 
 
-Now we will feed this representation to the cluster_simulator module:
+Now we will feed this representation to the **Cluster Simulator** module:
 
 .. code-block:: python
     :caption: feeding representation to simulator
 
     app = Application(self.env, name="#read-compute-write",
-                        compute=[0, 4],
+                        compute=[0, 2],
                         read=[2, 0],
                         write=[0, 2], data=data)
 
-    self.env.process(app.run(cluster, placement=[0, 0, 0, 0, 0, 0]))
+    self.env.process(app.run(cluster, placement=[0, 0]))
     self.env.run()
 
 
