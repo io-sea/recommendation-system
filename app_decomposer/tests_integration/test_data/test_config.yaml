@@ -1,0 +1,4 @@
+keycloak:
+  uri: https://localhost:18443
+  realm: atos-data-management
+  client: io-instrumentation

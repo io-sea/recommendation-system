@@ -1,0 +1,4 @@
+keycloak:
+  uri: https://false_uri:666
+  realm: my_realm
+  client: my_client
