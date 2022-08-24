@@ -17,8 +17,7 @@ import random
 import numpy as np
 from scipy import integrate
 from app_decomposer.signal_decomposer import KmeansSignalDecomposer, get_lowest_cluster
-from app_decomposer.api_connector import request_delegator, check_http_code, TimeSeries, \
-    MetaData, MinMax, MinMaxDuration, JobSearch
+from app_decomposer.api_connector import TimeSeries, MetaData, JobSearch
 
 def get_phase_volume(signal, method="sum", start_index=0, end_index=-1, dx=1):
     """Method allowing many functions to compute the total volume of data for a given phase boundary in a signal array.
@@ -189,7 +188,8 @@ def get_signal_representation(timestamps, signal, labels, merge_clusters=False):
 
     return compute, data, bandwidth
 
-
+class JobDecomposerConfig:
+    pass
 class JobConnector:
     """Given a slurm job id, this class allows to retrieve volume timeseries and nodecount metadata to be used later by the job decomposer."""
     def __init__(self, api_uri, api_token, job_id):
@@ -200,7 +200,37 @@ class JobConnector:
             api_token (string): the api token of the user account used.
             job_id (int): the slurm job id number.
         """
-        pass
+        self.api_uri = api_uri
+        self.api_token = api_token
+
+    def slurm_id_2_obj_id(self, job_id):
+        job_search = JobSearch(self.api_uri,
+                               f"Bearer {self.keycloakToken}",
+                               job_filter={"jobid": {"contains": str(job_id)}})
+        return job_search.job_objids_list[0]
+
+    def get_node_count(self, object_id):
+        metadata = MetaData(api_uri=self.api_uri,
+                            api_token=f"Bearer {self.keycloakToken}",
+                            object_id=object_id)
+        data = metadata.get_all_metadata()
+        return data["nodeCount"]
+
+    def get_job_data(self, object_id):
+        time_series = TimeSeries(api_uri=self.api_uri,
+                                 api_token=f"Bearer {self.keycloakToken}",
+                                 object_id=object_id,
+                                 type_series='volume')
+        data = time_series.get_data_by_label()
+        return data["timestamps"], data["bytesRead"], data["bytesWritten"]
+
+    def get_data(self):
+        object_id = self.slurm_id_2_obj_id(job_id)
+        node_count = self.get_node_count(object_id)
+        return self.get_job_data(object_id)
+
+
+
 
 
 class JobDecomposer:
@@ -216,22 +246,15 @@ class JobDecomposer:
         self.signal_decomposer = signal_decomposer
         self.timestamps, self.read_signal, self.write_signal = self.get_job_timeseries(api_uri, keycloak_token)
 
-    def get_job_timeseries(self, api_uri, keycloak_token):
+    def get_job_timeseries(self, api_uri, api_token):
         """Method to extract read and write timeseries for a job instrumented in IOI.
-        TODO: connect this method directly to the IOI database.
         For the moment, data will be mocked by a csv file containing the timeseries.
 
         Returns:
             timestamps, read_signal, write_signal (numpy array): various arrays of the job timeseries.
         """
-        job_search = JobSearch(self.api_uri,
-                               f"Bearer {self.keycloakToken}",
-                               job_filter={"jobid": {"contains": "3336"}})
-
-
-
-
-        return 0, 0, 0
+        job_connector = JobConnector(api_uri, api_token, self.job_id)
+        return job_connector.get_data()
 
     def get_phases(self):
         """Get phases from each timeserie of the job."""
