@@ -22,8 +22,7 @@ from tests_integration.iopa_integration_config import get_keycloak_token
 from tests_integration.iopa_integration_config import get_mongo_hostname, get_mongo_ipv4_port
 from tests_integration.iopa_integration_config import MongoDB, __MONGO_DUMP__
 from app_decomposer.api_connector import request_delegator, check_http_code, TimeSeries, \
-    MetaData, MinMax, LabExpResult, LabExpDetailId, LabExpStart, LabExpFail, MinMaxDuration, \
-    JobSearch
+    MetaData, MinMax, MinMaxDuration, JobSearch
 
 
 class TestFunctions(unittest.TestCase):
@@ -113,7 +112,6 @@ class TestTimeSeries(unittest.TestCase):
                                  object_id='5e78805e3a185aaa08517c1b',
                                  type_series='volume')
         data = time_series.get_data_by_label()
-
         self.assertIn('timestamp', data)
         self.assertEqual(data['timestamp'].tolist(), [1570636800000, 1570636805000])
         self.assertEqual(data['bytesRead'].tolist(), [138336721, 0])
@@ -200,97 +198,6 @@ class TestMinMaxDuration(unittest.TestCase):
         data = minmax_duration.get_data()
         self.assertDictEqual(data, {'min': 5, 'max': 604800})
 
-
-class TestLabExpResult(unittest.TestCase):
-    """ Test LabExpResult functionalities """
-
-    def setUp(self):
-        self.keycloakToken = get_keycloak_token()
-        # To disable useless warnings with requests module on https without certificate
-        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-    def test_get_data_completed(self):
-        """ Test get_data method returns the good data from database.
-
-        The data fetched are from the "completed" experiment.
-        """
-        api_uri = f"https://{get_backend_hostname()}:{get_backend_ipv4_port()}"
-
-        lab_exp_result = LabExpResult(api_uri=api_uri,
-                                      api_token=f"Bearer {self.keycloakToken}",
-                                      experiment_id='5f69e2bdcf20e92bb02c4692')
-        result = lab_exp_result.get_data()
-
-        expected_result = [
-            'clustering',
-            [
-                {
-                    "jobid": "5d8b58be0187784d71fd8a7e",
-                    "label": 2,
-                    "coordinates": [0.04, 10.3, 0.6]
-                },
-                {
-                    "jobid": "5d81e8ce0187784d71fc71e2",
-                    "label": 0,
-                    "coordinates": [0.1234, 1, 1]
-                },
-                {
-                    "jobid": "5d52cd5c609bdd51a565a633",
-                    "label": 1,
-                    "coordinates": [-1.22, -1.01, -1]
-                }
-            ]
-        ]
-        self.assertListEqual(result, expected_result)
-
-
-class TestLabExpDetailId(unittest.TestCase):
-    """ Test LabExpDetailId functionalities """
-
-    def setUp(self):
-        self.keycloakToken = get_keycloak_token()
-        # To disable useless warnings with requests module on https without certificate
-        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-        self.api_uri = f"https://{get_backend_hostname()}:{get_backend_ipv4_port()}"
-
-    def test_get_data_idle(self):
-        """ Test get_data method returns the good data from database.
-
-        The data fetched are from the "idle" experiment.
-        """
-        lab_exp_result = LabExpDetailId(api_uri=self.api_uri,
-                                        api_token=f"Bearer {self.keycloakToken}",
-                                        experiment_id='5f69db74cf20e9010f1a3652')
-        result = lab_exp_result.get_data()
-        self.assertIn('jobs', result)
-        self.assertEqual(result['type'], 'clustering')
-        self.assertEqual(result['status'], 'idle')
-        self.assertEqual(result['user'], 'ioi-admin')
-        self.assertEqual(result['name'], 'Idle Clustering Exp')
-
-    def test_get_status_idle(self):
-        """ Test get_status method returns the good status of an experiment.
-
-        The data fetched are from the "idle" experiment.
-        """
-        lab_exp_result = LabExpDetailId(api_uri=self.api_uri,
-                                        api_token=f"Bearer {self.keycloakToken}",
-                                        experiment_id='5f69db74cf20e9010f1a3652')
-        status = lab_exp_result.get_status()
-        self.assertEqual(status, 'idle')
-
-    def test_check_connection_no_credential(self):
-        """ Test 'check_connection' method returns True, if the request returns a 403 code.
-
-        The data fetched are from the "idle" experiment.
-        """
-        lab_exp_result = LabExpDetailId(api_uri=self.api_uri,
-                                        api_token="not_needed_for_this_test",
-                                        experiment_id='not_needed_for_this_test')
-        self.assertTrue(lab_exp_result.check_connection())
-
-
 class TestJobSearch(unittest.TestCase):
     """ Test JobSearch functionalities """
 
@@ -342,6 +249,17 @@ class TestJobSearch(unittest.TestCase):
         self.assertEqual(count, len(expected_ids))
         self.assertEqual(ids, expected_ids)
 
+class TestGetJobData(unittest.TestCase):
+    """Test functionnalities needed for job decomposer to get job data."""
+
+    def setUp(self):
+        self.keycloakToken = get_keycloak_token()
+        # To disable useless warnings with requests module on https without certificate
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+        self.api_uri = f"https://{get_backend_hostname()}:{get_backend_ipv4_port()}"
+
+
     def test_job_search_by_jobid(self):
         """Test job retrieval when having only the job id that is visible in IOI."""
         job_search = JobSearch(self.api_uri,
@@ -349,6 +267,40 @@ class TestJobSearch(unittest.TestCase):
                                job_filter={"jobid": {"contains": "3336"}})
 
         self.assertEqual(job_search.job_objids_list[0], "5d7bd95e0187784d71fbbf38")
+
+    def test_get_nodecount_metadata(self):
+        """Test nodecount method returns the good information for the selected job.
+        """
+        metadata = MetaData(api_uri=self.api_uri,
+                            api_token=f"Bearer {self.keycloakToken}",
+                            object_id='5e78805e3a185aaa08517c1b')
+        data = metadata.get_all_metadata()
+        # Verify the main field are in the data retrieved
+        self.assertIn("nodeCount", data)
+        # Verify the information corresponds to the good job.
+        self.assertEqual(data["nodeCount"], 1)
+
+    def test_get_job_timeseries(self):
+        """Test method that gathers all needed data from slurm jobid necessary for the app decomposer."""
+        target_jobid = 666
+        job_search = JobSearch(self.api_uri,
+                               f"Bearer {self.keycloakToken}",
+                               job_filter={"jobid": {"contains": str(target_jobid)}})
+        object_id = job_search.job_objids_list[0]
+        metadata = MetaData(api_uri=self.api_uri,
+                            api_token=f"Bearer {self.keycloakToken}",
+                            object_id=object_id)
+        data = metadata.get_all_metadata()
+        node_count = data["nodeCount"]
+        time_series = TimeSeries(api_uri=self.api_uri,
+                                 api_token=f"Bearer {self.keycloakToken}",
+                                 object_id=object_id,
+                                 type_series='volume')
+        data = time_series.get_data_by_label()
+        self.assertEqual(node_count, 1)
+        self.assertEqual(object_id, "5e78805e3a185aaa08517c1b")
+        self.assertIn('timestamp', data)
+        self.assertEqual(data['timestamp'].tolist(), [1570636800000, 1570636805000])
 
 
 if __name__ == '__main__':

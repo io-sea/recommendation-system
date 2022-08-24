@@ -17,8 +17,7 @@ import requests
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 import numpy
 from loguru import logger
-# from list_manipulation import get_ok_elements
-# from string_manipulation import upper_char
+
 
 # Only print out once the InsecureRequestWarning due to the lack of SSL in HTTPS usage.
 warnings.filterwarnings("once", category=InsecureRequestWarning)
@@ -454,163 +453,6 @@ class LabExpCompleted(LabExpStore):
         request_delegator(requests.post, self.build_url(), json=experiment_data,
                           headers={'Authorization': self.api_token})
 
-
-class LabExpResult(LabExpStore):
-    """
-    This class allows to manage the Optimization/Clustering Lab experiment results through
-    the backend API.
-    It uses the endpoints /api/iopa/experiment/results (PUT and GET) from the API.
-    """
-    def __init__(self, api_uri, api_token, experiment_id):
-        """Initializes the LabExpResult class with the api token of the user that access
-         the API and the considered experiment id.
-
-        Args:
-            api_uri (string): the uri to join the API.
-            api_token (string): the api token of the user account used.
-            experiment_id (string): the unique experiment id provided by backend at creation.
-        """
-        super().__init__(api_uri, api_token, experiment_id)
-
-    def build_url(self):
-        """Generates the url corresponding to the endpoint.
-
-        Returns:
-            string: the api url.
-        """
-        return (self.api_uri
-                + 'iopa/'
-                + 'experiment/'
-                + 'result'
-                + '?objectId=' + self.experiment_id)
-
-    def put_data(self, experiment_data):
-        """Edit in the database the results corresponding to the considered experiment.
-
-        Args:
-            experiment_data (dict): experiment data gathered in a dict.
-        """
-        request_delegator(requests.put, self.build_url(), json=experiment_data,
-                          headers={'Authorization': self.api_token})
-
-    def get_data(self):
-        """Retrieves, from the database, the results corresponding to the considered experiment.
-
-        Returns:
-            (dict): the dictionary of the result experiment.
-        """
-        rqst = request_delegator(requests.get, self.build_url(),
-                                 headers={'Authorization': self.api_token})
-        return rqst.json()
-
-
-class LabExpDetailId(ApiConnect):
-    """
-    This class allows to manage an Optimization/Clustering Lab experiment through the backend API.
-    It uses the endpoints /api/iopa/experiment/id (GET and DELETE) from the API.
-    """
-    def __init__(self, api_uri, api_token, experiment_id):
-        """Initializes the LabExpDetailId class with the api token of the user that access
-         the API and the considered experiment id.
-
-        Args:
-            api_uri (string): the uri to join the API.
-            api_token (string): the api token of the user account used.
-            experiment_id (string): the unique experiment id provided by backend at creation.
-        """
-        super().__init__(api_uri, api_token)
-        self.experiment_id = experiment_id
-
-    def build_url(self):
-        """Generates the url corresponding to the endpoint.
-
-        Returns:
-            (string) the api url.
-        """
-        return (self.api_uri
-                + 'iopa/'
-                + 'experiment/'
-                + 'id'
-                + '?objectId=' + self.experiment_id)
-
-    def get_data(self):
-        """Retrieves, from the database, the details corresponding to the considered experiment.
-
-        Returns:
-            (dict): the dictionary of the experiment details.
-        """
-        rqst = request_delegator(requests.get, self.build_url(),
-                                 headers={'Authorization': self.api_token})
-        return rqst.json()
-
-    def get_status(self):
-        """
-        Use the LabExpDetailId class to read the current status of a given experiment in database.
-
-        Returns:
-             (string): the status of the experiment.
-        """
-        details = self.get_data()
-        return details['status']
-
-    def get_experiment_parameters(self):
-        """
-        Use the LabExpDetailId class to read some experiment parameters in database.
-
-        Returns:
-             (tuple): containing the maxRun, the sbatch filepath and accelerator.
-        """
-        params = self.get_data()
-        return params["sbatch"], params["accelerator"], params["maxRun"]
-
-    def delete_data(self):
-        """Delete from the database the considered experiment."""
-        raise NotImplementedError("The python wrapper for this endpoint is not yet implemented.")
-
-
-class ScoreStore(ApiConnect):
-    """
-    This class performs put requests on the endpoint /api/iopa/score to send score result to the
-    backend.
-    """
-    def __init__(self, api_uri, api_token, accelerator, jobid, score):
-        """Initializes the ScoreStore class with the api token of the user that access the API.
-
-        Args:
-            api_uri (string): the uri to join the API.
-            api_token (string): the api token of the user account used.
-            accelerator (string): the accelerator for which the score is computed.
-            jobid (string): the job id for which the score is computed.
-            score (float): the score to be stored.
-        """
-        super().__init__(api_uri, api_token)
-        self.accelerator = accelerator
-        self.jobid = jobid
-        self.score = score
-
-    def build_url(self):
-        """Generates the url corresponding to the endpoint.
-
-        Returns:
-            string: the api url.
-        """
-        return (self.api_uri
-                + 'iopa/'
-                + 'score'
-                + '?objectId=' + self.jobid
-                + '&acc=' + self.accelerator
-                + '&score=' + str(self.score))
-
-    def put_data(self):
-        """
-        Builds the request object to be sent to the backend.
-
-        Returns:
-            requests object: the object that contains all information for API call.
-        """
-        request_delegator(requests.put, self.build_url(), headers={'Authorization': self.api_token})
-
-
 class JobSearch(ApiConnect):
     """
     This class allows to retrieve from the database the list job metadata according a filter on
@@ -762,78 +604,6 @@ class JobListMultiple(ApiConnect):
             data = dict()
         return data
 
-
-class LabExpStart(ApiConnect):
-    """
-    This class allows Optimization/Clustering Lab experiment to be started.
-    It uses the endpoint /api/iopa/experiment/start from the API.
-
-    This class is mainly used to set the status of an Optimization experiment to running, while the
-    optim_lab CLI is launched manually by the user (not by the backend like the clustering one).
-    """
-    def __init__(self, api_uri, api_token, experiment_id):
-        """Initializes the LabExpStart class with the api token of the user that access the API.
-
-        Args:
-            api_uri (string): the uri to join the API.
-            api_token (string): the api token of the user account used.
-            experiment_id (string): the unique experiment id provided by backend at creation.
-        """
-        super().__init__(api_uri, api_token, experiment_id)
-        self.experiment_id = experiment_id
-
-    def build_url(self):
-        """Generates the url corresponding to the endpoint.
-
-        Returns:
-            string: the api url.
-        """
-        return (self.api_uri
-                + 'iopa/'
-                + 'experiment/'
-                + 'start'
-                + '?objectId=' + self.experiment_id)
-
-    def post_start(self, experiment_data):
-        """Builds the request object to start the experiment."""
-        request_delegator(requests.post, self.build_url(), json=experiment_data,
-                          headers={'Authorization': self.api_token})
-
-
-class LabExpFail(ApiConnect):
-    """
-    This class allows Optimization Lab experiment to change the status to Failed.
-    It uses the endpoint /api/iopa/experiment/fail from the API.
-    """
-    def __init__(self, api_uri, api_token, experiment_id):
-        """Initializes the LabExpFail class with the api token of the user that access the API.
-
-        Args:
-            api_uri (string): the uri to join the API.
-            api_token (string): the api token of the user account used.
-            experiment_id (string): the unique experiment id provided by backend at creation.
-        """
-        super().__init__(api_uri, api_token, experiment_id)
-        self.experiment_id = experiment_id
-
-    def build_url(self):
-        """Generates the url corresponding to the endpoint.
-
-        Returns:
-            string: the api url.
-        """
-        return (self.api_uri
-                + 'iopa/'
-                + 'experiment/'
-                + 'fail'
-                + '?objectId=' + self.experiment_id)
-
-    def post_fail(self):
-        """Builds the request object to fail the experiment."""
-        request_delegator(requests.post, self.build_url(),
-                          headers={'Authorization': self.api_token})
-
-
 def request_delegator(request, *args, verify_ssl=False, **kwargs):
     """Raises exceptions in case of bad given http request.
        Do not verify SSL certificate to allow self-signed certificate.
@@ -888,3 +658,76 @@ def check_http_code(url, code, verify_ssl=False, **kwargs):
         return rqst.status_code == code
     except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
         return False
+
+# class LabExpStart(ApiConnect):
+#     """
+#     This class allows Optimization/Clustering Lab experiment to be started.
+#     It uses the endpoint /api/iopa/experiment/start from the API.
+
+#     This class is mainly used to set the status of an Optimization experiment to running, while the
+#     optim_lab CLI is launched manually by the user (not by the backend like the clustering one).
+#     """
+#     def __init__(self, api_uri, api_token, experiment_id):
+#         """Initializes the LabExpStart class with the api token of the user that access the API.
+
+#         Args:
+#             api_uri (string): the uri to join the API.
+#             api_token (string): the api token of the user account used.
+#             experiment_id (string): the unique experiment id provided by backend at creation.
+#         """
+#         super().__init__(api_uri, api_token, experiment_id)
+#         self.experiment_id = experiment_id
+
+#     def build_url(self):
+#         """Generates the url corresponding to the endpoint.
+
+#         Returns:
+#             string: the api url.
+#         """
+#         return (self.api_uri
+#                 + 'iopa/'
+#                 + 'experiment/'
+#                 + 'start'
+#                 + '?objectId=' + self.experiment_id)
+
+#     def post_start(self, experiment_data):
+#         """Builds the request object to start the experiment."""
+#         request_delegator(requests.post, self.build_url(), json=experiment_data,
+#                           headers={'Authorization': self.api_token})
+
+
+# class LabExpFail(ApiConnect):
+#     """
+#     This class allows Optimization Lab experiment to change the status to Failed.
+#     It uses the endpoint /api/iopa/experiment/fail from the API.
+#     """
+#     def __init__(self, api_uri, api_token, experiment_id):
+#         """Initializes the LabExpFail class with the api token of the user that access the API.
+
+#         Args:
+#             api_uri (string): the uri to join the API.
+#             api_token (string): the api token of the user account used.
+#             experiment_id (string): the unique experiment id provided by backend at creation.
+#         """
+#         super().__init__(api_uri, api_token, experiment_id)
+#         self.experiment_id = experiment_id
+
+#     def build_url(self):
+#         """Generates the url corresponding to the endpoint.
+
+#         Returns:
+#             string: the api url.
+#         """
+#         return (self.api_uri
+#                 + 'iopa/'
+#                 + 'experiment/'
+#                 + 'fail'
+#                 + '?objectId=' + self.experiment_id)
+
+#     def post_fail(self):
+#         """Builds the request object to fail the experiment."""
+#         request_delegator(requests.post, self.build_url(),
+#                           headers={'Authorization': self.api_token})
+
+
+
