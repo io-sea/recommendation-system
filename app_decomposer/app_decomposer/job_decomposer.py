@@ -188,8 +188,6 @@ def get_signal_representation(timestamps, signal, labels, merge_clusters=False):
 
     return compute, data, bandwidth
 
-class JobDecomposerConfig:
-    pass
 class JobConnector:
     """Given a slurm job id, this class allows to retrieve volume timeseries and nodecount metadata to be used later by the job decomposer."""
     def __init__(self, api_uri, api_token):
@@ -272,7 +270,9 @@ class JobDecomposer:
         """
         self.job_id = job_id
         self.signal_decomposer = signal_decomposer
-        self.timestamps, self.read_signal, self.write_signal = self.get_job_timeseries(api_uri, keycloak_token)
+        api_uri = "coco"
+        api_token = "popo"
+        self.timestamps, self.read_signal, self.write_signal = self.get_job_timeseries(api_uri, api_token)
 
     def get_job_timeseries(self, api_uri, api_token):
         """Method to extract read and write timeseries for a job instrumented in IOI.
