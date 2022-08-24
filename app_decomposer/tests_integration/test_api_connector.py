@@ -16,11 +16,14 @@ import unittest
 import requests
 import urllib3
 from shutil import rmtree
+import numpy as np
 
 from tests_integration.iopa_integration_config import get_backend_hostname, get_backend_ipv4_port
 from tests_integration.iopa_integration_config import get_keycloak_token
 from tests_integration.iopa_integration_config import get_mongo_hostname, get_mongo_ipv4_port
 from tests_integration.iopa_integration_config import MongoDB, __MONGO_DUMP__
+
+from app_decomposer.job_decomposer import JobConnector
 from app_decomposer.api_connector import request_delegator, check_http_code, TimeSeries, \
     MetaData, MinMax, MinMaxDuration, JobSearch
 
@@ -301,6 +304,47 @@ class TestGetJobData(unittest.TestCase):
         self.assertEqual(object_id, "5e78805e3a185aaa08517c1b")
         self.assertIn('timestamp', data)
         self.assertEqual(data['timestamp'].tolist(), [1570636800000, 1570636805000])
+
+class TestJobConnector(unittest.TestCase):
+    """Test functionnalities of JobConnector class that is needed for job decomposer to get job data."""
+
+    def setUp(self):
+        self.keycloakToken = get_keycloak_token()
+        # To disable useless warnings with requests module on https without certificate
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+        self.api_uri = f"https://{get_backend_hostname()}:{get_backend_ipv4_port()}"
+        self.job_connector = JobConnector(self.api_uri, self.keycloakToken)
+
+    def test_slurm_id_2_obj_id(self):
+        """Test that method provides object id given a slurm jobid."""
+        self.assertEqual(self.job_connector.slurm_id_2_obj_id(666),
+                         "5e78805e3a185aaa08517c1b")
+
+    def test_get_node_count(self):
+        """Test that method provides the correct node count field value."""
+        self.assertEqual(self.job_connector.get_node_count("5e78805e3a185aaa08517c1b"),
+                         1)
+
+    def test_get_job_data(self):
+        """Test if the output of the get_job_data method is correct from db."""
+        timestamps = np.array([1570636800000, 1570636805000])
+        read = np.array([138336721,         0])
+        write = np.array([53198720,    13681])
+        a, b, c = self.job_connector.get_job_data("5e78805e3a185aaa08517c1b")
+        np.testing.assert_array_equal(timestamps, a)
+        np.testing.assert_array_equal(read, b)
+        np.testing.assert_array_equal(write, c)
+
+    def test_get_data(self):
+        """Test of get_data method from JobConnector gives the expected results."""
+        timestamps = np.array([1570636800000, 1570636805000])
+        read = np.array([138336721,         0])
+        write = np.array([53198720,    13681])
+        a, b, c = self.job_connector.get_data(666)
+        np.testing.assert_array_equal(timestamps, a)
+        np.testing.assert_array_equal(read, b)
+        np.testing.assert_array_equal(write, c)
 
 
 if __name__ == '__main__':

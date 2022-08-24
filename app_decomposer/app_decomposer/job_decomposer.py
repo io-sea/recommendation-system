@@ -192,39 +192,67 @@ class JobDecomposerConfig:
     pass
 class JobConnector:
     """Given a slurm job id, this class allows to retrieve volume timeseries and nodecount metadata to be used later by the job decomposer."""
-    def __init__(self, api_uri, api_token, job_id):
-        """Initializes the JobListMultiple class with the api token of the user that access the API.
+    def __init__(self, api_uri, api_token):
+        """Initializes the JobConnector class with the api token of the user that access the API.
 
         Args:
             api_uri (string): the uri to join the API.
             api_token (string): the api token of the user account used.
-            job_id (int): the slurm job id number.
         """
         self.api_uri = api_uri
         self.api_token = api_token
 
     def slurm_id_2_obj_id(self, job_id):
+        """Gets the object id of the database entry for job from the slurm job id reference.
+
+        Args:
+            job_id (int): slurm job id.
+
+        Returns:
+            str: object id that reference the db entry for job's information.
+        """
         job_search = JobSearch(self.api_uri,
-                               f"Bearer {self.keycloakToken}",
+                               f"Bearer {self.api_token}",
                                job_filter={"jobid": {"contains": str(job_id)}})
         return job_search.job_objids_list[0]
 
     def get_node_count(self, object_id):
+        """Get the compute node count that was used to run the job referenced by object_id.
+
+        Args:
+            object_id (str): object id that reference the db entry for job's information.
+
+        Returns:
+            int: number of compute nodes used to run the job.
+        """
         metadata = MetaData(api_uri=self.api_uri,
-                            api_token=f"Bearer {self.keycloakToken}",
+                            api_token=f"Bearer {self.api_token}",
                             object_id=object_id)
         data = metadata.get_all_metadata()
         return data["nodeCount"]
 
     def get_job_data(self, object_id):
+        """Get volume timeseries and timestamps for a given object id.
+
+        Args:
+            object_id (str): object id that reference the db entry for job's information.
+
+        Returns:
+            tuple: three numpy ndarrays of data volumes.
+        """
         time_series = TimeSeries(api_uri=self.api_uri,
-                                 api_token=f"Bearer {self.keycloakToken}",
+                                 api_token=f"Bearer {self.api_token}",
                                  object_id=object_id,
                                  type_series='volume')
         data = time_series.get_data_by_label()
-        return data["timestamps"], data["bytesRead"], data["bytesWritten"]
+        return data["timestamp"], data["bytesRead"], data["bytesWritten"]
 
-    def get_data(self):
+    def get_data(self, job_id):
+        """Retrieves necessary data for JobDecomposer to extract phases and representation.
+
+        Returns:
+            tuple: data needed for job decomposition.
+        """
         object_id = self.slurm_id_2_obj_id(job_id)
         node_count = self.get_node_count(object_id)
         return self.get_job_data(object_id)
