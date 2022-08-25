@@ -18,6 +18,7 @@ import numpy as np
 from scipy import integrate
 from app_decomposer.signal_decomposer import KmeansSignalDecomposer, get_lowest_cluster
 from app_decomposer.api_connector import TimeSeries, MetaData, JobSearch
+from app_decomposer.config_parser import Configuration
 
 def get_phase_volume(signal, method="sum", start_index=0, end_index=-1, dx=1):
     """Method allowing many functions to compute the total volume of data for a given phase boundary in a signal array.
@@ -188,6 +189,7 @@ def get_signal_representation(timestamps, signal, labels, merge_clusters=False):
 
     return compute, data, bandwidth
 
+
 class JobConnector:
     """Given a slurm job id, this class allows to retrieve volume timeseries and nodecount metadata to be used later by the job decomposer."""
     def __init__(self, api_uri, api_token):
@@ -257,8 +259,6 @@ class JobConnector:
 
 
 
-
-
 class JobDecomposer:
     """This class takes separate read and write dataflow timeseries in order to extract separated phases for each type: compute, read and write phases."""
     def __init__(self, job_id=None, signal_decomposer=KmeansSignalDecomposer):
@@ -270,8 +270,10 @@ class JobDecomposer:
         """
         self.job_id = job_id
         self.signal_decomposer = signal_decomposer
-        api_uri = "coco"
-        api_token = "popo"
+        # Initialize the IOI Connector Configuration
+        config = Configuration(path=DEFAULT_CONFIG)
+        api_uri = f"{self.config.get_api_uri()}:{self.config.get_api_port()}"
+        api_token = self.config.get_kc_token()
         self.timestamps, self.read_signal, self.write_signal = self.get_job_timeseries(api_uri, api_token)
 
     def get_job_timeseries(self, api_uri, api_token):

@@ -37,30 +37,19 @@ class TestKeycloakToken(unittest.TestCase):
     def test_get_token(self):
         """Test that keycloak_connector.get_kc_token returns a valid token."""
         keycloak_token = self.config.get_kc_token()
-        print(keycloak_token)
-        self.assertIn('Bearer ', keycloak_token)
+        #self.assertIn('Bearer ', keycloak_token)
         # test to call an api with the token
-        # api_uri = f"{self.config.get_api_uri()}:{self.config.get_api_port()}" \
-        #     "/backend/api/user/settings"
-        # rqst = request_delegator(requests.get,
-        #                          api_uri,
-        #                          headers={'Authorization': keycloak_token})
-        # self.assertIsInstance(rqst, requests.Response)
-        # resp = rqst.json()
-        # self.assertIn('username', resp)
-        # self.assertEqual(resp['username'], "ioi-admin")
+        api_uri = f"{self.config.get_api_uri()}:{self.config.get_api_port()}" \
+            "/backend/api/user/settings"
 
-    # def test_check_connection(self):
-    #     """Test that keycloak_connector.check_connection returns True, if the connection to the
-    #     server can be reached."""
-    #     self.assertTrue(self.keycloak_connector.check_connection())
+        rqst = request_delegator(requests.get,
+                                 api_uri,
+                                 headers={'Authorization': "Bearer "+keycloak_token})
+        self.assertIsInstance(rqst, requests.Response)
+        resp = rqst.json()
+        self.assertIn('username', resp)
+        self.assertEqual(resp['username'], "ioi-admin")
 
-    # def test_check_connection_ko(self):
-    #     """Test that keycloak_connector.check_connection returns False, if the connection to the
-    #     server cannot be reached."""
-    #     keycloak_config = KeycloakConfig.from_yaml(TEST_CONFIG_KO)
-    #     keycloak_connector = KeycloakConnector(keycloak_config.keycloak, 'ioi-admin', 'password')
-    #     self.assertFalse(keycloak_connector.check_connection())
 
 
 if __name__ == '__main__':

@@ -70,22 +70,8 @@ class Configuration:
         conf = json.loads(rc.stdout)
         assert('access_token' in conf)
 
-        if "Bearer " not in conf['access_token']:
-            token = "Bearer " + conf["access_token"]
-        return token
+        # if "Bearer " not in conf['access_token']:
+        #     token = "Bearer " + conf["access_token"]
+        return conf["access_token"]
 
-    # def get_keycloak_token_legacy(self):
-    #     """ Return the authentification keycloak token """
-
-    #     ioi_backend_url = f"{self.get_kc_hostname()}:{self.get_kc_port()}" \
-    #                     "/auth/realms/atos-data-management/protocol/openid-connect/token"
-    #     cmd = ['curl', '--silent', '--insecure']
-    #     cmd += ['--header', 'Content-Type: application/x-www-form-urlencoded']
-    #     cmd += ['--request', 'POST', '--data', 'username=ioi-admin', '--data', 'password=password',
-    #             '--data', 'grant_type=password', '--data', 'client_id=io-instrumentation']
-    #     cmd += [ioi_backend_url]
-    #     rc = subprocess.run(cmd, stdout=subprocess.PIPE, shell=False, check=True)
-    #     conf = json.loads(rc.stdout)
-    #     assert('access_token' in conf)
-    #     return conf['access_token']
 
