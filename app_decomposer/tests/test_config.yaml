@@ -1,8 +1,9 @@
 api:
   uri: https://localhost
+  port: 10443
 
 keycloak:
   uri: https://localhost
-  port: 8443
+  port: 18443
   realm: atos-data-management
   client: io-instrumentation

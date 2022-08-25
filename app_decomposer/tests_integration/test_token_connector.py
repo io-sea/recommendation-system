@@ -16,63 +16,51 @@ import os
 import unittest
 import requests
 import urllib3
-from pydantic import BaseModel
-from tests_integration.iopa_integration_config import get_backend_hostname, get_backend_ipv4_port
-from ioanalyticstools.api_connector import request_delegator
-from ioanalyticstools.token_connector import KeycloakConnector
-from ioanalyticstools.configuration_parser import BaseConfiguration, KeycloakParameters
-from ioanalyticstools.logger import init_logger
+
+from app_decomposer.api_connector import request_delegator
+from app_decomposer.config_parser import Configuration
+
 
 CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
-TEST_DATA = os.path.join(CURRENT_DIR, "test_data")
-TEST_CONFIG = os.path.join(TEST_DATA, "test_config.yaml")
-TEST_CONFIG_KO = os.path.join(TEST_DATA, "test_config_kc_ko.yaml")
-
-
-class KeycloakConfig(BaseConfiguration, BaseModel):
-    """Dummy class to read keycloak parameters."""
-    keycloak: KeycloakParameters
-
+TEST_CONFIG = os.path.join(CURRENT_DIR, "test_data", "test_config.yaml")
+TEST_CONFIG_KO = os.path.join(CURRENT_DIR, "test_data", "test_config_kc_ko.yaml")
 
 class TestKeycloakToken(unittest.TestCase):
     """ Test KeycloakToken functionalities """
 
     def setUp(self):
         """ Prepare the test suite """
-        init_logger()
-
-        keycloak_config = KeycloakConfig.from_yaml(TEST_CONFIG)
-        self.keycloak_connector = KeycloakConnector(
-            keycloak_config.keycloak, 'ioi-admin', 'password')
+        self.config = Configuration(path=TEST_CONFIG)
         # To disable useless warnings with requests module on https without certificate
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     def test_get_token(self):
-        """Test that keycloak_connector.get_token returns a valid token."""
-        keycloak_token = self.keycloak_connector.get_token()
+        """Test that keycloak_connector.get_kc_token returns a valid token."""
+        keycloak_token = self.config.get_kc_token()
+        print(keycloak_token)
         self.assertIn('Bearer ', keycloak_token)
         # test to call an api with the token
-        api_uri = f"https://{get_backend_hostname()}:{get_backend_ipv4_port()}" \
-            "/backend/api/user/settings"
-        rqst = request_delegator(requests.get,
-                                 api_uri,
-                                 headers={'Authorization': keycloak_token})
-        self.assertIsInstance(rqst, requests.Response)
-        resp = rqst.json()
-        self.assertIn('username', resp)
-        self.assertEqual(resp['username'], "ioi-admin")
+        # api_uri = f"{self.config.get_api_uri()}:{self.config.get_api_port()}" \
+        #     "/backend/api/user/settings"
+        # rqst = request_delegator(requests.get,
+        #                          api_uri,
+        #                          headers={'Authorization': keycloak_token})
+        # self.assertIsInstance(rqst, requests.Response)
+        # resp = rqst.json()
+        # self.assertIn('username', resp)
+        # self.assertEqual(resp['username'], "ioi-admin")
 
-    def test_check_connection(self):
-        """Test that keycloak_connector.check_connection returns True, if the connection to the
-        server can be reached."""
-        self.assertTrue(self.keycloak_connector.check_connection())
+    # def test_check_connection(self):
+    #     """Test that keycloak_connector.check_connection returns True, if the connection to the
+    #     server can be reached."""
+    #     self.assertTrue(self.keycloak_connector.check_connection())
 
-    def test_check_connection_ko(self):
-        """Test that keycloak_connector.check_connection returns False, if the connection to the
-        server cannot be reached."""
-        keycloak_config = KeycloakConfig.from_yaml(TEST_CONFIG_KO)
-        keycloak_connector = KeycloakConnector(keycloak_config.keycloak, 'ioi-admin', 'password')
-        self.assertFalse(keycloak_connector.check_connection())
+    # def test_check_connection_ko(self):
+    #     """Test that keycloak_connector.check_connection returns False, if the connection to the
+    #     server cannot be reached."""
+    #     keycloak_config = KeycloakConfig.from_yaml(TEST_CONFIG_KO)
+    #     keycloak_connector = KeycloakConnector(keycloak_config.keycloak, 'ioi-admin', 'password')
+    #     self.assertFalse(keycloak_connector.check_connection())
 
 
 if __name__ == '__main__':

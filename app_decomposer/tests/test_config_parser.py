@@ -27,6 +27,24 @@ class TestConfiguration(unittest.TestCase):
         """Test the 'request_delegator' standard behavior."""
         config = Configuration(path=self.yaml_file).parse()
         self.assertEqual(config["api"]["uri"], 'https://localhost')
+        self.assertEqual(config["keycloak"]["uri"], 'https://localhost')
+        self.assertEqual(config["keycloak"]["port"], 18443)
+
+
+    def test_kc_realm(self):
+        """Test if keycloak realm is correct."""
+        config = Configuration(path=self.yaml_file)
+        print(config.get_kc_realm())
+        self.assertEqual(config.get_kc_realm(),  "atos-data-management")
+
+    def test_get_api_port(self):
+        config = Configuration(path=self.yaml_file)
+        self.assertEqual(config.get_api_port(), 10443)
+
+    def test_get_api_uri(self):
+        config = Configuration(path=self.yaml_file)
+        self.assertEqual(config.get_api_uri(), "https://localhost")
+
 
 
 
