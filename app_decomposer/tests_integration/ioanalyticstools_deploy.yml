@@ -1,0 +1,13 @@
+---
+# Prepare test platform for analytic tools integration tests
+
+- hosts: iopa-integration
+  tasks:
+
+    - name: Generate KeycloakConnector configuration file
+      delegate_to: localhost
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/templates/test_config.yaml.j2"
+        dest: "{{ playbook_dir }}/test_data/test_config.yaml"
+        force: yes
+        mode: 0644
