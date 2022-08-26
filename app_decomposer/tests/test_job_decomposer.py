@@ -12,6 +12,7 @@ import random
 
 from app_decomposer.job_decomposer import JobDecomposer, get_events_indexes, get_signal_representation, get_phase_volume, phases_to_representation, get_events_indexes, get_events_indexes_no_merge, get_phase_volume
 
+from app_decomposer.config_parser import Configuration
 from app_decomposer.signal_decomposer import KmeansSignalDecomposer, get_lowest_cluster
 
 def list_jobs(dataset_path):
@@ -61,29 +62,35 @@ class TestJobDecomposer(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures, if any."""
 
+    @patch.object(Configuration, 'get_kc_token')
     @patch.object(JobDecomposer, 'get_job_timeseries')
-    def test_init_job_dec(self, mock_get_timeseries):
+    def test_init_job_dec(self, mock_get_timeseries, mock_get_kc_token):
         """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
         # mock the method to return some dataset file content
         mock_get_timeseries.return_value = get_job_timeseries_from_file(job_id=457344)
+        mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         jd = JobDecomposer()
         self.assertEqual(len(jd.timestamps), len(jd.read_signal))
 
+    @patch.object(Configuration, 'get_kc_token')
     @patch.object(JobDecomposer, 'get_job_timeseries')
-    def test_init_job_dec_no_jobid(self, mock_get_timeseries):
+    def test_init_job_dec_no_jobid(self, mock_get_timeseries, mock_get_kc_token):
         """Test if JobDecomposer initializes well with no jobid for mock."""
         # mock the method to return some dataset file content
         mock_get_timeseries.return_value = get_job_timeseries_from_file()
+        mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         jd = JobDecomposer()
         self.assertEqual(len(jd.timestamps), len(jd.read_signal))
 
+    @patch.object(Configuration, 'get_kc_token')
     @patch.object(JobDecomposer, 'get_job_timeseries')
-    def test_job_dec_and_output(self, mock_get_timeseries):
+    def test_job_dec_and_output(self, mock_get_timeseries, mock_get_kc_token):
         """Test if JobDecomposer gets the expected output."""
         # mock the method to return some dataset file content
         mock_get_timeseries.return_value = get_job_timeseries_from_file(job_id=457344)
+        mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         jd = JobDecomposer()
         bkps, labels, _, _ = jd.get_phases()
@@ -103,13 +110,15 @@ class TestJobDecomposer(unittest.TestCase):
         self.assertEqual(get_phase_volume(np.arange(10), method="simps"), 40.5)
 
 
+    @patch.object(Configuration, 'get_kc_token')
     @patch.object(JobDecomposer, 'get_job_timeseries')
-    def test_get_events_indexes(self, mock_get_timeseries):
+    def test_get_events_indexes(self, mock_get_timeseries, mock_get_kc_token):
         """Test if get_events_indexes and variant with merge works well."""
         timestamps = np.arange(10)
         read_signal = np.array([60, 30, 7, 0, 0, 0, 0, 0, 7, 10])
         write_signal = np.array([0, 0, 0, 0, 0, 0, 0, 25, 20, 0])
         mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         jd = JobDecomposer()
         _, read_labels, _, write_labels = jd.get_phases()
@@ -120,13 +129,15 @@ class TestJobDecomposer(unittest.TestCase):
         self.assertListEqual(w_start_points, [7])
         self.assertListEqual(w_end_points, [9])
 
+    @patch.object(Configuration, 'get_kc_token')
     @patch.object(JobDecomposer, 'get_job_timeseries')
-    def test_get_events_indexes_no_merge(self, mock_get_timeseries):
+    def test_get_events_indexes_no_merge(self, mock_get_timeseries, mock_get_kc_token):
         """Test if get_events_indexes and variant with no_merge works well."""
         timestamps = np.arange(10)
         read_signal = np.array([60, 30, 7, 0, 0, 0, 0, 0, 7, 10])
         write_signal = np.array([0, 0, 0, 0, 0, 0, 0, 25, 20, 0])
         mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         jd = JobDecomposer()
         _, read_labels, _, write_labels = jd.get_phases()
@@ -137,13 +148,15 @@ class TestJobDecomposer(unittest.TestCase):
         self.assertListEqual(w_start_points, [7])
         self.assertListEqual(w_end_points, [9])
 
+    @patch.object(Configuration, 'get_kc_token')
     @patch.object(JobDecomposer, 'get_job_timeseries')
-    def test_get_events_indexes_no_merge_1(self, mock_get_timeseries):
+    def test_get_events_indexes_no_merge_1(self, mock_get_timeseries, mock_get_kc_token):
         """Test if get_events_indexes and variant merge works well."""
         timestamps = np.arange(5)
         read_signal = np.array([0, 1, 2, 2, 0])
         write_signal = np.array([0, 1, 2, 2, 0])
         mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         jd = JobDecomposer()
         _, read_labels, _, write_labels = jd.get_phases()
@@ -158,13 +171,15 @@ class TestJobDecomposer(unittest.TestCase):
         self.assertListEqual(data, [0, 1, 4, 0])
         self.assertListEqual(bw, [0, 1, 2, 0])
 
+    @patch.object(Configuration, 'get_kc_token')
     @patch.object(JobDecomposer, 'get_job_timeseries')
-    def test_get_events_indexes_no_merge_2(self, mock_get_timeseries):
+    def test_get_events_indexes_no_merge_2(self, mock_get_timeseries, mock_get_kc_token):
         """Test if get_events_indexes and variant merge works well."""
         timestamps = np.arange(5)
         read_signal = np.array([0, 2, 1, 1, 0])
         write_signal = np.array([0, 1, 2, 2, 0])
         mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         jd = JobDecomposer()
         _, read_labels, _, write_labels = jd.get_phases()
@@ -176,13 +191,15 @@ class TestJobDecomposer(unittest.TestCase):
         self.assertListEqual(data, [0,  4, 0])
         self.assertListEqual(bw, [0, 4/3, 0])
 
+    @patch.object(Configuration, 'get_kc_token')
     @patch.object(JobDecomposer, 'get_job_timeseries')
-    def test_get_events_indexes_no_merge_3(self, mock_get_timeseries):
+    def test_get_events_indexes_no_merge_3(self, mock_get_timeseries, mock_get_kc_token):
         """Test if get_events_indexes and variant merge works well."""
         timestamps = np.arange(5)
         read_signal = np.array([1, 1, 1, 0])
         write_signal = np.array([1, 1, 1, 0])
         mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         jd = JobDecomposer()
         _, read_labels, _, write_labels = jd.get_phases()
@@ -196,13 +213,15 @@ class TestJobDecomposer(unittest.TestCase):
         self.assertListEqual(data, [3, 0])
         self.assertListEqual(bw, [1, 0])
 
+    @patch.object(Configuration, 'get_kc_token')
     @patch.object(JobDecomposer, 'get_job_timeseries')
-    def test_get_events_indexes_no_merge_4(self, mock_get_timeseries):
+    def test_get_events_indexes_no_merge_4(self, mock_get_timeseries, mock_get_kc_token):
         """Test if get_events_indexes and variant merge works well."""
         timestamps = np.arange(5)
         read_signal = np.array([1, 3, 3, 1, 0])
         write_signal = np.array([1, 3, 3, 1, 0])
         mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         jd = JobDecomposer()
         _, read_labels, _, write_labels = jd.get_phases()
@@ -216,13 +235,15 @@ class TestJobDecomposer(unittest.TestCase):
         self.assertListEqual(data, [1, 6, 1, 0])
         self.assertListEqual(bw, [1, 3, 1, 0])
 
+    @patch.object(Configuration, 'get_kc_token')
     @patch.object(JobDecomposer, 'get_job_timeseries')
-    def test_read_signal_decomposer_pattern_1(self, mock_get_timeseries):
+    def test_read_signal_decomposer_pattern_1(self, mock_get_timeseries, mock_get_kc_token):
         """Test extracting representation from read signal having different type of patterns. Pattern here has IO at the begining and end of the job."""
         timestamps = np.arange(10)
         read_signal = np.array([60, 30, 7, 0, 0, 0, 0, 0, 7, 10])
         write_signal = np.array([0, 0, 0, 0, 0, 0, 0, 25, 20, 0])
         mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         jd = JobDecomposer()
         #r_breakpoints, r_labels, w_breakpoints, w_labels = jd.get_phases()
@@ -236,13 +257,15 @@ class TestJobDecomposer(unittest.TestCase):
         self.assertListEqual(compute, [0, 6])
         self.assertListEqual(read, [97, 17])
 
+    @patch.object(Configuration, 'get_kc_token')
     @patch.object(JobDecomposer, 'get_job_timeseries')
-    def test_read_signal_decomposer_pattern_1_no_merge(self, mock_get_timeseries):
+    def test_read_signal_decomposer_pattern_1_no_merge(self, mock_get_timeseries, mock_get_kc_token):
         """Test extracting representation from read signal having different type of patterns. Pattern here has IO at the begining and end of the job."""
         timestamps = np.arange(10)
         read_signal = np.array([60, 30, 7, 0, 0, 0, 0, 0, 7, 10])
         write_signal = np.array([0, 0, 0, 0, 0, 0, 0, 25, 20, 0])
         mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         jd = JobDecomposer()
         #r_breakpoints, r_labels, w_breakpoints, w_labels = jd.get_phases()
@@ -256,13 +279,15 @@ class TestJobDecomposer(unittest.TestCase):
         self.assertListEqual(read, [60, 30, 7, 17])
         self.assertListEqual(bandwidth, [60.0, 30.0, 7.0, 8.5])
 
+    @patch.object(Configuration, 'get_kc_token')
     @patch.object(JobDecomposer, 'get_job_timeseries')
-    def test_read_signal_decomposer_pattern_2(self, mock_get_timeseries):
+    def test_read_signal_decomposer_pattern_2(self, mock_get_timeseries, mock_get_kc_token):
         """Test extracting representation from read signal having different type of patterns. Pattern here has an IO in the middle of the job."""
         timestamps = np.arange(6)
         read_signal = np.array([0, 0, 10, 8, 0, 0])
         write_signal = np.array([0, 0, 0, 0, 0, 0])
         mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         jd = JobDecomposer()
         #r_breakpoints, r_labels, w_breakpoints, w_labels = jd.get_phases()
@@ -276,13 +301,15 @@ class TestJobDecomposer(unittest.TestCase):
         self.assertListEqual(compute, [0, 2, 4])
         self.assertListEqual(read, [0, 18, 0])
 
+    @patch.object(Configuration, 'get_kc_token')
     @patch.object(JobDecomposer, 'get_job_timeseries')
-    def test_read_signal_decomposer_pattern_2_no_merge(self, mock_get_timeseries):
+    def test_read_signal_decomposer_pattern_2_no_merge(self, mock_get_timeseries, mock_get_kc_token):
         """Test extracting representation from read signal having different type of patterns. Pattern here has an IO in the middle of the job."""
         timestamps = np.arange(6)
         read_signal = np.array([0, 0, 10, 8, 0, 0])
         write_signal = np.array([0, 0, 0, 0, 0, 0])
         mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         jd = JobDecomposer()
         #r_breakpoints, r_labels, w_breakpoints, w_labels = jd.get_phases()
@@ -296,13 +323,15 @@ class TestJobDecomposer(unittest.TestCase):
         self.assertListEqual(bandwidth, [0, 9, 0])
 
 
+    @patch.object(Configuration, 'get_kc_token')
     @patch.object(JobDecomposer, 'get_job_timeseries')
-    def test_read_signal_decomposer_pattern_3(self, mock_get_timeseries):
+    def test_read_signal_decomposer_pattern_3(self, mock_get_timeseries, mock_get_kc_token):
         """Test extracting representation from read signal having different type of patterns. Pattern here has complex IO pattern."""
         timestamps = np.arange(6)
         read_signal = np.array([12, 0, 10, 8, 0, 19, 0])
         write_signal = np.array([0, 0, 0, 0, 0, 0, 0])
         mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         jd = JobDecomposer()
         #r_breakpoints, r_labels, w_breakpoints, w_labels = jd.get_phases()
@@ -316,13 +345,15 @@ class TestJobDecomposer(unittest.TestCase):
         self.assertListEqual(compute, [0, 2, 4, 5])
         self.assertListEqual(read, [12, 18, 19, 0])
 
+    @patch.object(Configuration, 'get_kc_token')
     @patch.object(JobDecomposer, 'get_job_timeseries')
-    def test_read_signal_decomposer_pattern_3_no_merge(self, mock_get_timeseries):
+    def test_read_signal_decomposer_pattern_3_no_merge(self, mock_get_timeseries, mock_get_kc_token):
         """Test extracting representation from read signal having different type of patterns. Pattern here has complex IO pattern."""
         timestamps = np.arange(6)
         read_signal = np.array([12, 0, 10, 8, 0, 19, 0])
         write_signal = np.array([0, 0, 0, 0, 0, 0, 0])
         mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         jd = JobDecomposer()
         #r_breakpoints, r_labels, w_breakpoints, w_labels = jd.get_phases()
@@ -337,13 +368,15 @@ class TestJobDecomposer(unittest.TestCase):
         self.assertListEqual(bandwidth, [12.0, 9.0, 19.0, 0.0])
 
 
+    @patch.object(Configuration, 'get_kc_token')
     @patch.object(JobDecomposer, 'get_job_timeseries')
-    def test_read_signal_decomposer_pattern_4(self, mock_get_timeseries):
+    def test_read_signal_decomposer_pattern_4(self, mock_get_timeseries, mock_get_kc_token):
         """Test getting phases from read and write signals. Pattern here has complex IO pattern."""
         timestamps = np.arange(6)
         read_signal = np.array([0, 0, 10, 8, 0, 19, 20])
         write_signal = np.array([0, 0, 0, 0, 0, 0, 0])
         mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         jd = JobDecomposer()
         #r_breakpoints, r_labels, w_breakpoints, w_labels = jd.get_phases()
@@ -357,13 +390,15 @@ class TestJobDecomposer(unittest.TestCase):
         self.assertListEqual(compute, [0, 2, 4])
         self.assertListEqual(read, [0, 18, 39])
 
+    @patch.object(Configuration, 'get_kc_token')
     @patch.object(JobDecomposer, 'get_job_timeseries')
-    def test_read_signal_decomposer_pattern_4_no_merge(self, mock_get_timeseries):
+    def test_read_signal_decomposer_pattern_4_no_merge(self, mock_get_timeseries, mock_get_kc_token):
         """Test getting phases from read and write signals. Pattern here has complex IO pattern."""
         timestamps = np.arange(6)
         read_signal = np.array([0, 0, 10, 8, 0, 19, 20])
         write_signal = np.array([0, 0, 0, 0, 0, 0, 0])
         mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         jd = JobDecomposer()
         #r_breakpoints, r_labels, w_breakpoints, w_labels = jd.get_phases()
@@ -379,13 +414,15 @@ class TestJobDecomposer(unittest.TestCase):
 
 
 
+    @patch.object(Configuration, 'get_kc_token')
     @patch.object(JobDecomposer, 'get_job_timeseries')
-    def test_read_signal_decomposer_pattern_5_no_merge(self, mock_get_timeseries):
+    def test_read_signal_decomposer_pattern_5_no_merge(self, mock_get_timeseries, mock_get_kc_token):
         """Test extracting representation from read signal having different type of patterns. Pattern here has complex IO pattern."""
         timestamps = np.arange(5)
         read_signal = np.array([0, 1, 1, 0, 0])
         write_signal = np.array([0, 0, 0, 0, 1])
         mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         jd = JobDecomposer()
         #r_breakpoints, r_labels, w_breakpoints, w_labels = jd.get_phases()
@@ -402,13 +439,15 @@ class TestJobDecomposer(unittest.TestCase):
         self.assertListEqual(bandwidth, [0, 1, 0])
 
 
+    @patch.object(Configuration, 'get_kc_token')
     @patch.object(JobDecomposer, 'get_job_timeseries')
-    def test_job_decomposer_pattern_1(self, mock_get_timeseries):
+    def test_job_decomposer_pattern_1(self, mock_get_timeseries, mock_get_kc_token):
         """Test combining phases from read and write signals to get a representation."""
         timestamps = np.arange(5)
         read_signal = np.array([0, 1, 1, 0, 0, 0, 0])
         write_signal = np.array([0, 0, 0, 0, 1, 1, 0])
         mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         jd = JobDecomposer()
         events, reads, writes, _, _ = jd.get_job_representation(merge_clusters=True)
@@ -417,13 +456,15 @@ class TestJobDecomposer(unittest.TestCase):
         self.assertListEqual(reads, [0, 2, 0, 0])
         self.assertListEqual(writes, [0, 0, 2, 0])
 
+    @patch.object(Configuration, 'get_kc_token')
     @patch.object(JobDecomposer, 'get_job_timeseries')
-    def test_job_decomposer_pattern_1_no_merge(self, mock_get_timeseries):
+    def test_job_decomposer_pattern_1_no_merge(self, mock_get_timeseries, mock_get_kc_token):
         """Test combining phases from read and write signals to get a representation."""
         timestamps = np.arange(5)
         read_signal = np.array([0, 1, 1, 0, 0, 0, 0])
         write_signal = np.array([0, 0, 0, 0, 1, 1, 0])
         mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         jd = JobDecomposer()
         events, reads, writes, _, _ = jd.get_job_representation(merge_clusters=False)
@@ -432,13 +473,15 @@ class TestJobDecomposer(unittest.TestCase):
         self.assertListEqual(reads, [0, 2, 0, 0])
         self.assertListEqual(writes, [0, 0, 2, 0])
 
+    @patch.object(Configuration, 'get_kc_token')
     @patch.object(JobDecomposer, 'get_job_timeseries')
-    def test_job_decomposer_pattern_2(self, mock_get_timeseries):
+    def test_job_decomposer_pattern_2(self, mock_get_timeseries, mock_get_kc_token):
         """Test combining phases from read and write signals to get a representation."""
         timestamps = np.arange(5)
         read_signal = np.array([0, 1, 1, 0, 0, 0, 0])
         write_signal = np.array([0, 0, 0, 0, 0, 1, 0])
         mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         jd = JobDecomposer()
         events, reads, writes, _, _ = jd.get_job_representation(merge_clusters=True)
@@ -447,13 +490,15 @@ class TestJobDecomposer(unittest.TestCase):
         self.assertListEqual(reads, [0, 2, 0, 0])
         self.assertListEqual(writes, [0, 0, 1, 0])
 
+    @patch.object(Configuration, 'get_kc_token')
     @patch.object(JobDecomposer, 'get_job_timeseries')
-    def test_job_decomposer_pattern_2_no_merge(self, mock_get_timeseries):
+    def test_job_decomposer_pattern_2_no_merge(self, mock_get_timeseries, mock_get_kc_token):
         """Test combining phases from read and write signals to get a representation."""
         timestamps = np.arange(5)
         read_signal = np.array([0, 1, 1, 0, 0, 0, 0])
         write_signal = np.array([0, 0, 0, 0, 0, 1, 0])
         mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         jd = JobDecomposer()
 
@@ -469,13 +514,15 @@ class TestJobDecomposer(unittest.TestCase):
         self.assertListEqual(reads, [0, 2, 0, 0])
         self.assertListEqual(writes, [0, 0, 1, 0])
 
+    @patch.object(Configuration, 'get_kc_token')
     @patch.object(JobDecomposer, 'get_job_timeseries')
-    def test_job_decomposer_pattern_3(self, mock_get_timeseries):
+    def test_job_decomposer_pattern_3(self, mock_get_timeseries, mock_get_kc_token):
         """Test combining phases from read and write signals to get a representation."""
         timestamps = np.arange(5)
         read_signal = np.array([1, 1, 1, 0, 0, 0])
         write_signal = np.array([0, 0, 0, 1, 1, 1])
         mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         jd = JobDecomposer()
         events, reads, writes, _, _ = jd.get_job_representation(merge_clusters=True)
@@ -484,13 +531,15 @@ class TestJobDecomposer(unittest.TestCase):
         self.assertListEqual(reads, [3, 0])
         self.assertListEqual(writes, [0, 3])
 
+    @patch.object(Configuration, 'get_kc_token')
     @patch.object(JobDecomposer, 'get_job_timeseries')
-    def test_job_decomposer_pattern_3_no_merge(self, mock_get_timeseries):
+    def test_job_decomposer_pattern_3_no_merge(self, mock_get_timeseries, mock_get_kc_token):
         """Test combining phases from read and write signals to get a representation."""
         timestamps = np.arange(5)
         read_signal = np.array([1, 1, 1, 0, 0, 0])
         write_signal = np.array([0, 0, 0, 1, 1, 1])
         mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         jd = JobDecomposer()
         events, reads, writes, _, _ = jd.get_job_representation(merge_clusters=False)
@@ -499,13 +548,15 @@ class TestJobDecomposer(unittest.TestCase):
         self.assertListEqual(reads, [3, 0])
         self.assertListEqual(writes, [0, 3])
 
+    @patch.object(Configuration, 'get_kc_token')
     @patch.object(JobDecomposer, 'get_job_timeseries')
-    def test_job_decomposer_pattern_simulataneous_read_write(self, mock_get_timeseries):
+    def test_job_decomposer_pattern_simulataneous_read_write(self, mock_get_timeseries, mock_get_kc_token):
         """Test combining phases from read and write signals to get a representation."""
         timestamps = np.arange(5)
         read_signal = np.array([1, 1, 1, 0, 0, 0])
         write_signal = np.array([1, 1, 1, 0, 0, 1])
         mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         jd = JobDecomposer()
         events, reads, writes, _, _ = jd.get_job_representation(merge_clusters=True)
@@ -514,13 +565,15 @@ class TestJobDecomposer(unittest.TestCase):
         self.assertListEqual(reads, [3, 0])
         self.assertListEqual(writes, [3, 1])
 
+    @patch.object(Configuration, 'get_kc_token')
     @patch.object(JobDecomposer, 'get_job_timeseries')
-    def test_job_decomposer_pattern_bw_1(self, mock_get_timeseries):
+    def test_job_decomposer_pattern_bw_1(self, mock_get_timeseries, mock_get_kc_token):
         """Test combining phases from read and write signals to get a representation with bandwidths."""
         timestamps = np.arange(5)
         read_signal = np.array([0, 10, 12, 0, 0, 0, 0])
         write_signal = np.array([0, 0, 0, 0, 10, 30, 0])
         mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         jd = JobDecomposer()
         events, reads, writes, read_bw, write_bw = jd.get_job_representation(merge_clusters=True)

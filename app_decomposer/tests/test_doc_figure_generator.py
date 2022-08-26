@@ -25,6 +25,8 @@ from cluster_simulator.analytics import display_run, display_run_with_signal
 
 from app_decomposer.job_decomposer import JobDecomposer, get_events_indexes, get_signal_representation, get_phase_volume, phases_to_representation, get_events_indexes, get_events_indexes_no_merge, get_phase_volume
 
+from app_decomposer.config_parser import Configuration
+
 from app_decomposer.signal_decomposer import KmeansSignalDecomposer, get_lowest_cluster
 
 def list_jobs(dataset_path):
@@ -83,8 +85,9 @@ class TestFigGenerator(unittest.TestCase):
         self.ssd_tier = Tier(self.env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
         self.nvram_tier = Tier(self.env, 'NVRAM', bandwidth=nvram_bandwidth, capacity=80e9)
 
+    @patch.object(Configuration, 'get_kc_token')
     @patch.object(JobDecomposer, 'get_job_timeseries')
-    def test_generate_simple_compare_app(self, mock_get_timeseries):
+    def test_generate_simple_compare_app(self, mock_get_timeseries, mock_get_kc_token):
         """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
         # mock the method to return some dataset file content
         # mock_get_timeseries.return_value = get_job_timeseries_from_file(job_id=457344)
@@ -93,6 +96,7 @@ class TestFigGenerator(unittest.TestCase):
         write_signal = np.array([0, 0, 0, 0, 1, 1])
         app_signal = timestamps, read_signal, write_signal
         # mock the method to return previous arrays
+        mock_get_kc_token.return_value = 'token'
         mock_get_timeseries.return_value = timestamps, read_signal, write_signal
         # init the job decomposer
         jd = JobDecomposer()
@@ -117,9 +121,9 @@ class TestFigGenerator(unittest.TestCase):
         file_path = os.path.join(current_dir, "app_decomposer", "docs", "figure_synthetic_signal.html")
         fig.write_html(file_path)
 
-
+    @patch.object(Configuration, 'get_kc_token')
     @patch.object(JobDecomposer, 'get_job_timeseries')
-    def test_generate_simple_compare_app_0(self, mock_get_timeseries):
+    def test_generate_simple_compare_app_0(self, mock_get_timeseries, mock_get_kc_token):
         """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
         # mock the method to return some dataset file content
         # mock_get_timeseries.return_value = get_job_timeseries_from_file(job_id=457344)
@@ -128,6 +132,7 @@ class TestFigGenerator(unittest.TestCase):
         write_signal = np.array([0, 0, 0, 0, 1, 1, 0])
         app_signal = timestamps, read_signal, write_signal
         mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         jd = JobDecomposer()
         compute, reads, writes, read_bw, write_bw = jd.get_job_representation(merge_clusters=True)
@@ -148,9 +153,9 @@ class TestFigGenerator(unittest.TestCase):
         # fig.show()
 
         #print(f"compute={events}, read={reads}, writes={writes}")
-
+    @patch.object(Configuration, 'get_kc_token')
     @patch.object(JobDecomposer, 'get_job_timeseries')
-    def test_generate_simple_compare_app_1(self, mock_get_timeseries):
+    def test_generate_simple_compare_app_1(self, mock_get_timeseries, mock_get_kc_token):
         """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
         # mock the method to return some dataset file content
         # mock_get_timeseries.return_value = get_job_timeseries_from_file(job_id=457344)
@@ -160,6 +165,7 @@ class TestFigGenerator(unittest.TestCase):
         app_signal = timestamps, read_signal, write_signal
         # mock the method to return previous arrays
         mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         jd = JobDecomposer()
         compute, reads, writes, read_bw, write_bw = jd.get_job_representation(merge_clusters=True)
@@ -405,9 +411,9 @@ class TestFigGenerator(unittest.TestCase):
         fig.write_html(file_path)
 
 
-
+    @patch.object(Configuration, 'get_kc_token')
     @patch.object(JobDecomposer, 'get_job_timeseries')
-    def test_generate_simple_compare_app_2(self, mock_get_timeseries):
+    def test_generate_simple_compare_app_2(self, mock_get_timeseries, mock_get_kc_token):
         """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
         # readlabels=[1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 0 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 1 0 0 0 0 0 0 0 0 0 0 1 1 0 0 0 0 0 0]
         # [1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 1 0 0 0 0 0 0 0 0 0 0 1  0 0 0 0 0 0]
@@ -433,6 +439,7 @@ class TestFigGenerator(unittest.TestCase):
                          'write': {'seq': 60, 'rand': 60}}
         self.ssd_tier = Tier(self.env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
         mock_get_timeseries.return_value = get_job_timeseries_from_file(job_id=2537) #457344
+        mock_get_kc_token.return_value = 'token'
 
         # init the job decomposer
         jd = JobDecomposer()
