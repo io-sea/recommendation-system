@@ -19,6 +19,7 @@ from scipy import integrate
 from app_decomposer.signal_decomposer import KmeansSignalDecomposer, get_lowest_cluster
 from app_decomposer.api_connector import TimeSeries, MetaData, JobSearch
 from app_decomposer.config_parser import Configuration
+from app_decomposer import DEFAULT_CONFIGURATION
 
 def get_phase_volume(signal, method="sum", start_index=0, end_index=-1, dx=1):
     """Method allowing many functions to compute the total volume of data for a given phase boundary in a signal array.
@@ -271,7 +272,7 @@ class JobDecomposer:
         self.job_id = job_id
         self.signal_decomposer = signal_decomposer
         # Initialize the IOI Connector Configuration
-        config = Configuration(path=DEFAULT_CONFIG)
+        self.config = Configuration(path=DEFAULT_CONFIGURATION)
         api_uri = f"{self.config.get_api_uri()}:{self.config.get_api_port()}"
         api_token = self.config.get_kc_token()
         self.timestamps, self.read_signal, self.write_signal = self.get_job_timeseries(api_uri, api_token)
