@@ -1,7 +1,5 @@
 # VScode
-.vscode/
-.VSCodeCounter/
-bbo/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -9,6 +7,13 @@ __pycache__/
 
 # C extensions
 *.so
+
+# Special folders and vscode
+job_decomposer/
+jobmodel
+.vscode/
+.VSCodeCounter/
+bbo/
 
 # Distribution / packaging
 .Python
