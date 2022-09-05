@@ -31,7 +31,7 @@ class DumpExtractor:
         elif isinstance(jobs, list):
             self.jobs = jobs
         
-    def get_bson_path(self, dir_list=["dump", "cmdb_database"], filename="JobItem.bson"):
+    def get_bson_path(self, dir_list=["cmdb_database"], filename="JobItem.bson"):
         """Get the path to the JobItem.bson file or any specified bson path.
 
         Args:
@@ -215,6 +215,15 @@ if __name__ == '__main__':
     
     # NAMD
     # C:\Users\a770398\IO-SEA\io-sea-3.4-analytics\dataset_generation\dump
-    jobids = [4911, 4912, 4913, 4949, 4950, 4951, 4952, 4953, 4954]
-    dump_extractor = DumpExtractor(absolute_dump_path = "C:\\Users\\a770398\\IO-SEA\\io-sea-3.4-analytics\\dataset_generation", target_folder="C:\\Users\\a770398\\IO-SEA\\io-sea-3.4-analytics\\dataset_generation\\dataset_generation\\dataset_namd", jobs=jobids)
+    # jobids = [4911, 4912, 4913, 4949, 4950, 4951, 4952, 4953, 4954]
+    # dump_extractor = DumpExtractor(absolute_dump_path = "C:\\Users\\a770398\\IO-SEA\\io-sea-3.4-analytics\\dataset_generation", target_folder="C:\\Users\\a770398\\IO-SEA\\io-sea-3.4-analytics\\dataset_generation\\dataset_generation\\dataset_namd", jobs=jobids)
+    # dump_extractor.extract_job()
+
+    # KIWI database for validation
+    absolute_dump_path = "C:\\Users\\a770398\\IO-SEA\\io-sea-3.4-analytics\\dataset_generation\\dump\kiwi"
+    target_folder = "C:\\Users\\a770398\\IO-SEA\\io-sea-3.4-analytics\\dataset_generation\\dataset_generation\\dataset_kiwi_validation"
+    jobids = list(range(3906, 3920))
+    dump_extractor = DumpExtractor(absolute_dump_path=absolute_dump_path,
+    target_folder=target_folder, jobs=jobids)
     dump_extractor.extract_job()
+    
