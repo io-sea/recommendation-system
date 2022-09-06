@@ -155,11 +155,13 @@ class IOPhase:
         dirty: int to indicate the amount of data that is dirty in ephemeral tier/RAM (does not have a copy in persistent tier).
         data: data store object where application records are kept.
         appname: a user specified application name the phase belongs to.
+        bw : in MB/s the observed throughput for this IO to reproduce the observed results.
     """
     #
     current_ios = []
 
-    def __init__(self, cores=1, operation='read', volume=1e9, pattern=1, data=None, appname=None):
+    def __init__(self, cores=1, operation='read', volume=1e9, pattern=1,
+                 data=None, appname=None, bw=None):
         """Inits an instance of I/O phase."""
         self.cores = cores
         self.operation = operation
@@ -171,6 +173,9 @@ class IOPhase:
         self.bandwidth_concurrency = 1
         self.data = data or None
         self.appname = appname or ''
+
+        # case where bandwidth is given for a reproducing a simulation
+        self.bw = bw*1e6 if bw else bw
         # logger.info(self.__str__())
 
     def __str__(self):
@@ -307,7 +312,7 @@ class IOPhase:
                     self.register_step(t_start, step_duration, available_bandwidth, cluster,
                                        tier=tier, initial_levels=initial_levels, eviction=eviction)
 
-        except simpy.exceptions.Interrupt as interrupt:
+        except simpy.exceptions.Interrupt:
             logger.trace(f'{self.appname} interrupt at {self.env.now}')
             step_duration = self.env.now - t_start
             if step_duration:
@@ -357,7 +362,7 @@ class IOPhase:
                     self.register_step(t_start, step_duration, available_bandwidth, cluster,
                                        target_tier, initial_levels, source_tier, eviction)
 
-        except simpy.exceptions.Interrupt as interrupt:
+        except simpy.exceptions.Interrupt:
             logger.trace(f'{self.appname} interrupt at {self.env.now}')
             step_duration = self.env.now - t_start
             if step_duration:
@@ -378,6 +383,29 @@ class IOPhase:
 
         return volume
 
+    def evaluate_tier_bandwidth(self, cluster, tier):
+        """Method to evaluate the bandwidth value for a given storage tier, and I/O operation, and a given I/O pattern.
+
+        Args:
+            cluster (Cluster): cluster object for which the bw will be evaluated.
+            tier (Tier): the tier of the cluster storage system where the I/O will be executed.
+        """
+        assert isinstance(tier, Tier)
+        # # assign bandwidth resource if not already done
+        # self.env = env
+        # if not tier.bandwidth:
+        #     tier.bandwidth = BandwidthResource(IOPhase.current_ios, self.env, 10)
+        if self.bw:
+            available_bandwidth = self.bw
+        else:
+            max_bandwidth = cluster.get_max_bandwidth(tier, operation=self.operation, pattern=self.pattern)
+            self.bandwidth_concurrency = tier.bandwidth.count
+            available_bandwidth = max_bandwidth/self.bandwidth_concurrency
+
+        return available_bandwidth
+
+
+
     def get_step_duration(self, cluster, tier, volume):
         """Get the adequate step duration to not avoid I/O event or volume saturation in tier
 
@@ -389,9 +417,8 @@ class IOPhase:
         Returns:
             tuple: _description_
         """
-        max_bandwidth = cluster.get_max_bandwidth(tier, operation=self.operation, pattern=self.pattern)
-        self.bandwidth_concurrency = tier.bandwidth.count
-        available_bandwidth = max_bandwidth/self.bandwidth_concurrency
+
+        available_bandwidth = self.evaluate_tier_bandwidth(cluster, tier)
         # limit the volume to maximum available
         max_volume = min(volume, tier.capacity.capacity - tier.capacity.level)
         # take the smallest step, step_duration must be > 0
@@ -498,6 +525,7 @@ class IOPhase:
             simpy.Event: other events that can occur during the I/O operation.
         """
         self.env = env
+        # assign bandwidth resource if not already done
         if not tier.bandwidth:
             tier.bandwidth = BandwidthResource(IOPhase.current_ios, self.env, 10)
         volume = self.volume
@@ -510,6 +538,7 @@ class IOPhase:
 
                 step_duration, available_bandwidth = self.get_step_duration(cluster, tier, volume)
                 logger.trace(f"appname: {self.appname}, now : {self.env.now} | last event: {self.last_event} | next event: {self.next_event}"
+                             f" | available bandwidth: {available_bandwidth}"
                              f" | full duration: {volume/available_bandwidth} | step duration: {step_duration}")
                 initial_volumes = cluster.get_levels()
                 step_event = self.env.process(self.process_volume(step_duration, volume,

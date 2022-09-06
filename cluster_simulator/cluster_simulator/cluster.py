@@ -118,7 +118,7 @@ class Cluster:
         if not isinstance(tier, Tier):
             tier = get_tier(self, tier)
         return (tier.max_bandwidth[operation]['seq'] * pattern +
-                tier.max_bandwidth[operation]['rand'] * (1-pattern)) * cores*1e6
+                tier.max_bandwidth[operation]['rand'] * (1-pattern)) * cores * 1e6
 
 
 class Tier:
@@ -138,6 +138,7 @@ class Tier:
             name (string): a name to make analytics readable and to assign a unique ID to a tier.
             bandwidth (simpy.Resource): bandwidth as limited number of slots that can be consumed.  Default capacity is up to 10 concurrent I/O sharing the maximum value of the bandwidth.
             capacity (simpy.Container, optional): storage capacity of the tier. Defaults to 100e9.
+            max_bandwidth (dict): which contains operation and pattern dependant max bandwidths.
         """
         self.env = env
         self.name = name

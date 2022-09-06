@@ -3,9 +3,10 @@ import time
 import numpy as np
 import simpy
 from loguru import logger
+import sys
 
 from cluster_simulator.cluster import Cluster, Tier, EphemeralTier, bandwidth_share_model, compute_share_model
-from cluster_simulator.utils import convert_size, get_tier
+from cluster_simulator.utils import convert_size, get_tier, BandwidthResource
 from cluster_simulator.phase import DelayPhase, ComputePhase, IOPhase
 from cluster_simulator.analytics import display_run
 
@@ -98,6 +99,32 @@ class TestPhase(unittest.TestCase):
         self.env.process(write_io.run(self.env, cluster, placement=1))
         self.env.run(until=10)
 
+    def test_evaluate_tier_bandwidth_no_bw(self):
+        data = simpy.Store(self.env)
+        placement=0
+        logger.add(sys.stderr, level="TRACE")
+        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
+        read_io = IOPhase(operation='read', volume=9e9, pattern=0, data=data)
+        self.env.process(read_io.run(self.env, cluster, placement=placement))
+        self.env.run()
+        # Traces should print an availbale bw of 190e6
+        tier = get_tier(cluster, placement)
+        self.assertAlmostEqual(tier.max_bandwidth["read"]["rand"],
+                               data.items[0]["bandwidth"])
+
+    def test_evaluate_tier_bandwidth_with_bw(self):
+        logger.add(sys.stderr, level="TRACE")
+        bw = 113
+        data = simpy.Store(self.env)
+        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
+        read_io = IOPhase(operation='read', volume=9e9, pattern=0, data=data,
+                          bw=bw)
+        self.env.process(read_io.run(self.env, cluster, placement=0))
+        self.env.run()
+        print(read_io.bw)
+        print(data.items[0])
+        # Traces should print an availbale bw of 113e6
+        self.assertAlmostEqual(data.items[0]["bandwidth"], bw)
 
 class TestBandwidthShare(unittest.TestCase):
     def setUp(self):
