@@ -45,7 +45,8 @@ class Application:
 
     """
 
-    def __init__(self, env, name=None, compute=None, read=None, write=None, data=None, delay=0):
+    def __init__(self, env, name=None, compute=None, read=None,
+                 write=None, bw=None, data=None, delay=0):
         """Initialize the application and schedule the sequence of phases.
 
         Args:
@@ -63,6 +64,8 @@ class Application:
                 a list of the same length as compute. For each time indicated in the compute list, the write list contains the volume of bytes that should be written by the application at this timed event. The duration of the write phase depends on the cluster hardware.
             data:
                 (optional) a simpy.Store object that stores the phases schedule of the application and make it available outside of the application.
+            bw :
+                (list, optional) in MB/s the observed throughput for this IO to reproduce the observed results.
             delay:
                 time in seconds to wait in order to start the application.
         """
@@ -76,6 +79,7 @@ class Application:
         # ensure format is valid, all list are length equal
         assert all([len(lst) == len(self.compute) for lst in [self.read, self.write]])
         self.data = data or None
+        self.bw = bw or None
         self.status = None
         # schedule all events
         self.cores_request = []
@@ -105,7 +109,7 @@ class Application:
         self.store.put(compute_phase)
         self.cores_request.append(compute_phase.cores)
 
-    def put_io(self, operation, volume, pattern=1):
+    def put_io(self, operation, volume, pattern=1, bw=None):
         """Add an I/O phase in read or write mode with a specific volume and pattern. It subclasses IOPhase and the object is queued to store attribute.
 
         Args:
@@ -114,8 +118,12 @@ class Application:
             volume (float): volume in bytes of data to be processed by the I/O.
             pattern (float):
                 encodes sequential pattern for a value of 1, and a random pattern for value of 0. Accepts intermediate values like 0.2, i.e. a mix of 20% sequential and 80% random. Default value is set to 1.
+            bw (float):
+                if note None initiates an IOPhase with bw argument to comply to mandatory observed bandwidth.
         """
-        io_phase = IOPhase(cores=1, operation=operation, volume=volume, pattern=pattern, data=self.data, appname=self.name)
+        bw = bw or None
+        io_phase = IOPhase(cores=1, operation=operation, volume=volume,
+                           pattern=pattern, data=self.data, bw=bw, appname=self.name)
         self.store.put(io_phase)
         self.cores_request.append(io_phase.cores)
 
@@ -129,15 +137,17 @@ class Application:
         if self.delay > 0:
             self.put_delay(duration=self.delay)
             self.status.append(False)
-        for i in range(len(self.compute)):
+        for i, _ in enumerate(self.compute):
             # iterating over timestamps
             if self.read[i] > 0:
                 # register read phases
-                self.put_io(operation="read", volume=self.read[i])
+                phase_bw = self.bw[i] if self.bw else None
+                self.put_io(operation="read", volume=self.read[i], bw=phase_bw)
                 self.status.append(False)
             if self.write[i] > 0:
                 # register write phases
-                self.put_io(operation="write", volume=self.write[i])
+                phase_bw = self.bw[i] if self.bw else None
+                self.put_io(operation="write", volume=self.write[i], bw=phase_bw)
                 self.status.append(False)
             if i < len(self.compute) - 1:
                 # register compute phase with duration  = diff between two events
