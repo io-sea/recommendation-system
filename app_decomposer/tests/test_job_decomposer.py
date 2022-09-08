@@ -10,7 +10,7 @@ from os.path import dirname, abspath
 import pandas as pd
 import random
 
-from app_decomposer.job_decomposer import JobDecomposer, get_events_indexes, get_signal_representation, get_phase_volume, phases_to_representation, get_events_indexes, get_events_indexes_no_merge, get_phase_volume
+from app_decomposer.job_decomposer import JobDecomposer, ComplexDecomposer, get_events_indexes, get_signal_representation, get_phase_volume, phases_to_representation, complex_to_representation, get_events_indexes, get_events_indexes_no_merge, get_phase_volume, is_interval_in
 
 from app_decomposer.config_parser import Configuration
 from app_decomposer.signal_decomposer import KmeansSignalDecomposer, get_lowest_cluster
@@ -583,4 +583,104 @@ class TestJobDecomposer(unittest.TestCase):
         self.assertListEqual(writes, [0, 0, 40, 0])
         self.assertListEqual(read_bw, [0, 11, 0, 0])
         self.assertListEqual(write_bw, [0, 0, 20, 0])
+
+
+class TestIsIntervalIn(unittest.TestCase):
+    def test_is_interval_in(self):
+        """test if is_interval_in works properly."""
+        i_start, i_end = 10, 15
+        starts = [0, 12]
+        ends = [10, 14]
+        self.assertListEqual(is_interval_in(starts, ends, i_start, i_end), [False, True])
+
+    def test_is_interval_in_2(self):
+        """test if is_interval_in works properly."""
+        i_start, i_end = 10, 15
+        starts = [10, 16]
+        ends = [9, 17]
+        self.assertListEqual(is_interval_in(starts, ends, i_start, i_end), [False, False])
+
+class TestComplexDecomposer(unittest.TestCase):
+    """Test the job crosswalk signals."""
+    @patch.object(Configuration, 'get_kc_token')
+    @patch.object(ComplexDecomposer, 'get_job_timeseries')
+    def test_complex_decomposer_compute_flat_phases(self, mock_get_timeseries, mock_get_kc_token):
+        """Test combining phases from flat read and write signals to get a representation."""
+        timestamps = np.arange(3)
+        read_signal = np.array([0, 0, 0])
+        write_signal = np.array([0, 0, 0])
+        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        mock_get_kc_token.return_value = 'token'
+        # init the job decomposer
+        cd = ComplexDecomposer()
+        read_breakpoints, read_labels, write_breakpoints, write_labels, norm_breakpoints, norm_labels = cd.get_phases()
+        self.assertListEqual(read_breakpoints, [])
+        self.assertListEqual(write_breakpoints, [])
+        np.testing.assert_array_equal(read_labels, np.array([0, 0, 0]))
+        np.testing.assert_array_equal(write_labels, np.array([0, 0, 0]))
+
+    @patch.object(Configuration, 'get_kc_token')
+    @patch.object(ComplexDecomposer, 'get_job_timeseries')
+    def test_complex_decomposer_compute_flat_representation(self, mock_get_timeseries, mock_get_kc_token):
+        """Test combining representation from flat read and write signals."""
+        timestamps = np.arange(3)
+        read_signal = np.array([0, 0, 0])
+        write_signal = np.array([0, 0, 0])
+        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        mock_get_kc_token.return_value = 'token'
+        # init the job decomposer
+        cd = ComplexDecomposer()
+        compute, volume, bandwidth = cd.get_job_representation()
+        self.assertListEqual(compute, [0, 2])
+        self.assertListEqual(volume, [0, 0])
+        self.assertListEqual(bandwidth, [0, 0])
+
+
+    @patch.object(Configuration, 'get_kc_token')
+    @patch.object(ComplexDecomposer, 'get_job_timeseries')
+    def test_complex_decomposer_compute_disjoint(self, mock_get_timeseries, mock_get_kc_token):
+        """Test combining phases from read and write signals to get a representation."""
+        timestamps = np.arange(6)
+        read_signal = np.array([1, 1, 0, 0, 0, 0])
+        write_signal = np.array([0, 0, 0, 0, 1, 1])
+        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        mock_get_kc_token.return_value = 'token'
+        # init the job decomposer
+        cd = ComplexDecomposer()
+        compute, data, bandwidth = cd.get_job_representation()
+        print(f"compute={compute}, data={data}, bw={bandwidth}")
+        self.assertListEqual(compute, [0, 2])
+        self.assertListEqual(data, [2, 2])
+        self.assertListEqual(bandwidth, [1, 1])
+
+
+    @patch.object(Configuration, 'get_kc_token')
+    @patch.object(ComplexDecomposer, 'get_job_timeseries')
+    def test_complex_decomposer_compute_limit_joint(self, mock_get_timeseries, mock_get_kc_token):
+        """Test combining phases from read and write signals to get a representation."""
+        timestamps = np.arange(6)
+        read_signal = np.array([1, 1, 1, 0, 0, 0])
+        write_signal = np.array([0, 0, 0, 1, 1, 1])
+        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        mock_get_kc_token.return_value = 'token'
+        # init the job decomposer
+        cd = ComplexDecomposer()
+        compute, data, bandwidth = cd.get_job_representation()
+        print(f"compute={compute}, data={data}, bw={bandwidth}")
+
+    @patch.object(Configuration, 'get_kc_token')
+    @patch.object(ComplexDecomposer, 'get_job_timeseries')
+    def test_complex_decomposer_compute_1pt_joint(self, mock_get_timeseries, mock_get_kc_token):
+        """Test combining phases from read and write signals to get a representation."""
+        timestamps = np.arange(6)
+        read_signal = np.array([1, 1, 1, 1, 0, 0])
+        write_signal = np.array([0, 0, 0, 1, 1, 1])
+        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        mock_get_kc_token.return_value = 'token'
+        # init the job decomposer
+        cd = ComplexDecomposer()
+        compute, start_points, end_points = cd.get_phases()
+        print(f"compute={compute}, starts={start_points}, ends={end_points}")
+        self.assertListEqual(compute, [0])
+
 
