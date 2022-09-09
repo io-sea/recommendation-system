@@ -630,10 +630,65 @@ class TestComplexDecomposer(unittest.TestCase):
         mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         cd = ComplexDecomposer()
-        compute, volume, bandwidth = cd.get_job_representation()
-        self.assertListEqual(compute, [0, 2])
-        self.assertListEqual(volume, [0, 0])
-        self.assertListEqual(bandwidth, [0, 0])
+        norm_compute, read_volumes, read_bw, write_volumes, write_bw = cd.get_job_representation()
+        self.assertListEqual(norm_compute, [0])
+        self.assertListEqual(read_volumes, [0])
+        self.assertListEqual(read_bw, [0])
+        self.assertListEqual(write_volumes, [0])
+        self.assertListEqual(write_bw, [0])
+        print(norm_compute)
+        print(read_volumes)
+        print(read_bw)
+        print(write_volumes)
+        print(write_bw)
+
+    @patch.object(Configuration, 'get_kc_token')
+    @patch.object(ComplexDecomposer, 'get_job_timeseries')
+    def test_complex_decomposer_compute_dirac_representation(self, mock_get_timeseries, mock_get_kc_token):
+        """Test combining representation from flat read and write signals."""
+        timestamps = np.arange(3)
+        read_signal = np.array([1, 0, 0])
+        write_signal = np.array([0, 0, 0])
+        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        mock_get_kc_token.return_value = 'token'
+        # init the job decomposer
+        cd = ComplexDecomposer()
+        compute, read_volumes, read_bw, write_volumes, write_bw = cd.get_job_representation()
+        print(compute)
+        print(read_volumes)
+        print(read_bw)
+        print(write_volumes)
+        print(write_bw)
+        self.assertListEqual(compute, [0, 1])
+        self.assertListEqual(read_volumes, [1, 0])
+        self.assertListEqual(read_bw, [1, 0])
+        self.assertListEqual(write_volumes, [0, 0])
+        self.assertListEqual(write_bw, [0, 0])
+
+
+    @patch.object(Configuration, 'get_kc_token')
+    @patch.object(ComplexDecomposer, 'get_job_timeseries')
+    def test_complex_decomposer_compute_dirac_bw_check(self, mock_get_timeseries, mock_get_kc_token):
+        """Test combining representation from flat read and write signals."""
+        timestamps = np.arange(3)
+        read_signal = np.array([10, 4, 0])
+        write_signal = np.array([0, 0, 0])
+        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        mock_get_kc_token.return_value = 'token'
+        # init the job decomposer
+        cd = ComplexDecomposer()
+        compute, read_volumes, read_bw, write_volumes, write_bw = cd.get_job_representation()
+        print(compute)
+        print(read_volumes)
+        print(read_bw)
+        print(write_volumes)
+        print(write_bw)
+        self.assertListEqual(compute, [0, 1])
+        self.assertListEqual(read_volumes, [1, 0])
+        self.assertListEqual(read_bw, [1, 0])
+        self.assertListEqual(write_volumes, [0, 0])
+        self.assertListEqual(write_bw, [0, 0])
+
 
 
     @patch.object(Configuration, 'get_kc_token')
