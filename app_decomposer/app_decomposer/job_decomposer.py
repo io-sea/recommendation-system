@@ -480,16 +480,14 @@ class ComplexDecomposer:
             for starting_point, ending_point in zip(read_start_points, read_end_points):
                 # iterate over read subphases
                 #if i_start <= starting_point <= i_end and starting_point <= ending_point <= i_end:
-                if i_start <= starting_point <= i_end:
-                    if ending_point >= i_end:
-                        # crop the subphase to the end of global phase
-                        ending_point = i_end
-                    # subphase within the norm phase
-                    read_volume += get_phase_volume(self.read_signal,
-                                     start_index=starting_point,
-                                     end_index=ending_point,
-                                     dx=1)
-                    read_extent += ending_point - starting_point
+                ending_point = min(ending_point, i_end)
+                starting_point = max(starting_point, i_start)
+                # subphase within the norm phase
+                read_volume += get_phase_volume(self.read_signal,
+                                    start_index=starting_point,
+                                    end_index=ending_point,
+                                    dx=1)
+                read_extent += ending_point - starting_point
             read_volumes.append(read_volume)
             bw = read_volume/(read_extent * dx) if read_extent else 0
             read_bw.append(bw)
@@ -500,16 +498,15 @@ class ComplexDecomposer:
             for starting_point, ending_point in zip(write_start_points, write_end_points):
                 # iterate over read subphases
                 #if i_start <= starting_point <= i_end and starting_point <= ending_point <= i_end:
-                if i_start <= starting_point <= i_end:
-                    if ending_point >= i_end:
-                        # crop the subphase to the end of global phase
-                        ending_point = i_end
-                    # subphase within the norm phase
-                    write_volume += get_phase_volume(self.write_signal,
-                                     start_index=starting_point,
-                                     end_index=ending_point,
-                                     dx=1)
-                    write_extent += ending_point - starting_point
+                ending_point = min(ending_point, i_end)
+                starting_point = max(starting_point, i_start)
+
+                # subphase within the norm phase
+                write_volume += get_phase_volume(self.write_signal,
+                                    start_index=starting_point,
+                                    end_index=ending_point,
+                                    dx=1)
+                write_extent += ending_point - starting_point
             write_volumes.append(write_volume)
             bw = write_volume/(write_extent * dx) if write_extent else 0
             write_bw.append(bw)
