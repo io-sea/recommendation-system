@@ -38,6 +38,9 @@ def get_lowest_cluster(labels, signal):
     Retuns:
         label0 (int): label with the lowest values.
     """
+    if signal.size <= 1:
+        print(labels[0])
+        return labels[0]
     unique_labels = np.unique(labels).tolist()
     mean_cluster_values = [np.mean(signal[np.where(labels==label, True, False)]) for label in unique_labels]
 

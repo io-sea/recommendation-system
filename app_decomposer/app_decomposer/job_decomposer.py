@@ -81,9 +81,11 @@ def get_events_indexes_no_merge(labels, signal):
     Returns:
         tuple: two lists of indexes for starting and ending points for each detected phase within the signal.
     """
+    print(labels)
+    print(type(labels))
     label0 = get_lowest_cluster(labels, signal)
     # adjust labels to 0 for compute phases and >1 for data phase
-    ref_labels = np.where(labels != label0, labels + 1, 0) # avoiding previous labeled 0
+    ref_labels = np.where(labels != label0, np.array(labels) + 1, 0) # avoiding previous labeled 0
     print(f"labels={ref_labels}")
 
     starting_points = []
@@ -188,7 +190,6 @@ def is_interval_in(starts, ends, i_start, i_end):
 
 
 
-
 def complex_to_representation(start_points, end_points, signal, dx=1):
     """Transform phase limits (starting points and ending points) into a representation in compute, data, and bandwidth lists.
     Args:
@@ -211,11 +212,6 @@ def complex_to_representation(start_points, end_points, signal, dx=1):
     # if no breakpoints
     if not start_points and not end_points:
         compute, data, bandwidth = [0], [np.sum(signal)], [np.sum(signal)/len(signal)]
-        # if len(signal) > 0:
-        #     compute.append(len(signal) - 1)
-        #     data.append(0)
-        #     bandwidth.append(0)
-
         return compute, data, bandwidth
 
     # if signal starts with compute
@@ -242,8 +238,6 @@ def complex_to_representation(start_points, end_points, signal, dx=1):
         compute.append(len(signal) - 1 - total_phase_durations)
         data.append(0)
         bandwidth.append(0)
-
-
 
     return compute, data, bandwidth
 
@@ -414,55 +408,141 @@ class ComplexDecomposer:
 
     def get_phases(self):
         """Get phases from each timeserie of the job but using mixed complex signal."""
-        read_decomposer = self.signal_decomposer(self.read_signal)
-        write_decomposer = self.signal_decomposer(self.write_signal)
-        norm_decomposer = self.signal_decomposer(self.norm_signal)
-        read_breakpoints, read_labels = read_decomposer.decompose()
-        write_breakpoints, write_labels = write_decomposer.decompose()
-        norm_breakpoints, norm_labels = norm_decomposer.decompose()
+        if len(self.norm_signal) == 1:
+            return [], [0], [], [0], [], [0]
+        else:
+            read_decomposer = self.signal_decomposer(self.read_signal)
+            write_decomposer = self.signal_decomposer(self.write_signal)
+            norm_decomposer = self.signal_decomposer(self.norm_signal)
+            read_breakpoints, read_labels = read_decomposer.decompose()
+            write_breakpoints, write_labels = write_decomposer.decompose()
+            norm_breakpoints, norm_labels = norm_decomposer.decompose()
 
-        return read_breakpoints, read_labels, write_breakpoints, write_labels, norm_breakpoints, norm_labels
+            return read_breakpoints, read_labels, write_breakpoints, write_labels, norm_breakpoints, norm_labels
 
     def get_job_representation(self, merge_clusters=False):
+
         read_breakpoints, read_labels, write_breakpoints, write_labels, norm_breakpoints, norm_labels = self.get_phases()
-        events, norm_volumes, norm_bandwidths = get_complex_representation(self.timestamps,
-                                                                          self.norm_signal, norm_labels, merge_clusters=merge_clusters)
-        return events, norm_volumes, norm_bandwidths
+
+        print(f"norm bkps = {norm_breakpoints}")
+        print(f"norm labels = {norm_labels}")
+        print(f"read bkps = {read_breakpoints}")
+        print(f"read labels = {read_labels}")
+        print(f"write bkps = {write_breakpoints}")
+        print(f"write labels = {write_labels}")
 
 
-# def combine_representation(representation1, representation2):
-#     """Considers I/O phase exhibiting various clusters levels (levels of bandwidths) to be segmented accoringgly.
-
-#     Args:
-#         representation1 (tuple): contains list of event timestamps, their relative volumes and bandwidths.
-#         representation2 (tuple): contains list of event timestamps, their relative volumes and bandwidths.
-
-#     Returns:
-#         _type_: _description_
-#     """
-#     events1, data1, bw1 = representation1
-#     events2, data2, bw2 = representation2
-
-#     events = np.unique(sorted(events1 + events2)).tolist()
-#     data = [0]*len(events)
-#     bw = [0]*len(events)
-
-#     for idx, event in enumerate(events):
-#         if event in events1:
-#             data[idx] = data1[events1.index(event)]
-#             bw[idx] = bw1[events1.index(event)]
-#         # else:
-#         #     data.append(0)
-#         #     bw.append(0)
-#         if event in events2:
-#             data[idx] = data2[events2.index(event)]
-#             bw[idx] = bw2[events2.index(event)]
-#         # else:
-#         #     data.append(0)
-#         #     bw.append(0)
-#     return events, data, bw
+        # we retain only compute array, volumes and bandwidths are computed individually
+        # norm_compute, _, _ = get_complex_representation(self.timestamps, self.norm_signal,
+        #                                                 norm_labels, merge_clusters=merge_clusters)
+        if merge_clusters:
+            norm_start_points, norm_end_points = get_events_indexes(norm_labels, self.norm_signal)
+            read_start_points, read_end_points = get_events_indexes(read_labels, self.read_signal)
+            write_start_points, write_end_points = get_events_indexes(write_labels, self.write_signal)
+        else:
+            norm_start_points, norm_end_points = get_events_indexes_no_merge(norm_labels, self.norm_signal)
+            read_start_points, read_end_points = get_events_indexes_no_merge(read_labels, self.read_signal)
+            write_start_points, write_end_points = get_events_indexes_no_merge(write_labels, self.write_signal)
 
 
+        # integration step, only if size > 1
+        dx = np.diff(self.timestamps.flatten()).tolist()[0] if self.timestamps.size > 1 else self.timestamps[0]
+        dx = dx or 1
+        compute = []
+        read_bw = []
+        read_volumes = []
+        write_bw = []
+        write_volumes = []
+
+        phase_duration = 0
+        excess_phase_durations = 0
+
+        # # if no breakpoints, no I/O phases
+        # if not read_breakpoints and not write_breakpoints:
+        #     if len(self.norm_signal) == 1:
+        #         return [0], [0], [0], [0], [0]
+        #     else:
+        #         return [0, len(self.norm_signal)-1], [0, 0], [0, 0], [0, 0], [0, 0]
+
+
+        # if no breakpoints, no I/O phases
+        # if not norm_start_points and not norm_end_points:
+        #     if len(self.norm_signal) == 1:
+        #         return [0], [0], [0], [0], [0]
+        #     else:
+        #         return [0, len(self.norm_signal)-1], [0, 0], [0, 0], [0, 0], [0, 0]
+
+        # if no phases
+        if not norm_start_points and not norm_end_points:
+            if sum(self.norm_signal) > 0:
+                # one I/O phase, assign extrem points and let do calculations
+                norm_start_points = [0]
+                norm_end_points = [len(self.norm_signal)]
+            else:
+                # pure compute phase
+                return [0, len(self.norm_signal)-1], [0, 0], [0, 0], [0, 0], [0, 0]
+
+        # if signal starts with compute
+        if norm_start_points[0] > 0:
+            compute.append(0)
+            read_volumes.append(0)
+            read_bw.append(0)
+            write_volumes.append(0)
+            write_bw.append(0)
+
+        for i_start, i_end in zip(norm_start_points, norm_end_points):
+            # feeding the compute array
+            compute.append(i_start - excess_phase_durations)
+            excess_phase_durations += i_end - i_start - 1
+
+            ## feeding volumes and bandwidths
+            # for a given "norm" phase
+            read_volume = 0
+            read_extent = 0
+            for starting_point, ending_point in zip(read_start_points, read_end_points):
+                # iterate over read subphases
+                #if i_start <= starting_point <= i_end and starting_point <= ending_point <= i_end:
+                ending_point = min(ending_point, i_end)
+                starting_point = max(starting_point, i_start)
+                # subphase within the norm phase
+                read_volume += get_phase_volume(self.read_signal,
+                                    start_index=starting_point,
+                                    end_index=ending_point,
+                                    dx=1)
+                read_extent += ending_point - starting_point
+            read_volumes.append(read_volume)
+            bw = read_volume/(read_extent * dx) if read_extent else 0
+            read_bw.append(bw)
+
+
+            write_volume = 0
+            write_extent = 0
+            for starting_point, ending_point in zip(write_start_points, write_end_points):
+                # iterate over read subphases
+                #if i_start <= starting_point <= i_end and starting_point <= ending_point <= i_end:
+                ending_point = min(ending_point, i_end)
+                starting_point = max(starting_point, i_start)
+
+                # subphase within the norm phase
+                write_volume += get_phase_volume(self.write_signal,
+                                    start_index=starting_point,
+                                    end_index=ending_point,
+                                    dx=1)
+                write_extent += ending_point - starting_point
+            write_volumes.append(write_volume)
+            bw = write_volume/(write_extent * dx) if write_extent else 0
+            write_bw.append(bw)
+
+        if norm_end_points[-1] < len(self.norm_signal):
+            compute.append(len(self.norm_signal) - 1 - excess_phase_durations)
+            [output_list.append(0) for output_list in [read_volumes, write_volumes, read_bw, write_bw]]
+
+        read_volumes = read_volumes or [0]
+        read_bw = read_bw or [0]
+        write_volumes = write_volumes or [0]
+        write_bw = write_bw or [0]
+
+        return compute, read_volumes, read_bw, write_volumes, write_bw
 
 
 class JobConnector:
