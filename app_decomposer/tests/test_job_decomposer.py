@@ -1089,13 +1089,13 @@ class TestComplexDecomposer(unittest.TestCase):
     def test_complex_decomposer_compute_1pt_joint(self, mock_get_timeseries, mock_get_kc_token):
         """Test combining phases from read and write signals to get a representation."""
         timestamps = np.arange(6)
-        read_signal = np.array([1, 1, 1, 1, 0, 0])
-        write_signal = np.array([0, 0, 0, 1, 1, 1])
+        read_signal = np.array([1, 1, 1, 12, 0, 0])
+        write_signal = np.array([0, 0, 0, 12, 1, 1])
         mock_get_timeseries.return_value = timestamps, read_signal, write_signal
         mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         cd = ComplexDecomposer()
-        compute, read_volumes, read_bw, write_volumes, write_bw = cd.get_job_representation()
+        compute, read_volumes, read_bw, write_volumes, write_bw = cd.get_job_representation(merge_clusters=True)
         print(compute)
         print(read_volumes)
         print(read_bw)
