@@ -81,9 +81,11 @@ def get_events_indexes_no_merge(labels, signal):
     Returns:
         tuple: two lists of indexes for starting and ending points for each detected phase within the signal.
     """
+    print(labels)
+    print(type(labels))
     label0 = get_lowest_cluster(labels, signal)
     # adjust labels to 0 for compute phases and >1 for data phase
-    ref_labels = np.where(labels != label0, labels + 1, 0) # avoiding previous labeled 0
+    ref_labels = np.where(labels != label0, np.array(labels) + 1, 0) # avoiding previous labeled 0
     print(f"labels={ref_labels}")
 
     starting_points = []
@@ -422,12 +424,13 @@ class ComplexDecomposer:
 
         read_breakpoints, read_labels, write_breakpoints, write_labels, norm_breakpoints, norm_labels = self.get_phases()
 
-        # if no breakpoints, no I/O phases
-        if not read_breakpoints and not write_breakpoints:
-            if len(self.norm_signal) == 1:
-                return [0], [0], [0], [0], [0]
-            else:
-                return [0, len(self.norm_signal)-1], [0, 0], [0, 0], [0, 0], [0, 0]
+        print(f"norm bkps = {norm_breakpoints}")
+        print(f"norm labels = {norm_labels}")
+        print(f"read bkps = {read_breakpoints}")
+        print(f"read labels = {read_labels}")
+        print(f"write bkps = {write_breakpoints}")
+        print(f"write labels = {write_labels}")
+
 
         # we retain only compute array, volumes and bandwidths are computed individually
         # norm_compute, _, _ = get_complex_representation(self.timestamps, self.norm_signal,
@@ -442,8 +445,9 @@ class ComplexDecomposer:
             write_start_points, write_end_points = get_events_indexes_no_merge(write_labels, self.write_signal)
 
 
-        # integration step
-        dx = np.diff(self.timestamps.flatten()).tolist()[0]
+        # integration step, only if size > 1
+        dx = np.diff(self.timestamps.flatten()).tolist()[0] if self.timestamps.size > 1 else self.timestamps[0]
+        dx = dx or 1
         compute = []
         read_bw = []
         read_volumes = []
@@ -453,11 +457,29 @@ class ComplexDecomposer:
         phase_duration = 0
         excess_phase_durations = 0
 
+        # # if no breakpoints, no I/O phases
+        # if not read_breakpoints and not write_breakpoints:
+        #     if len(self.norm_signal) == 1:
+        #         return [0], [0], [0], [0], [0]
+        #     else:
+        #         return [0, len(self.norm_signal)-1], [0, 0], [0, 0], [0, 0], [0, 0]
+
+
         # if no breakpoints, no I/O phases
+        # if not norm_start_points and not norm_end_points:
+        #     if len(self.norm_signal) == 1:
+        #         return [0], [0], [0], [0], [0]
+        #     else:
+        #         return [0, len(self.norm_signal)-1], [0, 0], [0, 0], [0, 0], [0, 0]
+
+        # if no phases
         if not norm_start_points and not norm_end_points:
-            if len(self.norm_signal) == 1:
-                return [0], [0], [0], [0], [0]
+            if sum(self.norm_signal) > 0:
+                # one I/O phase, assign extrem points and let do calculations
+                norm_start_points = [0]
+                norm_end_points = [len(self.norm_signal)]
             else:
+                # pure compute phase
                 return [0, len(self.norm_signal)-1], [0, 0], [0, 0], [0, 0], [0, 0]
 
         # if signal starts with compute
