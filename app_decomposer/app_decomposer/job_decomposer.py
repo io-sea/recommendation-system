@@ -379,7 +379,7 @@ class JobDecomposer:
 
 class ComplexDecomposer:
     """This class takes separate read and write dataflow timeseries in order to extract separated phases for each type: compute, read and write phases."""
-    def __init__(self, job_id=None, signal_decomposer=KmeansSignalDecomposer):
+    def __init__(self, job_id=None, signal_decomposer=KmeansSignalDecomposer, v0_threshold=0.05):
         """Initiates JobDecomposer class by fetching job related data.
 
         Args:
@@ -388,6 +388,7 @@ class ComplexDecomposer:
         """
         self.job_id = job_id
         self.signal_decomposer = signal_decomposer
+        self.v0_threshold = v0_threshold
         # Initialize the IOI Connector Configuration
         self.config = Configuration(path=DEFAULT_CONFIGURATION)
         api_uri = f"{self.config.get_api_uri()}:{self.config.get_api_port()}"
@@ -395,6 +396,7 @@ class ComplexDecomposer:
         self.timestamps, self.read_signal, self.write_signal = self.get_job_timeseries(api_uri, api_token)
         self.complex_signal = self.read_signal + 1j * self.write_signal
         self.norm_signal = np.abs(self.read_signal + 1j * self.write_signal)
+        #self.norm_signal = np.abs(self.read_signal) + np.abs(self.write_signal)
 
     def get_job_timeseries(self, api_uri, api_token):
         """Method to extract read and write timeseries for a job instrumented in IOI.
@@ -411,9 +413,12 @@ class ComplexDecomposer:
         if len(self.norm_signal) == 1:
             return [], [0], [], [0], [], [0]
         else:
-            read_decomposer = self.signal_decomposer(self.read_signal)
-            write_decomposer = self.signal_decomposer(self.write_signal)
-            norm_decomposer = self.signal_decomposer(self.norm_signal)
+            read_decomposer = self.signal_decomposer(self.read_signal,
+                                                     v0_threshold=self.v0_threshold)
+            write_decomposer = self.signal_decomposer(self.write_signal,
+                                                     v0_threshold=self.v0_threshold)
+            norm_decomposer = self.signal_decomposer(self.norm_signal,
+                                                     v0_threshold=self.v0_threshold)
             read_breakpoints, read_labels = read_decomposer.decompose()
             write_breakpoints, write_labels = write_decomposer.decompose()
             norm_breakpoints, norm_labels = norm_decomposer.decompose()
@@ -482,13 +487,13 @@ class ComplexDecomposer:
                 # pure compute phase
                 return [0, len(self.norm_signal)-1], [0, 0], [0, 0], [0, 0], [0, 0]
 
-        # if signal starts with compute
+        # adding 0 as default start point if not already existing
         if norm_start_points[0] > 0:
-            compute.append(0)
-            read_volumes.append(0)
-            read_bw.append(0)
-            write_volumes.append(0)
-            write_bw.append(0)
+            norm_start_points.insert(0, 0)
+
+        # appending end point with the last element of signal
+        # if norm_end_points[-1] < len(self.norm_signal):
+        #     norm_end_points.append(len(self.norm_signal))
 
         for i_start, i_end in zip(norm_start_points, norm_end_points):
             # feeding the compute array

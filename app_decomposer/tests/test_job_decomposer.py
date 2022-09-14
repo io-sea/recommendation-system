@@ -1088,9 +1088,10 @@ class TestComplexDecomposer(unittest.TestCase):
     @patch.object(ComplexDecomposer, 'get_job_timeseries')
     def test_complex_decomposer_compute_1pt_joint(self, mock_get_timeseries, mock_get_kc_token):
         """Test combining phases from read and write signals to get a representation."""
+        # TODO : still needs examining this output when write_signal = np.array([0, 0, 0, 1, 1, 1])
         timestamps = np.arange(6)
-        read_signal = np.array([1, 1, 1, 12, 0, 0])
-        write_signal = np.array([0, 0, 0, 12, 1, 1])
+        read_signal = np.array([1, 1, 1, 1, 0, 0])
+        write_signal = np.array([0, 0, 0, 1, 2, 2])
         mock_get_timeseries.return_value = timestamps, read_signal, write_signal
         mock_get_kc_token.return_value = 'token'
         # init the job decomposer
