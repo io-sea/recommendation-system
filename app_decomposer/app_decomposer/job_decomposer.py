@@ -489,7 +489,10 @@ class ComplexDecomposer:
 
         # adding 0 as default start point if not already existing
         if norm_start_points[0] > 0:
+            old_start_point = norm_start_points[0]
             norm_start_points.insert(0, 0)
+            norm_end_points.insert(0, old_start_point)
+            # pairing this start point with first start point
 
         # appending end point with the last element of signal
         # if norm_end_points[-1] < len(self.norm_signal):
@@ -508,13 +511,14 @@ class ComplexDecomposer:
                 # iterate over read subphases
                 #if i_start <= starting_point <= i_end and starting_point <= ending_point <= i_end:
                 ending_point = min(ending_point, i_end)
-                starting_point = max(starting_point, i_start)
+                starting_point = min(max(starting_point, i_start), ending_point)
                 # subphase within the norm phase
                 read_volume += get_phase_volume(self.read_signal,
                                     start_index=starting_point,
                                     end_index=ending_point,
                                     dx=1)
                 read_extent += ending_point - starting_point
+                assert ending_point >= starting_point
             read_volumes.append(read_volume)
             bw = read_volume/(read_extent * dx) if read_extent else 0
             read_bw.append(bw)
@@ -526,7 +530,7 @@ class ComplexDecomposer:
                 # iterate over read subphases
                 #if i_start <= starting_point <= i_end and starting_point <= ending_point <= i_end:
                 ending_point = min(ending_point, i_end)
-                starting_point = max(starting_point, i_start)
+                starting_point = min(max(starting_point, i_start), ending_point)
 
                 # subphase within the norm phase
                 write_volume += get_phase_volume(self.write_signal,
