@@ -7,7 +7,7 @@ from cluster_simulator.cluster import Cluster, Tier, EphemeralTier, bandwidth_sh
 from cluster_simulator.phase import DelayPhase, ComputePhase, IOPhase
 from cluster_simulator.application import Application
 from cluster_simulator.analytics import display_run
-
+from cluster_simulator.analytics import get_execution_signal
 
 class TestAppInit(unittest.TestCase):
     def setUp(self):
@@ -102,6 +102,31 @@ class TestAppInit(unittest.TestCase):
         sample_item = {'app': 'B8', 'type': 'read', 'cpu_usage': 1, 't_start': 12, 't_end': 14}
         data.put(sample_item)
         self.assertAlmostEqual(app.get_fitness(), 2)
+
+
+    def test_app_execution_data(self):
+        """Test the output formatting of data once the app is executed."""
+        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
+        # record data
+        data = simpy.Store(self.env)
+        # Simple app: read 1GB -> compute 10s -> write 5GB
+        compute = [0, 10]
+        read = [1e9, 0]
+        write = [0, 5e9]
+        tiers = [0, 1]
+        app = Application(self.env,
+                          compute=compute,
+                          read=read,
+                          write=write,
+                          data=data)
+        sample_item = {'app': 'B8', 'type': 'read', 'cpu_usage': 1, 't_start': 12, 't_end': 14,
+                       'bandwidth': 2}
+        data.put(sample_item)
+        output = get_execution_signal(data)
+        self.assertListEqual(output['B8']["time"], [12, 14])
+        self.assertListEqual(output['B8']["read_bw"], [0, 2])
+        self.assertListEqual(output['B8']["write_bw"], [0, 0])
+
 
     # def test_app_fitness_filter_name(self):
     #     """Tests that app fitness routine filters by the specified application name."""

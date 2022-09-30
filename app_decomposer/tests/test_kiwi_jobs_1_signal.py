@@ -11,6 +11,7 @@ import pandas as pd
 import random
 import plotly.express as px
 import plotly.graph_objects as go
+import matplotlib.pyplot as plt
 
 from cluster_simulator.cluster import Cluster, Tier, EphemeralTier, bandwidth_share_model, compute_share_model, get_tier, convert_size
 from cluster_simulator.phase import DelayPhase, ComputePhase, IOPhase
@@ -64,6 +65,18 @@ def get_job_timeseries_from_file(job_id=None):
     df = pd.read_csv(csv_file, index_col=0)
     return df[["timestamp"]].to_numpy(), df[["bytesRead"]].to_numpy(), df[["bytesWritten"]].to_numpy()
 
+def plot_job_signal(jobid=None):
+    x, read_signal, write_signal = get_job_timeseries_from_file(job_id=jobid)
+    # plt.rcParams["figure.figsize"] = (20, 5)
+    # plt.rcParams['figure.facecolor'] = 'gray'
+
+    plt.plot(x, read_signal, label="read signal")
+    plt.plot(x, write_signal, label="write signal")
+    plt.grid(True)
+    plt.legend()
+    plt.title(f"timeserie for jobid = {jobid}")
+    plt.show()
+
 
 class QualifyJobDecomposer1Signal(unittest.TestCase):
     """Examine and qualify JobDecomposer on 1D signals."""
@@ -83,27 +96,20 @@ class QualifyJobDecomposer1Signal(unittest.TestCase):
     def test_job_3912(self, mock_get_timeseries, mock_get_kc_token):
         """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
         # mock the method to return some dataset file content
-        mock_get_timeseries.return_value = get_job_timeseries_from_file(job_id=3912)
+        jobid=3912
+        mock_get_timeseries.return_value = get_job_timeseries_from_file(job_id=jobid)
         mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         cd = ComplexDecomposer()
-        compute, read_volumes, read_bw, write_volumes, write_bw = cd.get_job_representation()
-        print(compute)
-        print(read_volumes)
-        print(read_bw)
-        print(write_volumes)
-        print(write_bw)
-        print("--------")
-        print(np.sum(cd.read_signal.flatten()))
-        print(sum(read_volumes))
-        print(cd.read_signal.flatten().tolist())
-        # print(np.sum(cd.write_signal.flatten()))
-        # print(sum(write_volumes))
-        # print(cd.write_signal.flatten().tolist())
-        compute, reads, writes, read_bw, write_bw = cd.get_job_representation()
+        compute, reads, read_bw, writes, write_bw = cd.get_job_representation()
         # This is the app encoding representation for Execution Simulator
         print(f"compute={compute}, reads={reads}, read_bw={read_bw}")
         print(f"compute={compute}, writes={writes}, write_bw={write_bw}")
+
+        # converting bws into MB/s
+        print(read_bw)
+        read_bw = list(map(lambda x: x/1e6, read_bw))
+        print(read_bw)
 
         data = simpy.Store(self.env)
         cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=2,
@@ -116,9 +122,16 @@ class QualifyJobDecomposer1Signal(unittest.TestCase):
                            data=data)
         self.env.process(app.run(cluster, placement=[0]*(10*len(compute))))
         self.env.run()
-        #fig = display_run_with_signal(data, cluster, app_signal=app_signal, width=800, height=900)
-        fig = display_run(data, cluster, width=800, height=900)
+        # plot_job_signal(jobid=jobid)
+        timestamps = (cd.timestamps.flatten() - cd.timestamps.flatten()[0])
+        read_signal =  cd.read_signal.flatten()
+        write_signal = cd.write_signal.flatten()
+        app_signal = timestamps, read_signal, write_signal
+        fig = display_run_with_signal(data, cluster, app_signal=app_signal, width=800, height=900)
         fig.show()
+        #fig = display_run(data, cluster, width=800, height=900)
+        #fig.show()
+        #plot_job_signal(jobid=jobid)
 
         # data = simpy.Store(self.env)
         # cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=2,

@@ -230,146 +230,53 @@ def display_run(data, cluster, width=800, height=600):
         fig.update_xaxes(title_text="time in s")
         i += 1
 
-    x_phase = []
-    y_phase = []
-    x_tiers = [0]
-    x_evict = []
-    capacities = dict()
-    text = []
-    text_evict = []
-    cpu_phase = []
-    buffer_storage = dict()
-    storage = dict()
-    bb_levels = dict()
-    storage_levels = dict()
-    eviction_levels = dict()
-    for phase in data.items:
-
-        x_phase.append([phase["t_start"], phase["t_end"]])
-        y_phase.append(phase["cpu_usage"])
-        x_tiers.append(phase["t_start"])
-        x_tiers.append(phase["t_end"])
-
-        # feeding eviction dict
-        if phase["type"] == "eviction":
-            if "source" in phase["data_placement"]:
-                tier = phase["data_placement"]["source"]
-                eviction_levels.setdefault(tier, []).append([phase["init_level"][tier], phase["tier_level"][tier]])
-                x_evict.append([phase["t_start"], phase["t_end"]])
-                text_evict.append(phase["type"].upper() + "|IN:"+tier + "|volume="+convert_size(phase["init_level"][tier]-phase["tier_level"][tier]))
-                text_evict.append(phase["type"].upper() + "|IN:"+tier + "|volume="+convert_size(phase["init_level"][tier]-phase["tier_level"][tier]))
-
-        tier_indication = "|" + phase["data_placement"]["placement"] if phase["data_placement"] else ''
-
-        text.append(phase["app"] + "|" + phase["type"].capitalize() + tier_indication + " | +volume="+convert_size(phase["volume"]))
-
-        # feeding tiers level
-        for tier in phase["tiers"]:
-            if tier not in storage_levels.keys():
-                storage_levels[tier] = dict()
-            storage_levels[tier][phase["t_start"]] = phase["init_level"][tier]
-            storage_levels[tier][phase["t_end"]] = phase["tier_level"][tier]
-            storage.setdefault(tier, []).append(phase["init_level"][tier])
-            storage.setdefault(tier, []).append(phase["tier_level"][tier])
-
-        # feeding buffer level
-        if cluster.ephemeral_tier:
-            bb_tier = cluster.ephemeral_tier.name
-            if bb_tier+"_level" in phase:
-                bb_levels[phase["t_start"]] = phase["init_level"][bb_tier]
-                bb_levels[phase["t_end"]] = phase["tier_level"][bb_tier]
-                buffer_storage.setdefault(bb_tier, []).append([phase["init_level"][bb_tier], phase["tier_level"][bb_tier]])
-
-    # Burst Buffer level tracing
-    for bb in buffer_storage.keys():
-        bb_capacity = cluster.ephemeral_tier.capacity.capacity
-        # for segment, level in zip(x_phase, buffer_storage[bb]):
-        #     fig.append_trace(go.Scatter(x=np.array(segment),
-        #                                 y=level,
-        #                                 text=text,
-        #                                 textposition="top center",
-        #                                 name=bb, line_shape='linear', showlegend=False), row=i, col=1)
-        fig.append_trace(go.Scatter(x=np.array(list(bb_levels.keys())),
-                                    y=100*bb_capacity*np.array(list(bb_levels.values()))/bb_capacity/100,
-                                    text=text,
-                                    textposition="top center",
-                                    name=bb, line_shape='linear', showlegend=False), row=i, col=1)
-
-        if bb in eviction_levels:
-            for segment, level in zip(x_evict, eviction_levels[bb]):
-                # fig.append_trace(go.Scatter(x=np.array(segment),
-                #                             y=level,
-                #                             text=text,
-                #                             textposition="top center",
-                #                             name=bb, line=dict(color='red', width=3, dash='dot'), showlegend=False), row=i, col=1)
-                fig.append_trace(go.Scatter(x=np.array(segment), y=np.array(level),
-                                            text=text_evict,
-                                            textposition="top center",
-                                            name=" Eviction",
-                                            line=dict(shape='linear', color="black"),
-                                            showlegend=False), row=i, col=1)
-                # fig.add_shape(type="line", x0=segment[0], y0=level[0], x1=segment[1], y1=level[1],
-                #               line=dict(width=3, color="black"),
-                #               row=i, col=1)
-                # fig.add_annotation(ax=segment[0],
-                #                    ay=level[0],
-                #                    x=segment[1],
-                #                    y=level[1],
-                #                    xref='x',
-
-                #                    yref='y',
-                #                    axref='x',
-                #                    ayref='y',
-                #                    text='',  # if you want only the arrow
-                #                    showarrow=True,
-                #                    arrowhead=3,
-                #                    arrowsize=1,
-                #                    arrowwidth=1,
-                #                    arrowcolor='black', row=i, col=1)
-
-        # fig.append_trace(go.Scatter(x=np.array(list(bb_levels.keys())),
-        #                             y=100*bb_capacity*np.array(list(bb_levels.values()))/bb_capacity/100,
-        #                             text=text,
-        #                             textposition="top center",
-        #                             name=bb, line_shape='linear', showlegend=False), row=i, col=1)
-        # fig.append_trace(go.Scatter(x=np.array(x_tiers),
-        #                             y=100*np.array(buffer_storage[bb])/bb_capacity,
-        #                             text=text,
-        #                             textposition="top center",
-        #                             name=bb, line_shape='linear', showlegend=False), row=i, col=1)
-        fig['layout']['yaxis' + str(i)]['title'] = bb + ' usage in Bytes'
-        i += 1
-
-    for tier in storage.keys():
-        # retrieve capacities
-        tier_capacity = [cluster.tiers[j].capacity.capacity for j, ctier in enumerate(cluster.tiers) if ctier.name == tier][0]
-        fig.append_trace(go.Scatter(x=np.array(list(storage_levels[tier].keys())),
-                                    y=100*tier_capacity*np.array(list(storage_levels[tier].values()))/tier_capacity/100,
-                                    text=text,
-                                    textposition="top center",
-                                    name=tier, line_shape='linear', showlegend=False), row=i, col=1)
-        # fig.append_trace(go.Scatter(x=np.array(x_tiers),
-        #                             y=100*np.array(storage[tier])/tier_capacity,
-        #                             text=text,
-        #                             textposition="top center",
-        #                             name=tier, line_shape='linear', showlegend=False), row=i, col=1)
-        fig['layout']['yaxis' + str(i)]['title'] = tier + ' usage in Bytes'
-
-        i += 1
-
-    # CPU tracing
-    points, values = accumulate_intervals(x_phase, y_phase)
-    fig.append_trace(go.Scatter(x=np.array(points), y=np.array(values),
-                                line_shape='hv', showlegend=False), row=i, col=1)
-
-    fig.append_trace(go.Scatter(x=np.array([points[0], points[-1]]), y=np.array([cluster.compute_cores.capacity]*2), text=["Maximum available cores in cluster=" + str(cluster.compute_cores.capacity)]*2, line_shape='hv', showlegend=False,
-                                line=dict(color='red', width=3, dash='dot')), row=i, col=1)
-    fig['layout']['yaxis'+str(i)]['title'] = 'CPU usage'
-    i += 1
-
-    fig.update_layout(width=width, height=height, title_text="State of the Cluster")
 
     return fig
+
+
+def get_execution_signal(data):
+    """Extract from data structure generated by an App execution the subsequent apps' signal in order to be able to get traces independantely."""
+
+    # sample_item = {'app': 'B8', 'type': 'read', 'cpu_usage': 1, 't_start': 0, 't_end': 4.761904761904762, 'bandwidth': 210.0, 'phase_duration': 4.761904761904762, 'volume': 1000000000.0, 'tiers': ['SSD', 'NVRAM'], 'data_placement': {'placement': 'SSD'}, 'tier_level': {'SSD': 1000000000.0, 'NVRAM': 0}}
+
+
+    # # Get list of present apps in data content
+    items = sorted(data.items, key=itemgetter('app'))
+    list_apps = [app for app, _ in groupby(items,  key=itemgetter('app'))]
+
+    output_dict = dict()
+    # iterate on apps
+    for app, app_elements in groupby(items,  key=itemgetter('app')):
+        app_time = []
+        app_bw_read = []
+        app_bw_write = []
+        # iterate on phase (app elements/events)
+        for phase in app_elements:
+            if phase['type'] in ['read', 'write', 'compute']:
+                if phase["t_start"] not in app_time:
+                    # first occurence of t_start for an app
+                    app_time.append(phase["t_start"])
+                    app_bw_read.append(0)
+                    app_bw_write.append(0)
+                if phase["type"] in ["read", "compute"]:
+                    if phase["t_end"] != app_time[-1]:
+                        app_time.append(phase["t_end"])
+                    app_bw_read.append(phase["bandwidth"])
+                    app_bw_write.append(0)
+                if phase["type"] in ["write", "compute"]:
+                    if phase["t_end"] != app_time[-1]:
+                        app_time.append(phase["t_end"])
+                    app_bw_write.append(phase["bandwidth"])
+                    app_bw_read.append(0)
+
+        output_dict[app] = {}
+        output_dict[app]["time"] = app_time
+        output_dict[app]["read_bw"] = app_bw_read
+        output_dict[app]["write_bw"] = app_bw_write
+
+    return output_dict
+
+
 
 
 
@@ -435,13 +342,15 @@ def display_run_with_signal(data, cluster, app_signal, width=1200, height=600):
         print(f"x_app = {x_app}")
         fig.append_trace(go.Scatter(x=np.array(x_app), y=np.array(y_app),
                                     text=text,
-                                    textposition="top center",
-                                    name="App Modeled by Execution Sim"+app, line_shape='linear'), row=i, col=1)
+                                    textposition="top center", mode='lines+markers',
+                                    name="App Modeled by Execution Sim "+app, line_shape='linear'), row=i, col=1)
         # plot original signals
-        fig.append_trace(go.Scatter(x=timestamps, y=read_signal, line_dash='dash',
-                                    name="read signal from original data", line_shape='hv'), row=i, col=1)
+        fig.append_trace(go.Scatter(x=timestamps, y=read_signal/5/1e6, line_dash='dash',
+                                    name="read signal from original data", line_shape='linear',
+                                    mode='lines+markers'), row=i, col=1)
         fig.append_trace(go.Scatter(x=timestamps, y=write_signal, line_dash='dash',
-                                    name="write signal from original data", line_shape='hv'), row=i, col=1)
+                                    name="write signal from original data", line_shape='linear',
+                                    mode='lines+markers'), row=i, col=1)
         fig.append_trace(go.Scatter(x=np.array(x_mvt), y=np.array(y_mvt),
                                     text=text_mvt,
                                     textposition="top center",
@@ -449,7 +358,6 @@ def display_run_with_signal(data, cluster, app_signal, width=1200, height=600):
         fig['layout']['yaxis'+str(i)]['title'] = 'dataflow in MB/s'
         fig.update_xaxes(title_text="time in s")
         i += 1
-
     x_phase = []
     y_phase = []
     x_tiers = [0]
