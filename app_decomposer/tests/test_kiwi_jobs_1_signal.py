@@ -24,6 +24,10 @@ from app_decomposer.job_decomposer import JobDecomposer, ComplexDecomposer, get_
 from app_decomposer.config_parser import Configuration
 from app_decomposer.signal_decomposer import KmeansSignalDecomposer, get_lowest_cluster
 
+from cluster_simulator.analytics import get_execution_signal
+
+
+SHOW_FIGURE = True
 def list_jobs(dataset_path):
     """list all present jobs in the dataset folder and return list of files, ids and dataset names.
 
@@ -77,6 +81,145 @@ def plot_job_signal(jobid=None):
     plt.title(f"timeserie for jobid = {jobid}")
     plt.show()
 
+class QualifyComplexDecomposerOnSyntheticSignals(unittest.TestCase):
+    """Examine and qualify JobDecomposer on 1D signals."""
+    def setUp(self):
+        """Set up test fixtures, if any."""
+        self.env = simpy.Environment()
+        nvram_bandwidth = {'read':  {'seq': 780, 'rand': 760},
+                           'write': {'seq': 515, 'rand': 505}}
+        ssd_bandwidth = {'read':  {'seq': 1, 'rand': 1},
+                         'write': {'seq': 1, 'rand': 1}}
+
+        self.ssd_tier = Tier(self.env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
+        self.nvram_tier = Tier(self.env, 'NVRAM', bandwidth=nvram_bandwidth, capacity=80e9)
+
+
+
+    @patch.object(Configuration, 'get_kc_token')
+    @patch.object(ComplexDecomposer, 'get_job_timeseries')
+    def test_job_read(self, mock_get_timeseries, mock_get_kc_token):
+        """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
+        # mock the method to return some manual content
+        timestamps = np.arange(4)
+        read_signal = np.array([1e6, 0, 0, 0])
+        write_signal = np.array([0, 0, 0, 0])
+        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        mock_get_kc_token.return_value = 'token'
+        # init the job decomposer
+        cd = ComplexDecomposer()
+        compute, reads, read_bw, writes, write_bw = cd.get_job_representation()
+
+        print(f"representation for read_bw={read_bw}")
+        input_bw = list(map(lambda x: x/1e6, read_bw))
+        print(f"to be injected in Sim read_bw={input_bw}")
+        data = simpy.Store(self.env)
+        cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=2,
+                          tiers=[self.ssd_tier, self.nvram_tier])
+        app = Application(self.env, name="job#3912",
+                          compute=compute,
+                           read=reads,
+                           write=writes,
+                           bw=input_bw,
+                           data=data)
+        self.env.process(app.run(cluster, placement=[0]*(10*len(compute))))
+        self.env.run()
+
+        print("Variables provided to the Sim")
+        print(f"compute={compute}, reads={reads}, read_bw={read_bw}")
+        print(f"compute={compute}, writes={writes}, write_bw={write_bw}")
+
+        # Extract app execution signals
+        print("original signals")
+        print(f"timestamps={timestamps}, read_signal={read_signal}, write_signal={write_signal}")
+        output = get_execution_signal(data)
+        print("Signals extracted from the Sim")
+        print(f"timestamps={output[app.name]['time']}, "
+              f"read_signal={output[app.name]['read_bw']}, "
+              f"write_signal={output[app.name]['write_bw']}")
+
+
+        self.assertListEqual(output[app.name]["time"], [0, 1, 4])
+        self.assertListEqual(output[app.name]["read_bw"], [0, 1, 0])
+
+
+        if SHOW_FIGURE:
+            fig1 = plt.figure("Throughput data")
+            plt.plot(timestamps, read_signal/1e6, marker='o', label="read signal from IOI")
+            plt.plot(output[app.name]['time'], output[app.name]['read_bw'], marker='o',
+                     label="read signal from ExecSim")
+            plt.grid(True)
+            plt.legend()
+            plt.show()
+
+
+    @patch.object(Configuration, 'get_kc_token')
+    @patch.object(ComplexDecomposer, 'get_job_timeseries')
+    def test_job_long_read(self, mock_get_timeseries, mock_get_kc_token):
+        """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
+        # mock the method to return some manual content
+        timestamps = np.arange(8)
+        read_signal = np.array([1e6, 1e6, 1e6, 0, 5e6, 5e6, 5e6, 0])
+        write_signal = np.array([0, 0, 0, 0, 0, 0, 0, 0])
+        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        mock_get_kc_token.return_value = 'token'
+        # init the job decomposer
+        cd = ComplexDecomposer()
+        compute, reads, read_bw, writes, write_bw = cd.get_job_representation()
+        print(f"representation for read_bw={read_bw}")
+        input_bw = list(map(lambda x: x/1e6, read_bw))
+        print(f"to be injected in Sim read_bw={input_bw}")
+        data = simpy.Store(self.env)
+        cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=2,
+                          tiers=[self.ssd_tier, self.nvram_tier])
+        app = Application(self.env, name="job#3912",
+                          compute=compute,
+                           read=reads,
+                           write=writes,
+                           bw=input_bw,
+                           data=data)
+        self.env.process(app.run(cluster, placement=[0]*(10*len(compute))))
+        self.env.run()
+
+        print("Variables provided to the Sim")
+        print(f"compute={compute}, reads={reads}, read_bw={read_bw}")
+        print(f"compute={compute}, writes={writes}, write_bw={write_bw}")
+
+        # Extract app execution signals
+        print("original signals")
+        print(f"timestamps={timestamps}, read_signal={read_signal}, write_signal={write_signal}")
+        output = get_execution_signal(data)
+        print("Signals extracted from the Sim")
+        print(f"timestamps={output[app.name]['time']}, "
+              f"read_signal={output[app.name]['read_bw']}, "
+              f"write_signal={output[app.name]['write_bw']}")
+
+        sim_read_signal = np.interp(timestamps,
+                                    output[app.name]['time'],
+                                    output[app.name]['read_bw'])
+
+
+        if SHOW_FIGURE:
+            fig1 = plt.figure("Throughput data")
+            plt.plot(timestamps, read_signal/1e6, marker='o', label="read signal from IOI")
+            plt.plot(output[app.name]['time'], output[app.name]['read_bw'], marker='o',
+                     label="read signal from ExecSim")
+            plt.plot(timestamps, sim_read_signal, marker='o', label="interpolated ExecSim")
+            plt.grid(True)
+            plt.legend()
+
+
+            fig2 = plt.figure("Throughput data step")
+            plt.plot(timestamps, read_signal/1e6, marker='o', label="read signal from IOI")
+            plt.step(output[app.name]['time'], output[app.name]['read_bw'], marker='o',
+                     label="read signal from ExecSim")
+            plt.grid(True)
+            plt.legend()
+            plt.show()
+
+        # self.assertListEqual(output[app.name]["time"], [0, 1, 4])
+        # self.assertListEqual(output[app.name]["read_bw"], [0, 1, 0])
+
 
 class QualifyJobDecomposer1Signal(unittest.TestCase):
     """Examine and qualify JobDecomposer on 1D signals."""
@@ -122,13 +265,48 @@ class QualifyJobDecomposer1Signal(unittest.TestCase):
                            data=data)
         self.env.process(app.run(cluster, placement=[0]*(10*len(compute))))
         self.env.run()
+        # Extract app execution signals
+        output = get_execution_signal(data)
+        time = output[app.name]["time"]
+        read_bw = output[app.name]["read_bw"]
+        write_bw = output[app.name]["write_bw"]
         # plot_job_signal(jobid=jobid)
-        timestamps = (cd.timestamps.flatten() - cd.timestamps.flatten()[0])
-        read_signal =  cd.read_signal.flatten()
+        timestamps = (cd.timestamps.flatten() - cd.timestamps.flatten()[0])/5
+        read_signal =  cd.read_signal.flatten()/5/1e6
         write_signal = cd.write_signal.flatten()
-        app_signal = timestamps, read_signal, write_signal
-        fig = display_run_with_signal(data, cluster, app_signal=app_signal, width=800, height=900)
-        fig.show()
+
+
+        print(f" time : {min(time)} -> {max(time)}")
+        print(f" read_bw : {min(read_bw)} -> {max(read_bw)} len = {len(read_bw)}")
+        print(f" timestamps : {min(timestamps)} -> {max(timestamps)}")
+        print(f" read_signal : {min(read_signal)} -> {max(read_signal)} len = {len(read_signal)}")
+        print(f" read_signal and read_bw integ : {np.trapz(read_signal, dx=np.diff(timestamps)[0])} -> {np.trapz(read_bw, dx=np.diff(timestamps)[0])}")
+        fig1 = plt.figure("Throughput data")
+        plt.plot(time, read_bw, label="read signal from execution")
+        plt.plot(timestamps, read_signal, label="read signal")
+        plt.grid(True)
+        plt.legend()
+        plt.title(f"timeserie for jobid = {jobid}")
+
+        fig2 = plt.figure("Cumulative data")
+        plt.plot(time, np.cumsum(read_bw), label="read signal from execution")
+        plt.plot(timestamps, np.cumsum(read_signal), label="read signal")
+        plt.grid(True)
+        plt.legend()
+        plt.title(f"timeserie for jobid = {jobid}")
+        plt.show()
+
+        # fig3 = plt.figure("Reconstructed signals from decomposition")
+        # plt.plot(timestamps, read_signal, label="read signal")
+        # plt.plot(timestamps, cd.read_rec.flatten()/5/1e6, label="read signal from reconstruction")
+
+        # plt.grid(True)
+        # plt.legend()
+        # plt.title(f"timeserie for jobid = {jobid}")
+
+        # app_signal = timestamps, read_signal, write_signal
+        # fig = display_run_with_signal(data, cluster, app_signal=app_signal, width=800, height=900)
+        # fig.show()
         #fig = display_run(data, cluster, width=800, height=900)
         #fig.show()
         #plot_job_signal(jobid=jobid)

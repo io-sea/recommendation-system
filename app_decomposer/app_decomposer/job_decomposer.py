@@ -398,6 +398,9 @@ class ComplexDecomposer:
         self.complex_signal = self.read_signal + 1j * self.write_signal
         self.norm_signal = np.abs(self.read_signal + 1j * self.write_signal)
         #self.norm_signal = np.abs(self.read_signal) + np.abs(self.write_signal)
+        self.read_rec = None
+        self.write_rec = None
+        self.norm_rec = None
 
     def get_job_timeseries(self, api_uri, api_token):
         """Method to extract read and write timeseries for a job instrumented in IOI.
@@ -421,8 +424,11 @@ class ComplexDecomposer:
             norm_decomposer = self.signal_decomposer(self.norm_signal,
                                                      v0_threshold=self.v0_threshold)
             read_breakpoints, read_labels = read_decomposer.decompose()
+            self.read_rec = read_decomposer.reconstruct(read_breakpoints)
             write_breakpoints, write_labels = write_decomposer.decompose()
+            self.write_rec = write_decomposer.reconstruct(write_breakpoints)
             norm_breakpoints, norm_labels = norm_decomposer.decompose()
+            self.norm_rec = norm_decomposer.reconstruct(norm_breakpoints)
 
             return read_breakpoints, read_labels, write_breakpoints, write_labels, norm_breakpoints, norm_labels
 
