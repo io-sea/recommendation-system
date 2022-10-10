@@ -485,6 +485,8 @@ class ComplexDecomposer:
         #         return [0, len(self.norm_signal)-1], [0, 0], [0, 0], [0, 0], [0, 0]
 
         # if no phases
+
+        # TODO : adjust suppl. zero padding point
         if not norm_start_points and not norm_end_points:
             if sum(self.norm_signal) > 0:
                 # one I/O phase, assign extrem points and let do calculations
@@ -527,7 +529,7 @@ class ComplexDecomposer:
                 read_extent += ending_point - starting_point
                 assert ending_point >= starting_point
             read_volumes.append(read_volume)
-            bw = read_volume/(read_extent + 1) if read_extent else 0
+            bw = read_volume/(read_extent) if read_extent else 0
             read_bw.append(bw)
 
             logger.info(f"Phase intervals {i_start}->{i_end} (dx={dx}) | read volume : {read_volume} | phase extent : {read_extent} | read bw : {bw}")
@@ -547,7 +549,7 @@ class ComplexDecomposer:
                                     dx=1)
                 write_extent += ending_point - starting_point
             write_volumes.append(write_volume)
-            bw = write_volume/(write_extent + 1) if write_extent else 0
+            bw = write_volume/(write_extent) if write_extent else 0
             write_bw.append(bw)
 
             logger.info(f"Phase intervals {i_start}->{i_end} (dx={dx}) | write volume : {write_volume} | phase extent : {write_extent} | write bw : {bw}")
