@@ -54,7 +54,8 @@ def get_job_timeseries_from_file(job_id=None):
         csv_file = job_files[job_ids.index(str(job_id))]
 
     df = pd.read_csv(csv_file, index_col=0)
-    return df[["timestamp"]].to_numpy(), df[["bytesRead"]].to_numpy(), df[["bytesWritten"]].to_numpy()
+    df_clean = df.drop_duplicates(subset=['timestamp', 'bytesRead', 'bytesWritten'])
+    return df_clean[["timestamp"]].to_numpy(), df_clean[["bytesRead"]].to_numpy(), df_clean[["bytesWritten"]].to_numpy()
 
 class TestJobDecomposer(unittest.TestCase):
     """Test that the app decomposer follows some pattern."""

@@ -171,6 +171,47 @@ class TestExecutionSignal2(unittest.TestCase):
         plt.legend()
         plt.show()
 
+    def test_app_execution_real_app_nvram(self):
+        """Test the output formatting of data once app is executed."""
+        """Test the output formatting of data once data is injected."""
+        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
+        # record data
+        data = simpy.Store(self.env)
+        # Simple app: read 1GB -> compute 10s -> write 5GB
+        compute = [0, 10]
+        read = [2.1e9, 0]
+        write = [0, 5e9]
+        tiers = [0, 1]
+        app = Application(self.env,
+                        compute=compute,
+                        read=read,
+                        write=write,
+                        data=data)
+        # only on SSD
+        nvram_bandwidth = {'read':  {'seq': 420, 'rand': 760},
+                           'write': {'seq': 200, 'rand': 505}}
+        self.env.process(app.run(cluster, placement=[1, 1]))
+        self.env.run()
+        output = get_execution_signal_2(data)
+        time = output[app.name]["time"]
+        read_bw = output[app.name]["read_bw"]
+        write_bw = output[app.name]["write_bw"]
+        print(f"timestamps = {output[app.name]['time']}")
+        print(f"read_bw = {output[app.name]['read_bw']}")
+        print(f"write_bw = {output[app.name]['write_bw']}")
+        # self.assertListEqual(time, [0, 10, 20, 70])
+        # self.assertListEqual(read_bw, [0, 210, 0, 0])
+        # self.assertListEqual(write_bw, [0, 0, 0, 100])
+        # np.testing.assert_array_almost_equal(np.array(read_bw), np.array([0, 210, 0, 0, 0]))
+        fig1 = plt.figure("Throughput data")
+        plt.plot(output[app.name]['time'], output[app.name]['read_bw'], marker='o',
+                    label="read signal from ExecSim")
+        plt.plot(output[app.name]['time'], output[app.name]['write_bw'], marker='o',
+                    label="write signal from ExecSim")
+        plt.grid(True)
+        plt.legend()
+        plt.show()
+
 class TestExecutionSignal(unittest.TestCase):
     """Testing signal extracted from get_execution_signal routine."""
     def setUp(self):

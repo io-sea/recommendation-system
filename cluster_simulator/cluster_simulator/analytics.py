@@ -291,14 +291,13 @@ def get_execution_signal_2(data):
         app_bw_write = []
         # iterate on phase (app elements/events)
         for phase in app_elements:
-            phase_width = phase["t_end"] - phase["t_start"]
-            adjusted_width = max(phase_width - 1, 1)
-            last_element = app_time[-1] if app_time else -1
-            next_element = last_element + 1 + adjusted_width if last_element >=0 else last_element + 2 + adjusted_width
-            print(last_element)
-            print(adjusted_width)
-            phase_timestamps = list(range(int(last_element) + 1,
-                                          int(next_element)))
+            phase_timestamps = list(range(int(phase["t_start"]), int(phase["t_end"])))
+            # phase_width = phase["t_end"] - phase["t_start"]
+            # adjusted_width = max(phase_width - 1, 1)
+            # last_element = app_time[-1] if app_time else -1
+            # next_element = last_element + 1*0 + adjusted_width if last_element >=0 else last_element + 1 + adjusted_width
+            # phase_timestamps = list(range(int(last_element) + 1,
+            #                               int(next_element)))
 
             if phase['type'] in ['compute']:
                 phase_bw = [0]*len(phase_timestamps)

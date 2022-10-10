@@ -436,12 +436,12 @@ class ComplexDecomposer:
 
         read_breakpoints, read_labels, write_breakpoints, write_labels, norm_breakpoints, norm_labels = self.get_phases()
 
-        print(f"norm bkps = {norm_breakpoints}")
-        print(f"norm labels = {norm_labels}")
-        print(f"read bkps = {read_breakpoints}")
-        print(f"read labels = {read_labels}")
-        print(f"write bkps = {write_breakpoints}")
-        print(f"write labels = {write_labels}")
+        # print(f"norm bkps = {norm_breakpoints}")
+        # print(f"norm labels = {norm_labels}")
+        # print(f"read bkps = {read_breakpoints}")
+        # print(f"read labels = {read_labels}")
+        # print(f"write bkps = {write_breakpoints}")
+        # print(f"write labels = {write_labels}")
 
 
         # we retain only compute array, volumes and bandwidths are computed individually
@@ -527,10 +527,10 @@ class ComplexDecomposer:
                 read_extent += ending_point - starting_point
                 assert ending_point >= starting_point
             read_volumes.append(read_volume)
-            bw = read_volume/(read_extent * dx) if read_extent else 0
+            bw = read_volume/(read_extent + 1) if read_extent else 0
             read_bw.append(bw)
 
-            logger.info(f"Phase {i_start}->{i_end} | read volume : {read_volume} | read bw : {bw}")
+            logger.info(f"Phase intervals {i_start}->{i_end} (dx={dx}) | read volume : {read_volume} | phase extent : {read_extent} | read bw : {bw}")
 
             write_volume = 0
             write_extent = 0
@@ -547,10 +547,10 @@ class ComplexDecomposer:
                                     dx=1)
                 write_extent += ending_point - starting_point
             write_volumes.append(write_volume)
-            bw = write_volume/(write_extent * dx) if write_extent else 0
+            bw = write_volume/(write_extent + 1) if write_extent else 0
             write_bw.append(bw)
 
-            logger.info(f"Phase {i_start}->{i_end} | write volume : {write_volume} | write bw : {bw}")
+            logger.info(f"Phase intervals {i_start}->{i_end} (dx={dx}) | write volume : {write_volume} | phase extent : {write_extent} | write bw : {bw}")
 
         if norm_end_points[-1] < len(self.norm_signal):
             compute.append(len(self.norm_signal) - 1 - excess_phase_durations)
