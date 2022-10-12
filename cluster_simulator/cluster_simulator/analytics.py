@@ -9,6 +9,7 @@ from itertools import groupby
 from operator import itemgetter
 from loguru import logger
 import itertools
+from collections import deque
 
 
 def accumulate_intervals(x_phase, y_phase):
@@ -283,36 +284,48 @@ def get_execution_signal_2(data):
     items = sorted(data.items, key=itemgetter('app'))
     list_apps = [app for app, _ in groupby(items,  key=itemgetter('app'))]
 
+
     output_dict = dict()
     # iterate on apps
     for app, app_elements in groupby(items,  key=itemgetter('app')):
+
         app_time = []
         app_bw_read = []
         app_bw_write = []
+        compute_excess = 0
+        phase_sequence = deque(["", "", ""])
         # iterate on phase (app elements/events)
         for phase in app_elements:
-            phase_timestamps = list(range(int(phase["t_start"]), int(phase["t_end"])))
-            # phase_width = phase["t_end"] - phase["t_start"]
-            # adjusted_width = max(phase_width - 1, 1)
-            # last_element = app_time[-1] if app_time else -1
-            # next_element = last_element + 1*0 + adjusted_width if last_element >=0 else last_element + 1 + adjusted_width
-            # phase_timestamps = list(range(int(last_element) + 1,
-            #                               int(next_element)))
+            phase_timestamps = list(range(int(phase["t_start"] - compute_excess), int(phase["t_end"] - compute_excess)))
 
             if phase['type'] in ['compute']:
+                # remove intermediate 0 padding if not final
+                phase_sequence.append('co')
+                phase_sequence.popleft()
                 phase_bw = [0]*len(phase_timestamps)
                 app_time += phase_timestamps
                 app_bw_read += phase_bw
                 app_bw_write += phase_bw
+
+            if phase["type"] in ["read", "write"]:
+                phase_sequence.append('io')
+                phase_sequence.popleft()
+                if list(phase_sequence) == ['io', 'co', 'io']:
+                    compute_excess += 1
+                    phase_timestamps = list(range(int(phase["t_start"] - compute_excess), int(phase["t_end"] - compute_excess)))
+                    app_time.pop()
+                    app_bw_read.pop()
+                    app_bw_write.pop()
+
             if phase["type"] in ["read"]:
                 app_time += phase_timestamps
                 app_bw_read += [phase["bandwidth"]]*len(phase_timestamps)
                 app_bw_write += [0]*len(phase_timestamps)
+
             if phase["type"] in ["write"]:
                 app_time += phase_timestamps
                 app_bw_read += [0]*len(phase_timestamps)
                 app_bw_write += [phase["bandwidth"]]*len(phase_timestamps)
-
         output_dict[app] = {}
         output_dict[app]["time"] = app_time # if app_time[0]==0 else app_time.insert(0, 0)
         output_dict[app]["read_bw"] = app_bw_read

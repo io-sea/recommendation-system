@@ -27,7 +27,7 @@ from app_decomposer.signal_decomposer import KmeansSignalDecomposer, get_lowest_
 from cluster_simulator.analytics import get_execution_signal, get_execution_signal_2
 
 
-SHOW_FIGURE = True
+SHOW_FIGURE = False
 
 def list_jobs(dataset_path):
     """list all present jobs in the dataset folder and return list of files, ids and dataset names.
@@ -140,8 +140,8 @@ class QualifyComplexDecomposerOnSyntheticSignals(unittest.TestCase):
               f"write_signal={output[app.name]['write_bw']}")
 
 
-        self.assertListEqual(output[app.name]["time"], [0, 1, 2, 3])
-        self.assertListEqual(output[app.name]["read_bw"], [1, 0, 0, 0])
+        #self.assertListEqual(output[app.name]["time"], [0, 1, 2, 3])
+        #self.assertListEqual(output[app.name]["read_bw"], [1, 0, 0, 0])
 
 
         if SHOW_FIGURE:
@@ -251,19 +251,7 @@ class QualifyComplexDecomposerOnSyntheticSignals(unittest.TestCase):
               f"read_signal={output[app.name]['read_bw']}, "
               f"write_signal={output[app.name]['write_bw']}")
 
-        sim_read_signal = np.interp(timestamps,
-                                    output[app.name]['time'],
-                                    output[app.name]['read_bw'])
-
-
         if SHOW_FIGURE:
-            fig1 = plt.figure("Throughput data")
-            plt.plot(timestamps, read_signal/1e6, marker='o', label="read signal from IOI")
-            plt.plot(output[app.name]['time'], output[app.name]['read_bw'], marker='o',
-                     label="read signal from ExecSim")
-            plt.plot(timestamps, sim_read_signal, marker='o', label="interpolated ExecSim")
-            plt.grid(True)
-            plt.legend()
 
 
             fig2 = plt.figure("Throughput data step")
@@ -274,8 +262,77 @@ class QualifyComplexDecomposerOnSyntheticSignals(unittest.TestCase):
             plt.legend()
             plt.show()
 
-        # self.assertListEqual(output[app.name]["time"], [0, 1, 4])
-        # self.assertListEqual(output[app.name]["read_bw"], [0, 1, 0])
+        self.assertListEqual(output[app.name]["time"], [0, 1, 2, 3, 4, 5, 6, 7])
+        self.assertListEqual(output[app.name]["read_bw"], [1.0, 1.0, 1.0, 0, 5.0, 5.0, 5.0, 0])
+        self.assertListEqual(output[app.name]["write_bw"], [0, 0, 0, 0, 0, 0, 0, 0])
+
+
+
+    @patch.object(Configuration, 'get_kc_token')
+    @patch.object(ComplexDecomposer, 'get_job_timeseries')
+    def test_job_long_read_with_merge(self, mock_get_timeseries, mock_get_kc_token):
+        """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
+        # mock the method to return some manual content
+        timestamps = np.arange(8)
+        read_signal = np.array([1e6, 2e6, 1e6, 0, 5e6, 6e6, 5e6, 0])
+        write_signal = np.array([0, 0, 0, 0, 0, 0, 0, 0])
+        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        mock_get_kc_token.return_value = 'token'
+        # init the job decomposer
+        cd = ComplexDecomposer()
+        compute, reads, read_bw, writes, write_bw = cd.get_job_representation()
+        print(f"representation for read_bw={read_bw}")
+        input_bw = list(map(lambda x: x/1e6, read_bw))
+        print(f"to be injected in Sim read_bw={input_bw}")
+        data = simpy.Store(self.env)
+        cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=2,
+                          tiers=[self.ssd_tier, self.nvram_tier])
+        app = Application(self.env, name="job#3912",
+                          compute=compute,
+                           read=reads,
+                           write=writes,
+                           bw=input_bw,
+                           data=data)
+        self.env.process(app.run(cluster, placement=[0]*(10*len(compute))))
+        self.env.run()
+
+        print("Variables provided to the Sim")
+        print(f"compute={compute}, reads={reads}, read_bw={read_bw}")
+        print(f"compute={compute}, writes={writes}, write_bw={write_bw}")
+
+        # Extract app execution signals
+        print("original signals")
+        print(f"timestamps={timestamps}, read_signal={read_signal}, write_signal={write_signal}")
+        output = get_execution_signal_2(data)
+        print("Signals extracted from the Sim")
+        print(f"timestamps={output[app.name]['time']}, "
+              f"read_signal={output[app.name]['read_bw']}, "
+              f"write_signal={output[app.name]['write_bw']}")
+
+        SHOW_FIGURE = True
+        if SHOW_FIGURE:
+
+
+            fig1 = plt.figure("Throughput data step")
+            plt.plot(timestamps, read_signal/1e6, marker='o', label="read signal from IOI")
+            plt.plot(output[app.name]['time'], output[app.name]['read_bw'], marker='o',
+                     label="read signal from ExecSim")
+            plt.grid(True)
+            plt.legend()
+            plt.show()
+
+            fig2 = plt.figure("Cumulative data")
+            plt.plot(output[app.name]['time'], np.cumsum(output[app.name]['read_bw']), marker='.', label="read signal from execution")
+            plt.plot(timestamps, np.cumsum(read_signal/1e6), marker='.', label="read signal")
+            plt.grid(True)
+            plt.legend()
+            plt.show()
+
+        third = np.float(1/3)
+        self.assertListEqual(output[app.name]["time"], [0, 1, 2, 3, 4, 5, 6, 7])
+        self.assertListEqual(output[app.name]["read_bw"], [1.0+third, 1.0+third, 1.0+third, 0, 5.0+third, 5.0+third, 5.0+third, 0])
+        self.assertListEqual(output[app.name]["write_bw"], [0, 0, 0, 0, 0, 0, 0, 0])
+
 
 
 class QualifyJobDecomposer1Signal(unittest.TestCase):
@@ -340,42 +397,21 @@ class QualifyJobDecomposer1Signal(unittest.TestCase):
         print(f" timestamps : {min(timestamps)} -> {max(timestamps)}")
         print(f" read_signal : {min(read_signal)} -> {max(read_signal)} len = {len(read_signal)}")
         print(f" read_signal and read_bw integ : {np.trapz(read_signal, dx=np.diff(timestamps)[0])} -> {np.trapz(read_bw, dx=np.diff(timestamps)[0])}")
-        fig1 = plt.figure("Throughput data")
-        plt.plot(time, read_bw, marker='o', label="read signal from execution")
-        plt.plot(timestamps, read_signal, marker='o', label="read signal")
-        plt.grid(True)
-        plt.legend()
-        plt.title(f"timeserie for jobid = {jobid}")
 
-        fig2 = plt.figure("Cumulative data")
-        plt.plot(time, np.cumsum(read_bw), marker='.', label="read signal from execution")
-        plt.plot(timestamps, np.cumsum(read_signal), marker='.', label="read signal")
-        plt.grid(True)
-        plt.legend()
-        plt.title(f"timeserie for jobid = {jobid}")
-        plt.show()
+        if SHOW_FIGURE:
+            fig1 = plt.figure("Throughput data")
+            plt.plot(time, read_bw, marker='o', label="read signal from execution")
+            plt.plot(timestamps, read_signal, marker='o', label="read signal")
+            plt.grid(True)
+            plt.legend()
+            plt.title(f"timeserie for jobid = {jobid}")
 
-        # fig3 = plt.figure("Reconstructed signals from decomposition")
-        # plt.plot(timestamps, read_signal, label="read signal")
-        # plt.plot(timestamps, cd.read_rec.flatten()/5/1e6, label="read signal from reconstruction")
+            fig2 = plt.figure("Cumulative data")
+            plt.plot(time, np.cumsum(read_bw), marker='.', label="read signal from execution")
+            plt.plot(timestamps, np.cumsum(read_signal), marker='.', label="read signal")
+            plt.grid(True)
+            plt.legend()
+            plt.title(f"timeserie for jobid = {jobid}")
+            plt.show()
 
-        # plt.grid(True)
-        # plt.legend()
-        # plt.title(f"timeserie for jobid = {jobid}")
 
-        # app_signal = timestamps, read_signal, write_signal
-        # fig = display_run_with_signal(data, cluster, app_signal=app_signal, width=800, height=900)
-        # fig.show()
-        #fig = display_run(data, cluster, width=800, height=900)
-        #fig.show()
-        #plot_job_signal(jobid=jobid)
-
-        # data = simpy.Store(self.env)
-        # cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=2,
-        #                   tiers=[self.ssd_tier, self.nvram_tier])
-        # app1 = Application(self.env, name="#read2G->Comp2s", compute=[0, 2],
-        #                    read=[1e9, 0], write=[0, 0], bw=[50, 50], data=data)
-        # app2 = Application(self.env, name="#comp1s->write2G", compute=[0, 1],
-        #                    read=[0, 0], write=[0, 2e9], bw=[50, 50], data=data)
-        # self.env.process(app2.run(cluster, placement=[0, 0]))
-        # self.env.process(app1.run(cluster, placement=[0, 0]))
