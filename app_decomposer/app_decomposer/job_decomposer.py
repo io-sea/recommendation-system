@@ -15,6 +15,7 @@ import os
 import pandas as pd
 import random
 import numpy as np
+from loguru import logger
 from scipy import integrate
 from app_decomposer.signal_decomposer import KmeansSignalDecomposer, get_lowest_cluster
 from app_decomposer.api_connector import TimeSeries, MetaData, JobSearch
@@ -81,8 +82,8 @@ def get_events_indexes_no_merge(labels, signal):
     Returns:
         tuple: two lists of indexes for starting and ending points for each detected phase within the signal.
     """
-    print(labels)
-    print(type(labels))
+    # print(labels)
+    # print(type(labels))
     label0 = get_lowest_cluster(labels, signal)
     # adjust labels to 0 for compute phases and >1 for data phase
     ref_labels = np.where(labels != label0, np.array(labels) + 1, 0) # avoiding previous labeled 0
@@ -101,8 +102,8 @@ def get_events_indexes_no_merge(labels, signal):
 
             sub_labels = np.where(ref_labels == label_value, 1, 0)
             diff_array = np.diff(np.insert(sub_labels, 0, 0, axis=0))
-            print(f"sub_labels={sub_labels}")
-            print(f"diff_array={diff_array}")
+            # print(f"sub_labels={sub_labels}")
+            # print(f"diff_array={diff_array}")
             start_points = np.where(diff_array==1)[0].tolist()
             end_points = np.where(diff_array==-1)[0].tolist()
             # if there is an open phase at the end of the signal
@@ -110,8 +111,8 @@ def get_events_indexes_no_merge(labels, signal):
                 end_points.append(len(signal))
             assert len(start_points)==len(end_points)
 
-            print(f"start points = {start_points}")
-            print(f"end points = {end_points}")
+            # print(f"start points = {start_points}")
+            # print(f"end points = {end_points}")
             # adding sub phases to slicing
             for start_point, end_point in zip(start_points, end_points):
                 #if (start_point, end_point) not in combinations:
@@ -398,6 +399,7 @@ class ComplexDecomposer:
         self.norm_signal = np.abs(self.read_signal + 1j * self.write_signal)
         #self.norm_signal = np.abs(self.read_signal) + np.abs(self.write_signal)
 
+
     def get_job_timeseries(self, api_uri, api_token):
         """Method to extract read and write timeseries for a job instrumented in IOI.
         For the moment, data will be mocked by a csv file containing the timeseries.
@@ -429,12 +431,12 @@ class ComplexDecomposer:
 
         read_breakpoints, read_labels, write_breakpoints, write_labels, norm_breakpoints, norm_labels = self.get_phases()
 
-        print(f"norm bkps = {norm_breakpoints}")
-        print(f"norm labels = {norm_labels}")
-        print(f"read bkps = {read_breakpoints}")
-        print(f"read labels = {read_labels}")
-        print(f"write bkps = {write_breakpoints}")
-        print(f"write labels = {write_labels}")
+        # print(f"norm bkps = {norm_breakpoints}")
+        # print(f"norm labels = {norm_labels}")
+        # print(f"read bkps = {read_breakpoints}")
+        # print(f"read labels = {read_labels}")
+        # print(f"write bkps = {write_breakpoints}")
+        # print(f"write labels = {write_labels}")
 
 
         # we retain only compute array, volumes and bandwidths are computed individually
@@ -478,6 +480,8 @@ class ComplexDecomposer:
         #         return [0, len(self.norm_signal)-1], [0, 0], [0, 0], [0, 0], [0, 0]
 
         # if no phases
+
+        # TODO : adjust suppl. zero padding point
         if not norm_start_points and not norm_end_points:
             if sum(self.norm_signal) > 0:
                 # one I/O phase, assign extrem points and let do calculations
@@ -489,7 +493,10 @@ class ComplexDecomposer:
 
         # adding 0 as default start point if not already existing
         if norm_start_points[0] > 0:
+            old_start_point = norm_start_points[0]
             norm_start_points.insert(0, 0)
+            norm_end_points.insert(0, old_start_point)
+            # pairing this start point with first start point
 
         # appending end point with the last element of signal
         # if norm_end_points[-1] < len(self.norm_signal):
@@ -508,17 +515,19 @@ class ComplexDecomposer:
                 # iterate over read subphases
                 #if i_start <= starting_point <= i_end and starting_point <= ending_point <= i_end:
                 ending_point = min(ending_point, i_end)
-                starting_point = max(starting_point, i_start)
+                starting_point = min(max(starting_point, i_start), ending_point)
                 # subphase within the norm phase
                 read_volume += get_phase_volume(self.read_signal,
                                     start_index=starting_point,
                                     end_index=ending_point,
                                     dx=1)
                 read_extent += ending_point - starting_point
+                assert ending_point >= starting_point
             read_volumes.append(read_volume)
-            bw = read_volume/(read_extent * dx) if read_extent else 0
+            bw = read_volume/(read_extent) if read_extent else 0
             read_bw.append(bw)
 
+            logger.info(f"Phase intervals {i_start}->{i_end} (dx={dx}) | read volume : {read_volume} | phase extent : {read_extent} | read bw : {bw}")
 
             write_volume = 0
             write_extent = 0
@@ -526,7 +535,7 @@ class ComplexDecomposer:
                 # iterate over read subphases
                 #if i_start <= starting_point <= i_end and starting_point <= ending_point <= i_end:
                 ending_point = min(ending_point, i_end)
-                starting_point = max(starting_point, i_start)
+                starting_point = min(max(starting_point, i_start), ending_point)
 
                 # subphase within the norm phase
                 write_volume += get_phase_volume(self.write_signal,
@@ -535,11 +544,13 @@ class ComplexDecomposer:
                                     dx=1)
                 write_extent += ending_point - starting_point
             write_volumes.append(write_volume)
-            bw = write_volume/(write_extent * dx) if write_extent else 0
+            bw = write_volume/(write_extent) if write_extent else 0
             write_bw.append(bw)
 
+            logger.info(f"Phase intervals {i_start}->{i_end} (dx={dx}) | write volume : {write_volume} | phase extent : {write_extent} | write bw : {bw}")
+
         if norm_end_points[-1] < len(self.norm_signal):
-            compute.append(len(self.norm_signal) - 1 - excess_phase_durations)
+            compute.append(len(self.norm_signal) - 1*1 - excess_phase_durations)
             [output_list.append(0) for output_list in [read_volumes, write_volumes, read_bw, write_bw]]
 
         read_volumes = read_volumes or [0]
