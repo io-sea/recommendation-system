@@ -567,14 +567,14 @@ def display_original_sim_signals(simulated, originals, width=1200, height=600):
     # plot original signals
     fig.append_trace(go.Scatter(x=np.array(timestamps), y=np.array(original_read),
                                 # text=text,
-                                legendgroup="Timeseries",
+                                # legendgroup="Timeseries",
                                 textposition="top center", mode='lines+markers',
                                 marker_size = 5,
                                 name="Original I/O Read Volume Signal (IOI)", line_shape='linear',
                                 line_color = "blue"), row=1, col=1)
     fig.append_trace(go.Scatter(x=np.array(timestamps), y=np.array(original_write),
                                 # text=text,
-                                legendgroup="Timeseries",
+                                # legendgroup="Timeseries",
                                 textposition="top center", mode='lines+markers',
                                 marker_size = 5,
                                 name="Original I/O Written Volume Signal (IOI)", line_shape='linear',
@@ -583,14 +583,14 @@ def display_original_sim_signals(simulated, originals, width=1200, height=600):
     # plot simulated signals
     fig.append_trace(go.Scatter(x=np.array(time), y=np.array(read_bw),
                                 # text=text,
-                                legendgroup="Timeseries",
+                                # legendgroup="Timeseries",
                                 textposition="top center", mode='lines',
                                 name="Simulated I/O Read Volume Signal", line_shape='linear',
                                 line={'dash': 'dot'},
                                 line_color = "blue"), row=1, col=1)
     fig.append_trace(go.Scatter(x=np.array(time), y=np.array(write_bw),
                                 # text=text,
-                                legendgroup="Timeseries",
+                                # legendgroup="Timeseries",
                                 textposition="top center", mode='lines',
                                 name="Simulated I/O Written Volume Signal", line_shape='linear',
                                 line={'dash': 'dot'},
@@ -599,14 +599,14 @@ def display_original_sim_signals(simulated, originals, width=1200, height=600):
     # plot cumulated original signals
     fig.append_trace(go.Scatter(x=np.array(timestamps), y=np.cumsum(np.array(original_read)),
                                 # text=text,
-                                legendgroup="Cumulated Timeseries",
+                                # legendgroup="Cumulated Timeseries",
                                 textposition="top center", mode='lines+markers',
                                 marker_size = 5,
                                 name="Cumulated Original I/O Read Volume Signal (IOI)", line_shape='linear',
                                 line_color = "blue"), row=2, col=1)
     fig.append_trace(go.Scatter(x=np.array(timestamps), y=np.cumsum(np.array(original_write)),
                                 # text=text,
-                                legendgroup="Cumulated Timeseries",
+                                # legendgroup="Cumulated Timeseries",
                                 textposition="top center", mode='lines+markers',
                                 marker_size = 5,
                                 name="Cumulated Original I/O Written Volume Signal (IOI)", line_shape='linear',
@@ -615,14 +615,14 @@ def display_original_sim_signals(simulated, originals, width=1200, height=600):
     # plot cumulated simulated signals
     fig.append_trace(go.Scatter(x=np.array(time), y=np.cumsum(np.array(read_bw)),
                                 # text=text,
-                                legendgroup="Cumulated Timeseries",
+                                # legendgroup="Cumulated Timeseries",
                                 textposition="top center", mode='lines',
                                 name="Simulated I/O Read Cumulative Volume Signal", line_shape='linear',
                                 line={'dash': 'dot'},
                                 line_color = "blue"), row=2, col=1)
     fig.append_trace(go.Scatter(x=np.array(time), y=np.cumsum(np.array(write_bw)),
                                 # text=text,
-                                legendgroup="Cumulated Timeseries",
+                                # legendgroup="Cumulated Timeseries",
                                 textposition="top center", mode='lines',
                                 name="Simulated I/O Written Cumulative Volume Signal", line_shape='linear',
                                 line={'dash': 'dot'},
@@ -631,56 +631,14 @@ def display_original_sim_signals(simulated, originals, width=1200, height=600):
     fig['layout']['yaxis']['title'] = 'dataflow in MB/s'
     fig.update_xaxes(title_text="time (1pt = 5s)")
 
-        # fig.append_trace(go.Scatter(x=np.array(list(bb_levels.keys())),
-        #                             y=100*bb_capacity*np.array(list(bb_levels.values()))/bb_capacity/100,
-        #                             text=text,
-        #                             textposition="top center",
-        #                             name=bb, line_shape='linear', showlegend=False), row=i, col=1)
 
-        # if bb in eviction_levels:
-        #     for segment, level in zip(x_evict, eviction_levels[bb]):
-        #         # fig.append_trace(go.Scatter(x=np.array(segment),
-        #         #                             y=level,
-        #         #                             text=text,
-        #         #                             textposition="top center",
-        #         #                             name=bb, line=dict(color='red', width=3, dash='dot'), showlegend=False), row=i, col=1)
-        #         fig.append_trace(go.Scatter(x=np.array(segment), y=np.array(level),
-        #                                     text=text_evict,
-        #                                     textposition="top center",
-        #                                     name=" Eviction",
-        #                                     line=dict(shape='linear', color="black"),
-        #                                     showlegend=False), row=i, col=1)
-                # fig.add_shape(type="line", x0=segment[0], y0=level[0], x1=segment[1], y1=level[1],
-                #               line=dict(width=3, color="black"),
-                #               row=i, col=1)
-                # fig.add_annotation(ax=segment[0],
-                #                    ay=level[0],
-                #                    x=segment[1],
-                #                    y=level[1],
-                #                    xref='x',
-
-                #                    yref='y',
-                #                    axref='x',
-                #                    ayref='y',
-                #                    text='',  # if you want only the arrow
-                #                    showarrow=True,
-                #                    arrowhead=3,
-                #                    arrowsize=1,
-                #                    arrowwidth=1,
-                #                    arrowcolor='black', row=i, col=1)
-
-        # fig.append_trace(go.Scatter(x=np.array(list(bb_levels.keys())),
-        #                             y=100*bb_capacity*np.array(list(bb_levels.values()))/bb_capacity/100,
-        #                             text=text,
-        #                             textposition="top center",
-        #                             name=bb, line_shape='linear', showlegend=False), row=i, col=1)
-        # fig.append_trace(go.Scatter(x=np.array(x_tiers),
-        #                             y=100*np.array(buffer_storage[bb])/bb_capacity,
-        #                             text=text,
-        #                             textposition="top center",
-        #                             name=bb, line_shape='linear', showlegend=False), row=i, col=1)
-
-
-    fig.update_layout(width=width, height=height, title_text="Comparing simulated and IOI signals")
+    fig.update_layout(width=width, height=height,
+                      autosize=False,
+                      legend=dict(
+                          font=dict(size=8),
+                          tracegroupgap = 2*180,
+                          orientation="v"
+                      ),
+                      title_text="Comparing simulated and IOI signals")
 
     return fig

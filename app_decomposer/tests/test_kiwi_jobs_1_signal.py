@@ -417,26 +417,35 @@ class QualifyJobDecomposer1Signal(unittest.TestCase):
 
     @patch.object(Configuration, 'get_kc_token')
     @patch.object(ComplexDecomposer, 'get_job_timeseries')
-    def test_job_3911(self, mock_get_timeseries, mock_get_kc_token):
+    def test_job_with_plots(self, mock_get_timeseries, mock_get_kc_token):
         """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
         # mock the method to return some dataset file content
         jobid=3911
-        SHOW_FIGURE = True
+        merge_clusters = True
         mock_get_timeseries.return_value = get_job_timeseries_from_file(job_id=jobid)
         mock_get_kc_token.return_value = 'token'
         # init the job decomposer
 
         # decompose and app/job
         cd = ComplexDecomposer()
-        compute, reads, read_bw, writes, write_bw = cd.get_job_representation()
+        compute, reads, read_bw, writes, write_bw = cd.get_job_representation(merge_clusters=merge_clusters)
         read_bw = list(map(lambda x: x/1e6, read_bw))
         write_bw = list(map(lambda x: x/1e6, write_bw))
+
+        # Apply same BW as measured by IOI
         io_bw = list(map(lambda x, y: x + y, read_bw, write_bw))
+
+        # Apply different BW and simulate app execution on another storage system
+        # with fixed values
+        # io_bw = list(map(lambda x, y: 1e4 if x else 0 + 1e3 if y else 0, read_bw, write_bw))
+        # with relative values
+        # io_bw = list(map(lambda x, y: x/2 + y/2, read_bw, write_bw))
+
         timestamps = (cd.timestamps.flatten() - cd.timestamps.flatten()[0])/5
         original_read =  cd.read_signal.flatten()/1e6
         original_write = cd.write_signal.flatten()/1e6
 
-
+        # Run the simulation with computed app representation
         data = simpy.Store(self.env)
         cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=2,
                           tiers=[self.ssd_tier, self.nvram_tier])
@@ -450,7 +459,7 @@ class QualifyJobDecomposer1Signal(unittest.TestCase):
         self.env.run()
         # Extract app execution signals
         output = get_execution_signal_2(data)
-        time = output[app.name]["time"]
+        time = list(map(lambda x: x, output[app.name]["time"]))
         read_bw = output[app.name]["read_bw"]
         write_bw = output[app.name]["write_bw"]
         # plot_job_signal(jobid=jobid)
@@ -461,21 +470,4 @@ class QualifyJobDecomposer1Signal(unittest.TestCase):
                                            (timestamps, original_read, original_write),
                                            width=800, height=900)
         fig.show()
-        # fig1 = plt.figure("Throughput data")
-        # plt.plot(time, read_bw, marker='.', label="read signal from execution")
-        # plt.plot(time, write_bw, marker='.', label="read signal from execution")
-        # plt.plot(timestamps, original_read, marker='.', label="IOI read signal")
-        # plt.plot(timestamps, original_write, marker='.', label="IOI write signal")
-        # plt.grid(True)
-        # plt.legend()
-        # plt.title(f"timeserie for jobid = {jobid}")
-        # plt.show()
-
-        #     # fig2 = plt.figure("Cumulative data")
-        #     # plt.plot(time, np.cumsum(read_bw), marker='.', label="read signal from execution")
-        #     # plt.plot(timestamps, np.cumsum(read_signal), marker='.', label="read signal")
-        #     # plt.grid(True)
-        #     # plt.legend()
-        #     # plt.title(f"timeserie for jobid = {jobid}")
-        #     plt.show()
 
