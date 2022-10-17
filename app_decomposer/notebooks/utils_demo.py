@@ -81,7 +81,7 @@ def plot_job_signal(jobid=None):
     plt.title(f"timeserie for jobid = {jobid}")
     plt.show()
 
-def plot_detected_phases(jobid, merge=False):
+def plot_detected_phases(jobid, merge=False, show_phases=False, width=1200, height=600):
     timestamps, read_signal, write_signal = get_job_timeseries_from_file(job_id=jobid) #457344
     ab = np.arange(len(read_signal))
     read_dec = KmeansSignalDecomposer(read_signal, merge=merge)
@@ -93,18 +93,28 @@ def plot_detected_phases(jobid, merge=False):
     compute, volume, bandwidth = get_signal_representation(timestamps, read_signal, read_labels)
     w_compute, w_volume, w_bandwidth = get_signal_representation(timestamps, read_signal, read_labels)
 
+    max_bw = max(max(volume), max(w_volume))
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=ab.flatten(), y=read_signal.flatten(),
                             mode='lines+markers', name='original bytesRead signal from IOI', line_width=1.5,
                             text=list(map(lambda x: "class="+str(x), read_labels))))
+
     fig.add_trace(go.Scatter(x=ab.flatten(), y=write_signal.flatten(),
                             mode='lines+markers', name='original bytesWritten signal from IOI', line_width=1.5,
-                            text=list(map(lambda x: "class="+str(x), read_labels))))
+                            text=list(map(lambda x: "class="+str(x), write_labels))))
+    # breakpoints
+    if show_phases:
+        for read_bkp in read_bkps + write_bkps:
+            fig.add_trace(go.Scatter(x=[read_bkp-1, read_bkp-1], y=[0, max_bw/2],
+                                mode='lines', line_color="black", line_dash='longdash',
+                                showlegend=False, line_width=0.5))
+
     fig.add_trace(go.Scatter(x=ab.flatten(), y=rec_signal.flatten(), mode='lines', name='read signal slices with constant bw', line_width=2))
     fig.add_trace(go.Scatter(x=ab.flatten(), y=rec_wsignal.flatten(), mode='lines', name='write signal slices with constant bw', line_width=2))
     # fig.add_trace(go.Scatter(x=ab.flatten(), y=rec_signal.flatten(), mode='lines', name='phase model preview for execution simulation', line_shape='vh', line_width=1))#line_dash='longdash'))
     fig.update_layout(
+        width=width, height=height,
         title=  "IOI Signal decomposition",
         legend=dict(orientation="h", yanchor="top"),
         #xaxis_title="timestamps",
