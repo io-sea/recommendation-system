@@ -1,6 +1,6 @@
 #!/bin/bash
-DIR_FILE=$1
-if [ $5 = "" ]
+DIR_FILE=$1 # for read mode
+if [ -z "$5" ] # empty string for write mode
 then
     DIR_FILE=$1/$(hostname)
     mkdir -p $DIR_FILE
