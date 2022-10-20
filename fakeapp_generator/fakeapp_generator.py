@@ -13,9 +13,24 @@ def write_to_file(fname, text):
     f.write(text)
 
 
-def gen_fakeapp(volume, mode, IOpattern, IOsize, target, nodes=1):
-    print("volume: ", volume)
-    print("mode: ", mode)
+def gen_fakeapp(volume, mode, IOpattern, IOsize, target, nodes=1, ioi="no"):
+    """
+    Generate an sbatch using the features extracted for each phase by the AppDecomposer
+    Args:
+        volume (int): volume of io will be generated
+        mode (string): read/write
+        IOpattern (string): Seq/Stride/Random
+        IOsize (string): size of IO
+        target (string): storage backend to be executed (nfs/fs1/sbb)
+        nodes (int): number of nodes, default = 1
+        ioi (string): enable/disable IOI, default = no
+
+    Returns:
+        mod_sbatch (str): the tranformed string
+    """
+    print("===================================")
+    print("Volume: ", volume)
+    print("Mode: ", mode)
     print("IO Pattern: ", IOpattern)
     print("IO Size: ", IOsize)
     print("Compute nodes: ", nodes)
@@ -23,11 +38,12 @@ def gen_fakeapp(volume, mode, IOpattern, IOsize, target, nodes=1):
 
     N = int(volume / IOsize)
     print("Number of IO: ", N)
+    print("IOI Enabled: ", ioi)
 
     #read template file
     template = "fakeapp.sbatch"
     sbatch = open_file(template)
-    print(sbatch)
+    #print(sbatch)
 
     #generate fakeapp from template
     lead = 1
@@ -48,6 +64,8 @@ def gen_fakeapp(volume, mode, IOpattern, IOsize, target, nodes=1):
     else:
         mod_sbatch = mod_sbatch.replace("$MODE", "")
 
+    mod_sbatch = mod_sbatch.replace("$IOI", ioi)
+
     print("------------------")
     print(mod_sbatch)
 
@@ -55,8 +73,11 @@ def gen_fakeapp(volume, mode, IOpattern, IOsize, target, nodes=1):
     write_to_file("mod_sbatch.sbatch", mod_sbatch)
     subprocess.run(["sbatch", "mod_sbatch.sbatch"])
 
+    return mod_sbatch
+
 if __name__ == '__main__':
     lfs="/fsiof/phamtt/tmp"
     nfs="/scratch/phamtt/tmp"
-    gen_fakeapp(1000000, "Read", "Seq", 1000, nfs)
-    gen_fakeapp(1000000, "Write", "Stride", 1000, lfs, 2)
+    gen_fakeapp(10000000, "Read", "Seq", 1000, nfs, 2, "yes")
+    gen_fakeapp(10000000, "Write", "Stride", 1000, nfs, 2)
+    #gen_fakeapp(10000000, "Read", "Seq", 1000, lfs, 1)

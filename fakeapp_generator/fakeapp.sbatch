@@ -1,11 +1,12 @@
 #!/bin/bash
 
-#SBATCH -J fakeapp_synth_nfs_seq
-##SBATCH --time=#TIME#
-#SBATCH -N 2
-#SBATCH --reservation=phamtt #on kea cluster
-##SBATCH --partition=equipment_compute_diskfull #on kiwi cluster
-##SBATCH --ioi=yes
-#export IOI_PROTECTED=1
+#SBATCH -J fakeapp_gen
+#SBATCH -N 4
+##SBATCH --reservation=phamtt #enable only on kea cluster
+#SBATCH --partition=equipment_compute_diskfull #enable only on kiwi cluster
+
+############# ENABLE TO USE IOI ###############
+#SBATCH --ioi=$IOI
+export IOI_PROTECTED=1
 
 srun -N $NODES ./run_fakeapp.sh $TARGET $LEAD $SIZE $OPS $MODE
