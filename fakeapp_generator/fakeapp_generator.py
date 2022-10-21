@@ -13,7 +13,7 @@ def write_to_file(fname, text):
     f.write(text)
 
 
-def gen_fakeapp(volume, mode, IOpattern, IOsize, target, nodes=1, ioi="no"):
+def gen_fakeapp(volume, mode, IOpattern, IOsize, target, nodes=1, ioi=False):
     """
     Generate an sbatch using the features extracted for each phase by the AppDecomposer
     Args:
@@ -23,7 +23,7 @@ def gen_fakeapp(volume, mode, IOpattern, IOsize, target, nodes=1, ioi="no"):
         IOsize (string): size of IO
         target (string): storage backend to be executed (nfs/fs1/sbb)
         nodes (int): number of nodes, default = 1
-        ioi (string): enable/disable IOI, default = no
+        ioi (bool): enable/disable IOI, default = False
 
     Returns:
         mod_sbatch (str): the tranformed string
@@ -64,20 +64,113 @@ def gen_fakeapp(volume, mode, IOpattern, IOsize, target, nodes=1, ioi="no"):
     else:
         mod_sbatch = mod_sbatch.replace("$MODE", "")
 
-    mod_sbatch = mod_sbatch.replace("$IOI", ioi)
-
     print("------------------")
-    print(mod_sbatch)
 
-    #run generated fakeapp
-    write_to_file("mod_sbatch.sbatch", mod_sbatch)
-    subprocess.run(["sbatch", "mod_sbatch.sbatch"])
+    #run sbacth to get executed time
+    t = run_sbatch(mod_sbatch, ioi)
 
-    return mod_sbatch
+    #compute bandwidth
+    bw = get_bandwidth(volume, t)
+
+    return bw
+
+def run_sbatch(sbatch, ioi, wait=True):
+    #write generated script to sbatch file
+    sbatch_file="mod_sbatch.sbatch"
+    write_to_file(sbatch_file, sbatch)
+
+    # If the wait option is enabled, use the --wait flag
+    wait_flag = ""
+    if wait:
+        wait_flag = " --wait "
+
+    # If the instrumentation is enabled, instrument the run
+    instrument_flag = ""
+    if ioi:
+        instrument_flag = " --ioinstrumentation=yes "
+
+    #cmd_line = " ".join(f'sbatch{wait_flag}{instrument_flag}{sbatch_file}'.split())
+    #cmd_line = ["sbatch", wait_flag, instrument_flag, "mod_sbatch.sbatch"]
+    cmd_line = "sbatch" + wait_flag + instrument_flag + "mod_sbatch.sbatch"
+    #print("CMD: ", cmd_line)
+    # Run the script using subprocess
+    sub_ps = subprocess.run(cmd_line.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    output_stdout = sub_ps.stdout.decode()
+    output_stderr = sub_ps.stderr.decode()
+    # Get and store the job_id from the stdout
+    if sub_ps.returncode == 0:
+        job_id = int(output_stdout.split()[-1])
+        print("Job id:", job_id)
+    else:
+        print("Could not run sbatch:", output_stderr)
+        raise Exception(f"Could not submit job: \n stderr: {output_stderr}")
+
+    #get avg time from slurm out
+    real_time = get_slurm_times(job_id)
+    print("Elapsed time (seconds) : ", real_time)
+
+    return real_time
+
+def get_slurm_times(job_id):
+    """Parses the slurm times associated with the file slurm-job_id.out
+
+    Args:
+        out_file (str): The job slurm output file path to parse.
+
+    Returns:
+        The time real value
+    """
+    cwd = os.getcwd() #get current directory
+    out_file = os.path.join(cwd, "slurm-" + str(job_id) + ".out")
+    print("Slurm output: ", out_file)
+    real_time = None
+    try:
+        with open(out_file, "r") as file:
+            lines = file.readlines()
+            for line in lines:
+                if line.startswith("real"):
+                    time = re.split('[ \t]*', line)[-1].strip()
+                    real_time = parse_milliseconds(time)
+        if real_time:
+            return real_time
+        raise ValueError(f"Slurm command was not timed !")
+    except FileNotFoundError as exc:
+        raise FileNotFoundError("Slurm output was not found.") from exc
+
+def parse_milliseconds(string_time):
+    """
+    Given a string date with the format MMmSS.MSs (as returned by the linux time command),
+    parses it to seconds.
+
+    Args:
+        string_time (str): The date to parse
+
+    Returns:
+        The number of elapsed seconds
+    """
+    minutes = int(string_time.split("m")[0])
+    string_time = string_time.replace(str(minutes) + "m", "")
+    seconds = int(string_time.split(".")[0])
+    milliseconds_string = string_time.split(".")[1]
+    milliseconds_string = milliseconds_string.replace("s", "")
+    milliseconds = int(milliseconds_string)
+    return minutes * 60 + seconds + milliseconds / 1000
+
+def get_bandwidth(volume, time):
+
+    #compute bandwidth
+    bw = 0
+    if (time > 0):
+        bw = volume/time
+        print("IO bandwidth (bytes per second): ", bw)
+
+    return bw
 
 if __name__ == '__main__':
     lfs="/fsiof/phamtt/tmp"
     nfs="/scratch/phamtt/tmp"
-    gen_fakeapp(10000000, "Read", "Seq", 1000, nfs, 2, "yes")
-    gen_fakeapp(10000000, "Write", "Stride", 1000, nfs, 2)
+    gen_fakeapp(10000000, "Read", "Seq", 1000, nfs, 2, True)
+    #run_sbatch(sbatch)
+    gen_fakeapp(10000000, "Write", "Stride", 1000, lfs, 2)
     #gen_fakeapp(10000000, "Read", "Seq", 1000, lfs, 1)
+    #run_sbatch(sbatch)

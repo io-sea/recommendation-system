@@ -6,7 +6,7 @@
 #SBATCH --partition=equipment_compute_diskfull #enable only on kiwi cluster
 
 ############# ENABLE TO USE IOI ###############
-#SBATCH --ioi=$IOI
-export IOI_PROTECTED=1
+##SBATCH --ioi=$IOI
+#export IOI_PROTECTED=1
 
-srun -N $NODES ./run_fakeapp.sh $TARGET $LEAD $SIZE $OPS $MODE
+time(srun -N $NODES ./run_fakeapp.sh $TARGET $LEAD $SIZE $OPS $MODE)
