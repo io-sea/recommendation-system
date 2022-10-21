@@ -552,3 +552,93 @@ def display_run_with_signal(data, cluster, app_signal, width=1200, height=600):
     fig.update_layout(width=width, height=height, title_text="State of the Cluster")
 
     return fig
+
+
+
+def display_original_sim_signals(simulated, originals, width=1200, height=600):
+
+    timestamps, original_read, original_write = originals
+    time, read_bw, write_bw = simulated
+
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
+                        # vertical_spacing=0.2,
+                        subplot_titles=["On read/write instant bandwidths",
+                                        "On read/write cumulated volumes"])
+    # plot original signals
+    fig.append_trace(go.Scatter(x=np.array(timestamps), y=np.array(original_read),
+                                # text=text,
+                                # legendgroup="Timeseries",
+                                textposition="top center", mode='lines+markers',
+                                marker_size = 5,
+                                name="Original I/O Read Volume Signal (IOI)", line_shape='linear',
+                                line_color = "blue"), row=1, col=1)
+    fig.append_trace(go.Scatter(x=np.array(timestamps), y=np.array(original_write),
+                                # text=text,
+                                # legendgroup="Timeseries",
+                                textposition="top center", mode='lines+markers',
+                                marker_size = 5,
+                                name="Original I/O Written Volume Signal (IOI)", line_shape='linear',
+                                line_color="green"), row=1, col=1)
+
+    # plot simulated signals
+    fig.append_trace(go.Scatter(x=np.array(time), y=np.array(read_bw),
+                                # text=text,
+                                # legendgroup="Timeseries",
+                                textposition="top center", mode='lines',
+                                name="Simulated I/O Read Volume Signal", line_shape='linear',
+                                line={'dash': 'dot'},
+                                line_color = "blue"), row=1, col=1)
+    fig.append_trace(go.Scatter(x=np.array(time), y=np.array(write_bw),
+                                # text=text,
+                                # legendgroup="Timeseries",
+                                textposition="top center", mode='lines',
+                                name="Simulated I/O Written Volume Signal", line_shape='linear',
+                                line={'dash': 'dot'},
+                                line_color="green"), row=1, col=1)
+
+    # plot cumulated original signals
+    fig.append_trace(go.Scatter(x=np.array(timestamps), y=np.cumsum(np.array(original_read)),
+                                # text=text,
+                                # legendgroup="Cumulated Timeseries",
+                                textposition="top center", mode='lines+markers',
+                                marker_size = 5,
+                                name="Cumulated Original I/O Read Volume Signal (IOI)", line_shape='linear',
+                                line_color = "blue"), row=2, col=1)
+    fig.append_trace(go.Scatter(x=np.array(timestamps), y=np.cumsum(np.array(original_write)),
+                                # text=text,
+                                # legendgroup="Cumulated Timeseries",
+                                textposition="top center", mode='lines+markers',
+                                marker_size = 5,
+                                name="Cumulated Original I/O Written Volume Signal (IOI)", line_shape='linear',
+                                line_color="green"), row=2, col=1)
+
+    # plot cumulated simulated signals
+    fig.append_trace(go.Scatter(x=np.array(time), y=np.cumsum(np.array(read_bw)),
+                                # text=text,
+                                # legendgroup="Cumulated Timeseries",
+                                textposition="top center", mode='lines',
+                                name="Simulated I/O Read Cumulative Volume Signal", line_shape='linear',
+                                line={'dash': 'dot'},
+                                line_color = "blue"), row=2, col=1)
+    fig.append_trace(go.Scatter(x=np.array(time), y=np.cumsum(np.array(write_bw)),
+                                # text=text,
+                                # legendgroup="Cumulated Timeseries",
+                                textposition="top center", mode='lines',
+                                name="Simulated I/O Written Cumulative Volume Signal", line_shape='linear',
+                                line={'dash': 'dot'},
+                                line_color="green"), row=2, col=1)
+
+    fig['layout']['yaxis']['title'] = 'dataflow in MB/s'
+    fig.update_xaxes(title_text="time (1pt = 5s)")
+
+
+    fig.update_layout(width=width, height=height,
+                      autosize=False,
+                      legend=dict(
+                          font=dict(size=8),
+                          tracegroupgap = 2*180,
+                          orientation="v"
+                      ),
+                      title_text="Comparing simulated and IOI signals")
+
+    return fig

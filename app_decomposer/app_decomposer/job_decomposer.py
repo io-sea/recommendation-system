@@ -59,17 +59,17 @@ def get_events_indexes(labels, signal):
     label0 = get_lowest_cluster(labels, signal)
     # binarize labels to 0 (compute) and 1 (data phase)
     bin_labels = np.where(labels != label0, 1, 0)
-    print(f"labels={bin_labels}")
+    #print(f"labels={bin_labels}")
     diff_array = np.diff(np.insert(bin_labels, 0, 0, axis=0))
-    print(f"diff_array={diff_array}")
+    #print(f"diff_array={diff_array}")
     start_points = np.where(diff_array==1)[0].tolist()
     end_points = np.where(diff_array==-1)[0].tolist()
     # if there is an open phase at the end of the signal
     if len(end_points) == len(start_points) - 1:
         end_points.append(len(signal))
     assert len(start_points)==len(end_points)
-    print(f"start points = {start_points}")
-    print(f"ending points = {end_points}")
+    #print(f"start points = {start_points}")
+    #print(f"ending points = {end_points}")
     return start_points, end_points
 
 def get_events_indexes_no_merge(labels, signal):
@@ -87,7 +87,7 @@ def get_events_indexes_no_merge(labels, signal):
     label0 = get_lowest_cluster(labels, signal)
     # adjust labels to 0 for compute phases and >1 for data phase
     ref_labels = np.where(labels != label0, np.array(labels) + 1, 0) # avoiding previous labeled 0
-    print(f"labels={ref_labels}")
+    #print(f"labels={ref_labels}")
 
     starting_points = []
     ending_points = []
@@ -122,8 +122,8 @@ def get_events_indexes_no_merge(labels, signal):
     if starting_points and ending_points:
         starting_points, ending_points = (list(t) for t in zip(*sorted(zip(starting_points, ending_points))))
 
-    print(f"starting points = {starting_points}")
-    print(f"ending points = {ending_points}")
+    #print(f"starting points = {starting_points}")
+    #print(f"ending points = {ending_points}")
 
     return starting_points, ending_points
 
@@ -340,7 +340,7 @@ class JobDecomposer:
             write_volumes (list): list of amount of data for each write phase.
         """
         _, read_labels, _, write_labels = self.get_phases()
-        print(f"read_labels={read_labels}, write_labels={write_labels}")
+        #print(f"read_labels={read_labels}, write_labels={write_labels}")
         dx = np.diff(self.timestamps.flatten()).tolist()[0]
         read_events, read_volumes_, read_bandwidths = get_signal_representation(self.timestamps, self.read_signal, read_labels, merge_clusters=merge_clusters)
         print(f"compute={read_events}, read={read_volumes_}")
