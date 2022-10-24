@@ -15,18 +15,20 @@ def write_to_file(fname, text):
 
 def gen_fakeapp(volume, mode, IOpattern, IOsize, target, nodes=1, ioi=False):
     """
-    Generate an sbatch using the features extracted for each phase by the AppDecomposer
+    Generate an sbatch file using the features extracted for each phase
+    by AppDecomposer
     Args:
         volume (int): volume of io will be generated
         mode (string): read/write
         IOpattern (string): Seq/Stride/Random
         IOsize (string): size of IO
-        target (string): storage backend to be executed (nfs/fs1/sbb)
+        target (string): storage backend file (nfs/fs1/sbb)
         nodes (int): number of nodes, default = 1
         ioi (bool): enable/disable IOI, default = False
 
     Returns:
-        mod_sbatch (str): the tranformed string
+        elap_time (float): elapsed time
+        bandwidth (float): IO bandwidth
     """
     print("===================================")
     print("Volume: ", volume)
@@ -47,16 +49,18 @@ def gen_fakeapp(volume, mode, IOpattern, IOsize, target, nodes=1, ioi=False):
 
     #generate fakeapp from template
     lead = 1
-    if (IOpattern=="Seq"):
-        lead = 1
-    else:
+    scatter = 0
+    if (IOpattern=="Stride"):
         lead = 3
+    if (IOpattern=="Random"):
+        scatter = 1000000
 
     #gen_sbatch = re.sub(r"\s$VOLUME", str(volume), sbatch)
     mod_sbatch = sbatch.replace("$VOLUME", str(volume))
     mod_sbatch = mod_sbatch.replace("$OPS", str(N))
     mod_sbatch = mod_sbatch.replace("$LEAD", str(lead))
     mod_sbatch = mod_sbatch.replace("$SIZE", str(IOsize))
+    mod_sbatch = mod_sbatch.replace("$SCATTER", str(scatter))
     mod_sbatch = mod_sbatch.replace("$NODES", str(nodes))
     mod_sbatch = mod_sbatch.replace("$TARGET", target)
     if mode == "Read":
@@ -67,12 +71,12 @@ def gen_fakeapp(volume, mode, IOpattern, IOsize, target, nodes=1, ioi=False):
     print("------------------")
 
     #run sbacth to get executed time
-    t = run_sbatch(mod_sbatch, ioi)
+    elap_time = run_sbatch(mod_sbatch, ioi)
 
     #compute bandwidth
-    bw = get_bandwidth(volume, t)
+    bandwidth = get_bandwidth(volume, elap_time)
 
-    return bw
+    return elap_time, bandwidth
 
 def run_sbatch(sbatch, ioi, wait=True):
     #write generated script to sbatch file
@@ -85,13 +89,13 @@ def run_sbatch(sbatch, ioi, wait=True):
         wait_flag = " --wait "
 
     # If the instrumentation is enabled, instrument the run
-    instrument_flag = ""
+    ioi_flag = ""
     if ioi:
-        instrument_flag = " --ioinstrumentation=yes "
+        ioi_flag = " --ioi=yes "
 
-    #cmd_line = " ".join(f'sbatch{wait_flag}{instrument_flag}{sbatch_file}'.split())
-    #cmd_line = ["sbatch", wait_flag, instrument_flag, "mod_sbatch.sbatch"]
-    cmd_line = "sbatch" + wait_flag + instrument_flag + "mod_sbatch.sbatch"
+    #cmd_line = " ".join(f'sbatch{wait_flag}{ioi_flag}{sbatch_file}'.split())
+    #cmd_line = ["sbatch", wait_flag, ioi_flag, "mod_sbatch.sbatch"]
+    cmd_line = "sbatch" + wait_flag + ioi_flag + "mod_sbatch.sbatch"
     #print("CMD: ", cmd_line)
     # Run the script using subprocess
     sub_ps = subprocess.run(cmd_line.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -162,15 +166,15 @@ def get_bandwidth(volume, time):
     bw = 0
     if (time > 0):
         bw = volume/time
-        print("IO bandwidth (bytes per second): ", bw)
+
+    print("IO bandwidth (bytes per second): ", bw)
 
     return bw
 
 if __name__ == '__main__':
     lfs="/fsiof/phamtt/tmp"
     nfs="/scratch/phamtt/tmp"
-    gen_fakeapp(10000000, "Read", "Seq", 1000, nfs, 2, True)
-    #run_sbatch(sbatch)
-    gen_fakeapp(10000000, "Write", "Stride", 1000, lfs, 2)
-    #gen_fakeapp(10000000, "Read", "Seq", 1000, lfs, 1)
+    gen_fakeapp(10000000, "Write", "Stride", 1000, lfs, 2, True)
+    gen_fakeapp(10000000, "Read", "Seq", 1000, lfs, 2, True)
+    gen_fakeapp(10000000, "Read", "Random", 1000, lfs, 2, True)
     #run_sbatch(sbatch)

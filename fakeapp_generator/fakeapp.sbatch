@@ -9,4 +9,4 @@
 ##SBATCH --ioi=$IOI
 #export IOI_PROTECTED=1
 
-time(srun -N $NODES ./run_fakeapp.sh $TARGET $LEAD $SIZE $OPS $MODE)
+time(srun -N $NODES ./run_fakeapp.sh $TARGET $LEAD $SIZE $SCATTER $OPS $MODE)
