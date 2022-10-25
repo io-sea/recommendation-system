@@ -99,10 +99,8 @@ def run_sbatch(sbatch, ioi, wait=True):
     if ioi:
         ioi_flag = " --ioi=yes "
 
-    #cmd_line = " ".join(f'sbatch{wait_flag}{ioi_flag}{sbatch_file}'.split())
-    #cmd_line = ["sbatch", wait_flag, ioi_flag, "mod_sbatch.sbatch"]
     cmd_line = "sbatch" + wait_flag + ioi_flag + "mod_sbatch.sbatch"
-    #print("CMD: ", cmd_line)
+
     # Run the script using subprocess
     sub_ps = subprocess.run(cmd_line.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     output_stdout = sub_ps.stdout.decode()
@@ -181,8 +179,8 @@ if __name__ == '__main__':
     lfs="/fsiof/phamtt/tmp"
     nfs="/scratch/phamtt/tmp"
     acc = "SBB"
-    gen_fakeapp(1000000000, "Write", "Random", 1000, lfs, 2, True, acc)
-    gen_fakeapp(1000000000, "Write", "Seq", 1000, lfs, 2, True)
+    gen_fakeapp(1000000000, "Write", "Random", 10000, lfs, 2, True, acc)
+    gen_fakeapp(1000000000, "Write", "Random", 10000, lfs, 2, True)
+    #gen_fakeapp(1000000000, "Write", "Seq", 1000, nfs, 2, True)
     #gen_fakeapp(10000000, "Read", "Stride", 1000, lfs, 2, True)
     #gen_fakeapp(10000000, "Read", "Seq", 1000, lfs, 2, True)
-    #run_sbatch(sbatch)
