@@ -13,7 +13,7 @@ def write_to_file(fname, text):
     f.write(text)
 
 
-def gen_fakeapp(volume, mode, IOpattern, IOsize, target, nodes=1, ioi=False):
+def gen_fakeapp(volume, mode, IOpattern, IOsize, target, nodes=1, ioi=False, accelerator =""):
     """
     Generate an sbatch file using the features extracted for each phase
     by AppDecomposer
@@ -41,6 +41,7 @@ def gen_fakeapp(volume, mode, IOpattern, IOsize, target, nodes=1, ioi=False):
     N = int(volume / IOsize)
     print("Number of IO: ", N)
     print("IOI Enabled: ", ioi)
+    print("IO Accelerator: ", accelerator)
 
     #read template file
     template = "fakeapp.sbatch"
@@ -67,6 +68,11 @@ def gen_fakeapp(volume, mode, IOpattern, IOsize, target, nodes=1, ioi=False):
         mod_sbatch = mod_sbatch.replace("$MODE", "-R")
     else:
         mod_sbatch = mod_sbatch.replace("$MODE", "")
+
+    if accelerator =="SBB":
+        mod_sbatch = mod_sbatch.replace("$ACC", accelerator)
+    else:
+        mod_sbatch = mod_sbatch.replace("$ACC", "no")
 
     print("------------------")
 
@@ -162,19 +168,21 @@ def parse_milliseconds(string_time):
 
 def get_bandwidth(volume, time):
 
-    #compute bandwidth
+    #compute IO bandwidth
     bw = 0
     if (time > 0):
         bw = volume/time
 
-    print("IO bandwidth (bytes per second): ", bw)
+    print("IO bandwidth: ", format(bw/(1024*1024), '.2f'), "(Mb/s)")
 
     return bw
 
 if __name__ == '__main__':
     lfs="/fsiof/phamtt/tmp"
     nfs="/scratch/phamtt/tmp"
-    gen_fakeapp(10000000, "Write", "Stride", 1000, lfs, 2, True)
-    gen_fakeapp(10000000, "Read", "Seq", 1000, lfs, 2, True)
-    gen_fakeapp(10000000, "Read", "Random", 1000, lfs, 2, True)
+    acc = "SBB"
+    gen_fakeapp(1000000000, "Write", "Random", 1000, lfs, 2, True, acc)
+    gen_fakeapp(1000000000, "Write", "Seq", 1000, lfs, 2, True)
+    #gen_fakeapp(10000000, "Read", "Stride", 1000, lfs, 2, True)
+    #gen_fakeapp(10000000, "Read", "Seq", 1000, lfs, 2, True)
     #run_sbatch(sbatch)
