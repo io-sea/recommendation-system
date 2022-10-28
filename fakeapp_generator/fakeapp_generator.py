@@ -62,7 +62,6 @@ def gen_fakeapp(volume, mode, IOpattern, IOsize, target, nodes=1, ioi=False, acc
     if (IOpattern=="Random"):
         scatter = 1000000
 
-    #gen_sbatch = re.sub(r"\s$VOLUME", str(volume), sbatch)
     mod_sbatch = sbatch.replace("$VOLUME", str(volume))
     mod_sbatch = mod_sbatch.replace("$OPS", str(N))
     mod_sbatch = mod_sbatch.replace("$LEAD", str(lead))
