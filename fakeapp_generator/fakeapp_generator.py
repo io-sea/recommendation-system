@@ -19,7 +19,7 @@ def write_to_file(fname, text):
     f= open(fname, "w")
     f.write(text)
 
-def gen_fakeapp(volume, mode, IOpattern, IOsize, target, nodes=1, ioi=False, accelerator =""):
+def gen_fakeapp(volume, mode, IOpattern, IOsize, nodes, target, ioi=False, accelerator =""):
     """
     Generate an sbatch file using the features extracted for each phase
     by AppDecomposer
@@ -203,8 +203,8 @@ if __name__ == '__main__':
     lfs="/fsiof/phamtt/tmp"
     nfs="/scratch/phamtt/tmp"
     acc = "SBB"
-    gen_fakeapp(1000000000, "Write", "Random", 10000, lfs, 2, True, acc)
-    gen_fakeapp(1000000000, "Write", "Random", 10000, lfs, 2, True)
+    gen_fakeapp(1000000000, "Write", "Random", 10000, 2, lfs, True, acc)
+    gen_fakeapp(1000000000, "Write", "Random", 10000, 2, lfs, True)
     #gen_fakeapp(1000000000, "Write", "Seq", 1000, nfs, 2, True)
     #gen_fakeapp(10000000, "Read", "Stride", 1000, lfs, 2, True)
     #gen_fakeapp(10000000, "Read", "Seq", 1000, lfs, 2, True)

@@ -5,7 +5,7 @@ This is not Free or Open Source software.
 Please contact Bull S. A. S. for details about its license.
 """
 import os
-import pandas as pd
+#import pandas as pd
 import fakeapp_generator
 
 class PhaseFeatures:
@@ -30,7 +30,7 @@ class PhaseFeatures:
 
 class PhasePerformance:
 
-    def __init__(self, target,  accelerator="", ioi=False):
+    def __init__(self, phase, target,  accelerator="", ioi=False):
         """Initializes the performance model with the phase features extracted from AppDecomposer
         Args:
             phase (list): list of phases features to be generated
@@ -38,7 +38,7 @@ class PhasePerformance:
             ioi (bool): enable/disable IOI, default = False
             accelerator (string): using IO acclerator such as SBB/FIOL
         """
-        #self.phase = phase
+        self.phase = phase
         self.target = target
         self.ioi = ioi
         self.accelerator = accelerator
@@ -51,20 +51,25 @@ class PhasePerformance:
 
         return
 
-    def get_phase_bandwidth(self, phase, sample=1):
+    def get_phase_bandwidth(self, sample=1):
         #run app n times to get the avg bandwidth
-        bw = 0
-        bw = fakeapp_generator.gen_fakeapp(phase["volume"], phase["mode"], phase["IOpattern"],
-                    phase["IOsize"], phase["nodes"], self.ioi, self.accelerator)
-        return bw
+        sum = 0
+        for i in range(1, sample+1):
+            (t, bw) = fakeapp_generator.gen_fakeapp(self.phase["volume"], self.phase["mode"], self.phase["IOpattern"],
+                    self.phase["IOsize"], self.phase["nodes"], self.target, self.ioi, self.accelerator)
+            sum += bw
+        avg_bw = (float)(sum/sample)
+        print("Performance on tier ", self.target, self.accelerator, ": ", format(avg_bw/(1024*1024), '.2f'), "(Mb/s)")
+        return avg_bw
 
 if __name__ == '__main__':
     lfs="/fsiof/phamtt/tmp"
     nfs="/scratch/phamtt/tmp"
     acc = "SBB"
-    perf_data_nfs = PhasePerformance(nfs)
-    perf_data_lfs = PhasePerformance(lfs)
-    perf_data_sbb = PhasePerformance(lfs, acc)
+    phase1=dict(volume=100000000, mode="Write", IOpattern="Random", IOsize=10000, nodes=1)
 
-    phase1=dict(volume=1000000000, mode="Write", IOpattern="Random", IOsize=10000, nodes=2)
-    perf_data_nfs.get_phase_bandwidth(phase1, 2)
+    perf_data_nfs = PhasePerformance(phase1, nfs)
+    perf_data_lfs = PhasePerformance(phase1, lfs)
+    perf_data_sbb = PhasePerformance(phase1, lfs, acc)
+
+    perf = perf_data_sbb.get_phase_bandwidth(2)
