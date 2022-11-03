@@ -19,7 +19,7 @@ def write_to_file(fname, text):
     f= open(fname, "w")
     f.write(text)
 
-def gen_fakeapp(volume, mode, IOpattern, IOsize, nodes, target, ioi=False, accelerator =""):
+def gen_fakeapp(volume, mode, IOpattern, IOsize, nodes, target, accelerator ="", ioi=False):
     """
     Generate an sbatch file using the features extracted for each phase
     by AppDecomposer
@@ -28,8 +28,9 @@ def gen_fakeapp(volume, mode, IOpattern, IOsize, nodes, target, ioi=False, accel
         mode (string): read/write
         IOpattern (string): Seq/Stride/Random
         IOsize (string): size of IO
-        target (string): storage backend file (nfs/fs1/sbb)
         nodes (int): number of nodes, default = 1
+        target (string): storage backend file (nfs or lfs)
+        accelerator (string): IO accelerator to be used (sbb), default=""
         ioi (bool): enable/disable IOI, default = False
 
     Returns:
