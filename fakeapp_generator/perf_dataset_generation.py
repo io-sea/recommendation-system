@@ -42,9 +42,10 @@ class PhasePerformance:
         self.target = target
         self.ioi = ioi
         self.accelerator = accelerator
+        self.perf_df = pd.DataFrame()
 
     def load_dataset(self, filename):
-        self.df = pd.read_csv(filename)
+        self.perf_df = pd.read_csv(filename)
 
     def extract_phases(self):
         phase = dict()
@@ -53,15 +54,23 @@ class PhasePerformance:
     def export_to_csv(self, filename):
         self.df.to_csv(filename)
 
-    def run_phases(self, sample=1):
+    def get_perfomrances(self, sample=1):
         self.extract_phases()
+        perf_nfs = []
+        perf_lfs = []
+        perf_sbb = []
         for phase in self.phases:
             #run the fakeapp to mesure the bandwidth on all tiers
-            perf_nfs = self.get_phase_bandwidth(phase, self.target["nfs"], "", 2)
-            perf_lfs = self.get_phase_bandwidth(phase, self.target["lfs"], "", 2)
-            perf_sbb = self.get_phase_bandwidth(phase, self.target["lfs"], self.accelerator, 2)
+            perf_nfs.append(self.get_phase_bandwidth(phase, self.target["nfs"], "", 2))
+            perf_lfs.append(self.get_phase_bandwidth(phase, self.target["lfs"], "", 2))
+            perf_sbb.append(self.get_phase_bandwidth(phase, self.target["lfs"], self.accelerator, 2))
 
-            #update phase performance on the dataframe
+        #update phase performance on the dataframe
+        self.perf_df["nfs"] = perf_nfs
+        self.perf_df["lfs"] = perf_lfs
+        self.perf_df["sbb"] = perf_sbb
+
+        return self.perf_df
 
     def get_phase_bandwidth(self, phase, target, accelerator="", sample=1):
         #run fakeapp n times to get the avg bandwidth
@@ -81,4 +90,5 @@ if __name__ == '__main__':
     phase2=dict(volume=100000000, mode="Read", IOpattern="Seq", IOsize=10000, nodes=1)
     phases = [phase1, phase2]
     perf_data = PhasePerformance(phases, target, acc)
-    perf_data.run_phases(2)
+    df=perf_data.get_perfomrances(2)
+    print(df)
