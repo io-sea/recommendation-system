@@ -42,19 +42,26 @@ class PhasePerformance:
         self.target = target
         self.ioi = ioi
         self.accelerator = accelerator
-        self.perf_df = pd.DataFrame()
+        self.perf_data = pd.DataFrame()
 
     def load_dataset(self, filename):
-        self.perf_df = pd.read_csv(filename)
+        self.perf_data = pd.read_csv(filename)
 
     def extract_phases(self):
-        phase = dict()
-        self.phases.append(phase)
+        # transform rows in the dataframe to a list of phase feature
+        self.phases = self.perf_data.to_dict('records')
 
     def export_to_csv(self, filename):
-        self.df.to_csv(filename)
+        self.perf_data.to_csv(filename)
 
     def get_perfomrances(self, sample=1):
+        """Compute the performance on each tier with the phase features extracted from AppDecomposer
+        Args:
+            sample (int): number of sampling of the phase
+
+        Return:
+            per_df (pandas): performances in each tier
+        """
         self.extract_phases()
         perf_nfs = []
         perf_lfs = []
@@ -66,13 +73,26 @@ class PhasePerformance:
             perf_sbb.append(self.get_phase_bandwidth(phase, self.target["lfs"], self.accelerator, 2))
 
         #update phase performance on the dataframe
-        self.perf_df["nfs"] = perf_nfs
-        self.perf_df["lfs"] = perf_lfs
-        self.perf_df["sbb"] = perf_sbb
+        perf_df = pd.DataFrame()
+        perf_df["nfs"] = perf_nfs
+        perf_df["lfs"] = perf_lfs
+        perf_df["sbb"] = perf_sbb
 
-        return self.perf_df
+        self.perf_data.join(perf_df)
+
+        return perf_df
 
     def get_phase_bandwidth(self, phase, target, accelerator="", sample=1):
+        """Compute the average bandwidht on a storage tier with the phase features extracted from AppDecomposer
+        Args:
+            phase (dict): phase to be measured
+            target (string): storage backend
+            accelerator (string): using IO acclerator such as SBB/FIOL
+            sample (int): number of sampling of the phase
+
+        Return:
+            avg_bw (float):  average bandwidth
+        """
         #run fakeapp n times to get the avg bandwidth
         sum = 0
         for i in range(1, sample+1):
