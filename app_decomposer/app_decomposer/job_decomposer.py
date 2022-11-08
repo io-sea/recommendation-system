@@ -602,7 +602,7 @@ class JobConnector:
         data = metadata.get_all_metadata()
         return data["nodeCount"]
 
-    def get_job_data(self, object_id):
+    def get_job_volume(self, object_id):
         """Get volume timeseries and timestamps for a given object id.
 
         Args:
@@ -618,15 +618,58 @@ class JobConnector:
         data = time_series.get_data_by_label()
         return data["timestamp"], data["bytesRead"], data["bytesWritten"]
 
+    def get_job_timeseries(self, object_id):
+        """Get volume, operationsCount and accessPattern arrays from job's data.
+
+        Args:
+            object_id (str): object id that reference the db entry for job's information.
+
+        Returns:
+            job_timeseries (dict): with 'volume', 'operationsCount' and 'accesspattern' as keys.
+            example:
+            {
+                'volume': {
+                    'timestamp': array([0, 1], dtype=int64),
+                    'bytesRead': array([0, 0], dtype=int64),
+                    'bytesWritten': array([ 0, 42], dtype=int64)},
+                'operationsCount': {
+                    'timestamp': array([0, 1], dtype=int64),
+                    'operationRead': array([0, 2], dtype=int64),
+                    'operationWrite': array([0, 1], dtype=int64)},
+                'accessPattern': {
+                    'timestamp': array([0, 1], dtype=int64),
+                    'accessRandRead': array([0, 12], dtype=int64),
+                    'accessSeqRead': array([0, 12], dtype=int64),
+                    'accessStrRead': array([0, 0], dtype=int64),
+                    'accessUnclRead': array([40, 1], dtype=int64),
+                    'accessRandWrite': array([0, 0], dtype=int64),
+                    'accessSeqWrite': array([0, 0], dtype=int64),
+                    'accessStrWrite': array([0, 0], dtype=int64),
+                    'accessUnclWrite': array([0, 1], dtype=int64)
+                }
+            }
+        """
+        job_timeseries = dict()
+        for ts in ["volume", "operationsCount", "accessPattern"]:
+            job_timeseries[ts]  = TimeSeries(api_uri=self.api_uri,
+                                      api_token=f"Bearer {self.api_token}",
+                                      object_id=object_id,
+                                      type_series=ts).get_data_by_label()
+
+        return job_timeseries
+
+
+
     def get_data(self, job_id):
         """Retrieves necessary data for JobDecomposer to extract phases and representation.
 
         Returns:
-            tuple: data needed for job decomposition.
+            tuple (int, dict): data needed for job decomposition.
         """
         object_id = self.slurm_id_2_obj_id(job_id)
         node_count = self.get_node_count(object_id)
-        return self.get_job_data(object_id)
+        timeseries = self.get_job_timeseries(object_id)
+        return node_count, timeseries
 
 
 
