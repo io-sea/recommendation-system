@@ -15,6 +15,8 @@ from app_decomposer.job_decomposer import JobDecomposer, ComplexDecomposer, get_
 from app_decomposer.config_parser import Configuration
 from app_decomposer.signal_decomposer import KmeansSignalDecomposer, get_lowest_cluster
 
+from app_decomposer import API_DICT_TS
+
 def list_jobs(dataset_path):
     """list all present jobs in the dataset folder and return list of files, ids and dataset names.
 
@@ -37,8 +39,7 @@ def list_jobs(dataset_path):
 
 def get_job_timeseries_from_file(job_id=None):
     """Method to extract read and write timeseries from a job.
-    TODO: connect this method directly to the IOI database.
-    For the moment, data will be mocked by a csv file containing the timeseries.
+    For unit tests, data will be mocked by a csv file containing the timeseries.
 
     Returns:
         timestamps, read_signal, write_signal (numpy array): various arrays of the job timeseries.
@@ -57,6 +58,47 @@ def get_job_timeseries_from_file(job_id=None):
     df_clean = df.drop_duplicates(subset=['timestamp', 'bytesRead', 'bytesWritten'])
     return df_clean[["timestamp"]].to_numpy(), df_clean[["bytesRead"]].to_numpy(), df_clean[["bytesWritten"]].to_numpy()
 
+def get_job_features_from_file(job_id=None):
+    """Method to extract read and write timeseries from a job.
+    For unit tests, data will be mocked by a csv file containing the timeseries.
+
+    Returns:
+        timestamps, read_signal, write_signal (numpy array): various arrays of the job timeseries.
+    """
+    # get out tests, and package folder
+    current_dir = dirname(dirname(dirname(abspath(__file__))))
+    dataset_path = os.path.join(current_dir, "dataset_generation", "dataset_generation")
+    # Get list of jobs
+    job_files, job_ids, dataset_names = list_jobs(dataset_path=dataset_path)
+    if job_id is None:
+        csv_file = random.choice(job_files)
+    else:
+        csv_file = job_files[job_ids.index(str(job_id))]
+
+    df = pd.read_csv(csv_file, index_col=0)
+
+    job_features = {}
+    for feature in ["volume", "operationsCount", "accessPattern"]:
+        timeseries = API_DICT_TS[feature]
+        timeseries.append('timestamp')
+        df_clean = df.drop_duplicates(subset=timeseries)
+        job_features[feature] = {}
+        for ts in timeseries:
+            job_features[feature][ts] = df_clean[[ts]].to_numpy().flatten()
+    return job_features
+
+
+class TestJobMocker(unittest.TestCase):
+    """Tests that the job timeseries mocker return the expected format."""
+    def test_output_format(self):
+        output = get_job_features_from_file(job_id=3906)
+        features = ["volume", "operationsCount", "accessPattern"]
+        self.assertEqual(set(output.keys()), set(features))
+        for feature in features:
+            for ts in API_DICT_TS[feature]:
+                self.assertIsInstance(output[feature][ts], np.ndarray)
+
+
 class TestJobDecomposer(unittest.TestCase):
     """Test that the app decomposer follows some pattern."""
 
@@ -73,6 +115,18 @@ class TestJobDecomposer(unittest.TestCase):
         # init the job decomposer
         jd = JobDecomposer()
         self.assertEqual(len(jd.timestamps), len(jd.read_signal))
+
+    @patch.object(Configuration, 'get_kc_token')
+    @patch.object(JobDecomposer, 'get_job_timeseries')
+    def test_init_job_dec_features(self, mock_get_timeseries, mock_get_kc_token):
+        """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
+        # mock the method to return some dataset file content
+        mock_get_timeseries.return_value = get_job_features_from_file(job_id=3906)
+        mock_get_kc_token.return_value = 'token'
+        # init the job decomposer
+        jd = JobDecomposer()
+        print(jd.timestamps)
+        #self.assertEqual(len(jd.timestamps), len(jd.read_signal))
 
     @patch.object(Configuration, 'get_kc_token')
     @patch.object(JobDecomposer, 'get_job_timeseries')
@@ -635,7 +689,12 @@ class TestComplexDecomposer(unittest.TestCase):
         timestamps = np.arange(1)
         read_signal = np.array([0])
         write_signal = np.array([0])
-        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        timeseries = {}
+        timeseries["volume"] = {}
+        timeseries["volume"]["timestamp"] = timestamps
+        timeseries["volume"]["bytesRead"] = read_signal
+        timeseries["volume"]["bytesWritten"] = write_signal
+        mock_get_timeseries.return_value = timeseries
         mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         cd = ComplexDecomposer()
@@ -659,7 +718,12 @@ class TestComplexDecomposer(unittest.TestCase):
         timestamps = np.arange(1)
         read_signal = np.array([1])
         write_signal = np.array([0])
-        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        timeseries = {}
+        timeseries["volume"] = {}
+        timeseries["volume"]["timestamp"] = timestamps
+        timeseries["volume"]["bytesRead"] = read_signal
+        timeseries["volume"]["bytesWritten"] = write_signal
+        mock_get_timeseries.return_value = timeseries
         mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         cd = ComplexDecomposer()
@@ -682,7 +746,12 @@ class TestComplexDecomposer(unittest.TestCase):
         timestamps = np.arange(1)
         read_signal = np.array([0])
         write_signal = np.array([13])
-        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        timeseries = {}
+        timeseries["volume"] = {}
+        timeseries["volume"]["timestamp"] = timestamps
+        timeseries["volume"]["bytesRead"] = read_signal
+        timeseries["volume"]["bytesWritten"] = write_signal
+        mock_get_timeseries.return_value = timeseries
         mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         cd = ComplexDecomposer()
@@ -705,7 +774,12 @@ class TestComplexDecomposer(unittest.TestCase):
         timestamps = np.arange(3)
         read_signal = np.array([0, 0, 0])
         write_signal = np.array([0, 0, 0])
-        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        timeseries = {}
+        timeseries["volume"] = {}
+        timeseries["volume"]["timestamp"] = timestamps
+        timeseries["volume"]["bytesRead"] = read_signal
+        timeseries["volume"]["bytesWritten"] = write_signal
+        mock_get_timeseries.return_value = timeseries
         mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         cd = ComplexDecomposer()
@@ -724,7 +798,12 @@ class TestComplexDecomposer(unittest.TestCase):
             timestamps = np.arange(N)
             read_signal = np.array([0]*N)
             write_signal = np.array([0]*N)
-            mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+            timeseries = {}
+        timeseries["volume"] = {}
+        timeseries["volume"]["timestamp"] = timestamps
+        timeseries["volume"]["bytesRead"] = read_signal
+        timeseries["volume"]["bytesWritten"] = write_signal
+        mock_get_timeseries.return_value = timeseries
             mock_get_kc_token.return_value = 'token'
             # init the job decomposer
             cd = ComplexDecomposer()
@@ -743,7 +822,12 @@ class TestComplexDecomposer(unittest.TestCase):
         timestamps = np.arange(2)
         read_signal = np.array([1, 0])
         write_signal = np.array([0, 0])
-        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        timeseries = {}
+        timeseries["volume"] = {}
+        timeseries["volume"]["timestamp"] = timestamps
+        timeseries["volume"]["bytesRead"] = read_signal
+        timeseries["volume"]["bytesWritten"] = write_signal
+        mock_get_timeseries.return_value = timeseries
         mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         cd = ComplexDecomposer()
@@ -766,7 +850,12 @@ class TestComplexDecomposer(unittest.TestCase):
         timestamps = np.arange(2)
         read_signal = np.array([1, 0])
         write_signal = np.array([1, 0])
-        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        timeseries = {}
+        timeseries["volume"] = {}
+        timeseries["volume"]["timestamp"] = timestamps
+        timeseries["volume"]["bytesRead"] = read_signal
+        timeseries["volume"]["bytesWritten"] = write_signal
+        mock_get_timeseries.return_value = timeseries
         mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         cd = ComplexDecomposer()
@@ -789,7 +878,12 @@ class TestComplexDecomposer(unittest.TestCase):
         timestamps = np.arange(3)
         read_signal = np.array([1, 0, 0])
         write_signal = np.array([0, 0, 0])
-        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        timeseries = {}
+        timeseries["volume"] = {}
+        timeseries["volume"]["timestamp"] = timestamps
+        timeseries["volume"]["bytesRead"] = read_signal
+        timeseries["volume"]["bytesWritten"] = write_signal
+        mock_get_timeseries.return_value = timeseries
         mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         cd = ComplexDecomposer()
@@ -812,7 +906,12 @@ class TestComplexDecomposer(unittest.TestCase):
         timestamps = np.arange(3)
         read_signal = np.array([1, 0, 0])
         write_signal = np.array([1, 0, 0])
-        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        timeseries = {}
+        timeseries["volume"] = {}
+        timeseries["volume"]["timestamp"] = timestamps
+        timeseries["volume"]["bytesRead"] = read_signal
+        timeseries["volume"]["bytesWritten"] = write_signal
+        mock_get_timeseries.return_value = timeseries
         mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         cd = ComplexDecomposer()
@@ -835,7 +934,12 @@ class TestComplexDecomposer(unittest.TestCase):
         timestamps = np.arange(3)
         read_signal = np.array([1, 0, 0])
         write_signal = np.array([0, 0, 1])
-        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        timeseries = {}
+        timeseries["volume"] = {}
+        timeseries["volume"]["timestamp"] = timestamps
+        timeseries["volume"]["bytesRead"] = read_signal
+        timeseries["volume"]["bytesWritten"] = write_signal
+        mock_get_timeseries.return_value = timeseries
         mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         cd = ComplexDecomposer()
@@ -857,7 +961,12 @@ class TestComplexDecomposer(unittest.TestCase):
         timestamps = np.arange(4)
         read_signal = np.array([1, 0, 0, 0])
         write_signal = np.array([0, 0, 0, 0])
-        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        timeseries = {}
+        timeseries["volume"] = {}
+        timeseries["volume"]["timestamp"] = timestamps
+        timeseries["volume"]["bytesRead"] = read_signal
+        timeseries["volume"]["bytesWritten"] = write_signal
+        mock_get_timeseries.return_value = timeseries
         mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         cd = ComplexDecomposer()
@@ -880,7 +989,12 @@ class TestComplexDecomposer(unittest.TestCase):
         timestamps = np.arange(4)
         read_signal = np.array([1, 0, 0, 0])
         write_signal = np.array([0, 0, 0, 1])
-        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        timeseries = {}
+        timeseries["volume"] = {}
+        timeseries["volume"]["timestamp"] = timestamps
+        timeseries["volume"]["bytesRead"] = read_signal
+        timeseries["volume"]["bytesWritten"] = write_signal
+        mock_get_timeseries.return_value = timeseries
         mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         cd = ComplexDecomposer()
@@ -902,7 +1016,12 @@ class TestComplexDecomposer(unittest.TestCase):
         timestamps = np.arange(4)
         read_signal = np.array([1, 1, 0, 0])
         write_signal = np.array([0, 0, 0, 0])
-        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        timeseries = {}
+        timeseries["volume"] = {}
+        timeseries["volume"]["timestamp"] = timestamps
+        timeseries["volume"]["bytesRead"] = read_signal
+        timeseries["volume"]["bytesWritten"] = write_signal
+        mock_get_timeseries.return_value = timeseries
         mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         cd = ComplexDecomposer()
@@ -925,7 +1044,12 @@ class TestComplexDecomposer(unittest.TestCase):
         timestamps = np.arange(4)
         read_signal = np.array([3, 5, 0, 0])
         write_signal = np.array([0, 0, 0, 0])
-        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        timeseries = {}
+        timeseries["volume"] = {}
+        timeseries["volume"]["timestamp"] = timestamps
+        timeseries["volume"]["bytesRead"] = read_signal
+        timeseries["volume"]["bytesWritten"] = write_signal
+        mock_get_timeseries.return_value = timeseries
         mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         cd = ComplexDecomposer()
@@ -948,7 +1072,12 @@ class TestComplexDecomposer(unittest.TestCase):
         timestamps = np.arange(4)
         read_signal = np.array([1, 0, 0, 0])
         write_signal = np.array([0, 1, 0, 0])
-        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        timeseries = {}
+        timeseries["volume"] = {}
+        timeseries["volume"]["timestamp"] = timestamps
+        timeseries["volume"]["bytesRead"] = read_signal
+        timeseries["volume"]["bytesWritten"] = write_signal
+        mock_get_timeseries.return_value = timeseries
         mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         cd = ComplexDecomposer()
@@ -971,7 +1100,12 @@ class TestComplexDecomposer(unittest.TestCase):
         timestamps = np.arange(4)
         read_signal = np.array([1, 0, 0, 0])
         write_signal = np.array([1, 1, 0, 0])
-        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        timeseries = {}
+        timeseries["volume"] = {}
+        timeseries["volume"]["timestamp"] = timestamps
+        timeseries["volume"]["bytesRead"] = read_signal
+        timeseries["volume"]["bytesWritten"] = write_signal
+        mock_get_timeseries.return_value = timeseries
         mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         cd = ComplexDecomposer()
@@ -994,7 +1128,12 @@ class TestComplexDecomposer(unittest.TestCase):
         timestamps = np.arange(4)
         read_signal = np.array([2, 0, 0, 0])
         write_signal = np.array([1, 1, 0, 0])
-        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        timeseries = {}
+        timeseries["volume"] = {}
+        timeseries["volume"]["timestamp"] = timestamps
+        timeseries["volume"]["bytesRead"] = read_signal
+        timeseries["volume"]["bytesWritten"] = write_signal
+        mock_get_timeseries.return_value = timeseries
         mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         cd = ComplexDecomposer()
@@ -1017,7 +1156,12 @@ class TestComplexDecomposer(unittest.TestCase):
         timestamps = np.arange(4)
         read_signal = np.array([2, 0, 0, 0])
         write_signal = np.array([1, 1, 0, 0])
-        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        timeseries = {}
+        timeseries["volume"] = {}
+        timeseries["volume"]["timestamp"] = timestamps
+        timeseries["volume"]["bytesRead"] = read_signal
+        timeseries["volume"]["bytesWritten"] = write_signal
+        mock_get_timeseries.return_value = timeseries
         mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         cd = ComplexDecomposer()
@@ -1036,7 +1180,12 @@ class TestComplexDecomposer(unittest.TestCase):
         timestamps = np.arange(3)
         read_signal = np.array([10, 4, 0, 0])
         write_signal = np.array([0, 0, 0, 0])
-        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        timeseries = {}
+        timeseries["volume"] = {}
+        timeseries["volume"]["timestamp"] = timestamps
+        timeseries["volume"]["bytesRead"] = read_signal
+        timeseries["volume"]["bytesWritten"] = write_signal
+        mock_get_timeseries.return_value = timeseries
         mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         cd = ComplexDecomposer()
@@ -1055,7 +1204,12 @@ class TestComplexDecomposer(unittest.TestCase):
         timestamps = np.arange(6)
         read_signal = np.array([1, 1, 0, 0, 0, 0])
         write_signal = np.array([0, 0, 0, 0, 1, 1])
-        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        timeseries = {}
+        timeseries["volume"] = {}
+        timeseries["volume"]["timestamp"] = timestamps
+        timeseries["volume"]["bytesRead"] = read_signal
+        timeseries["volume"]["bytesWritten"] = write_signal
+        mock_get_timeseries.return_value = timeseries
         mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         cd = ComplexDecomposer()
@@ -1074,7 +1228,12 @@ class TestComplexDecomposer(unittest.TestCase):
         timestamps = np.arange(6)
         read_signal = np.array([1, 1, 1, 0, 0, 0])
         write_signal = np.array([0, 0, 0, 1, 1, 1])
-        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        timeseries = {}
+        timeseries["volume"] = {}
+        timeseries["volume"]["timestamp"] = timestamps
+        timeseries["volume"]["bytesRead"] = read_signal
+        timeseries["volume"]["bytesWritten"] = write_signal
+        mock_get_timeseries.return_value = timeseries
         mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         cd = ComplexDecomposer()
@@ -1097,7 +1256,12 @@ class TestComplexDecomposer(unittest.TestCase):
         timestamps = np.arange(6)
         read_signal = np.array([1, 1, 1, 0, 0, 0])
         write_signal = np.array([1, 1, 1, 0, 0, 0])
-        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        timeseries = {}
+        timeseries["volume"] = {}
+        timeseries["volume"]["timestamp"] = timestamps
+        timeseries["volume"]["bytesRead"] = read_signal
+        timeseries["volume"]["bytesWritten"] = write_signal
+        mock_get_timeseries.return_value = timeseries
         mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         cd = ComplexDecomposer()
@@ -1116,7 +1280,12 @@ class TestComplexDecomposer(unittest.TestCase):
         timestamps = np.arange(6)
         read_signal = np.array([1, 1, 1, 1, 0, 0])
         write_signal = np.array([0, 0, 0, 1, 2, 2])
-        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        timeseries = {}
+        timeseries["volume"] = {}
+        timeseries["volume"]["timestamp"] = timestamps
+        timeseries["volume"]["bytesRead"] = read_signal
+        timeseries["volume"]["bytesWritten"] = write_signal
+        mock_get_timeseries.return_value = timeseries
         mock_get_kc_token.return_value = 'token'
         # init the job decomposer
         cd = ComplexDecomposer()

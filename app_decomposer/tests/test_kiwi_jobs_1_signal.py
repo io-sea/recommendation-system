@@ -69,7 +69,13 @@ def get_job_timeseries_from_file(job_id=None):
 
     df = pd.read_csv(csv_file, index_col=0)
     df_clean = df.drop_duplicates(subset=['timestamp'])
-    return df_clean[["timestamp"]].to_numpy(), df_clean[["bytesRead"]].to_numpy(), df_clean[["bytesWritten"]].to_numpy()
+    timeseries = {}
+    timeseries["volume"] = {}
+    timeseries["volume"]["timestamp"] = df_clean[["timestamp"]].to_numpy()
+    timeseries["volume"]["bytesRead"] = df_clean[["bytesRead"]].to_numpy()
+    timeseries["volume"]["bytesWritten"] = df_clean[["bytesWritten"]].to_numpy()
+    return timeseries
+    #return , df_clean[["bytesRead"]].to_numpy(), df_clean[["bytesWritten"]].to_numpy()
 
 def plot_job_signal(jobid=None):
     x, read_signal, write_signal = get_job_timeseries_from_file(job_id=jobid)
@@ -97,16 +103,23 @@ class QualifyComplexDecomposerOnSyntheticSignals(unittest.TestCase):
         self.nvram_tier = Tier(self.env, 'NVRAM', bandwidth=nvram_bandwidth, capacity=80e9)
 
 
+    @patch.object(ComplexDecomposer, 'get_job_node_count')
     @patch.object(Configuration, 'get_kc_token')
     @patch.object(ComplexDecomposer, 'get_job_timeseries')
-    def test_job_read_1(self, mock_get_timeseries, mock_get_kc_token):
+    def test_job_read_1(self, mock_get_timeseries, mock_get_kc_token, mock_get_node_count):
         """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
         # mock the method to return some manual content
+        timeseries = {}
+        timeseries["volume"] = {}
         timestamps = np.arange(4)
         read_signal = np.array([1e6, 0, 0, 0])
         write_signal = np.array([0, 0, 0, 0])
-        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        timeseries["volume"]["timestamp"] = timestamps
+        timeseries["volume"]["bytesRead"] = read_signal
+        timeseries["volume"]["bytesWritten"] = write_signal
+        mock_get_timeseries.return_value = timeseries
         mock_get_kc_token.return_value = 'token'
+        mock_get_node_count.return_value = 1
         # init the job decomposer
         cd = ComplexDecomposer()
         compute, reads, read_bw, writes, write_bw = cd.get_job_representation()
@@ -153,16 +166,23 @@ class QualifyComplexDecomposerOnSyntheticSignals(unittest.TestCase):
             plt.legend()
             plt.show()
 
+    @patch.object(ComplexDecomposer, 'get_job_node_count')
     @patch.object(Configuration, 'get_kc_token')
     @patch.object(ComplexDecomposer, 'get_job_timeseries')
-    def test_job_read_2(self, mock_get_timeseries, mock_get_kc_token):
+    def test_job_read_2(self, mock_get_timeseries, mock_get_kc_token, mock_get_node_count):
         """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
         # mock the method to return some manual content
         timestamps = np.arange(4)
         read_signal = np.array([0, 1e6, 0, 0])
         write_signal = np.array([0, 0, 0, 0])
-        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        timeseries = {}
+        timeseries["volume"] = {}
+        timeseries["volume"]["timestamp"] = timestamps
+        timeseries["volume"]["bytesRead"] = read_signal
+        timeseries["volume"]["bytesWritten"] = write_signal
+        mock_get_timeseries.return_value = timeseries
         mock_get_kc_token.return_value = 'token'
+        mock_get_node_count.return_value = 1
         # init the job decomposer
         cd = ComplexDecomposer()
         compute, reads, read_bw, writes, write_bw = cd.get_job_representation()
@@ -210,16 +230,23 @@ class QualifyComplexDecomposerOnSyntheticSignals(unittest.TestCase):
             plt.show()
 
 
+    @patch.object(ComplexDecomposer, 'get_job_node_count')
     @patch.object(Configuration, 'get_kc_token')
     @patch.object(ComplexDecomposer, 'get_job_timeseries')
-    def test_job_long_read(self, mock_get_timeseries, mock_get_kc_token):
+    def test_job_long_read(self, mock_get_timeseries, mock_get_kc_token, mock_get_node_count):
         """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
         # mock the method to return some manual content
         timestamps = np.arange(8)
         read_signal = np.array([1e6, 1e6, 1e6, 0, 5e6, 5e6, 5e6, 0])
         write_signal = np.array([0, 0, 0, 0, 0, 0, 0, 0])
-        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        timeseries = {}
+        timeseries["volume"] = {}
+        timeseries["volume"]["timestamp"] = timestamps
+        timeseries["volume"]["bytesRead"] = read_signal
+        timeseries["volume"]["bytesWritten"] = write_signal
+        mock_get_timeseries.return_value = timeseries
         mock_get_kc_token.return_value = 'token'
+        mock_get_node_count.return_value = 1
         # init the job decomposer
         cd = ComplexDecomposer()
         compute, reads, read_bw, writes, write_bw = cd.get_job_representation()
@@ -268,16 +295,23 @@ class QualifyComplexDecomposerOnSyntheticSignals(unittest.TestCase):
 
 
 
+    @patch.object(ComplexDecomposer, 'get_job_node_count')
     @patch.object(Configuration, 'get_kc_token')
     @patch.object(ComplexDecomposer, 'get_job_timeseries')
-    def test_job_long_read_with_merge(self, mock_get_timeseries, mock_get_kc_token):
+    def test_job_long_read_with_merge(self, mock_get_timeseries, mock_get_kc_token, mock_get_node_count):
         """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
         # mock the method to return some manual content
         timestamps = np.arange(8)
         read_signal = np.array([1e6, 2e6, 1e6, 0, 5e6, 6e6, 5e6, 0])
         write_signal = np.array([0, 0, 0, 0, 0, 0, 0, 0])
-        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        timeseries = {}
+        timeseries["volume"] = {}
+        timeseries["volume"]["timestamp"] = timestamps
+        timeseries["volume"]["bytesRead"] = read_signal
+        timeseries["volume"]["bytesWritten"] = write_signal
+        mock_get_timeseries.return_value = timeseries
         mock_get_kc_token.return_value = 'token'
+        mock_get_node_count.return_value = 1
         # init the job decomposer
         cd = ComplexDecomposer()
         compute, reads, read_bw, writes, write_bw = cd.get_job_representation()
@@ -309,7 +343,7 @@ class QualifyComplexDecomposerOnSyntheticSignals(unittest.TestCase):
               f"read_signal={output[app.name]['read_bw']}, "
               f"write_signal={output[app.name]['write_bw']}")
 
-        SHOW_FIGURE = True
+
         if SHOW_FIGURE:
 
 
@@ -348,15 +382,17 @@ class QualifyJobDecomposer1Signal(unittest.TestCase):
         self.ssd_tier = Tier(self.env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
         self.nvram_tier = Tier(self.env, 'NVRAM', bandwidth=nvram_bandwidth, capacity=80e9)
 
+    @patch.object(ComplexDecomposer, 'get_job_node_count')
     @patch.object(Configuration, 'get_kc_token')
     @patch.object(ComplexDecomposer, 'get_job_timeseries')
-    def test_job_3912(self, mock_get_timeseries, mock_get_kc_token):
+    def test_job_3912(self, mock_get_timeseries, mock_get_kc_token, mock_get_node_count):
         """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
         # mock the method to return some dataset file content
         jobid=3912
-        SHOW_FIGURE = True
+
         mock_get_timeseries.return_value = get_job_timeseries_from_file(job_id=jobid)
         mock_get_kc_token.return_value = 'token'
+        mock_get_node_count.return_value = 1
         # init the job decomposer
         cd = ComplexDecomposer()
 
@@ -415,15 +451,17 @@ class QualifyJobDecomposer1Signal(unittest.TestCase):
             plt.title(f"timeserie for jobid = {jobid}")
             plt.show()
 
+    @patch.object(ComplexDecomposer, 'get_job_node_count')
     @patch.object(Configuration, 'get_kc_token')
     @patch.object(ComplexDecomposer, 'get_job_timeseries')
-    def test_job_with_plots(self, mock_get_timeseries, mock_get_kc_token):
+    def test_job_with_plots(self, mock_get_timeseries, mock_get_kc_token, mock_get_node_count):
         """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
         # mock the method to return some dataset file content
         jobid=3911
         merge_clusters = True
         mock_get_timeseries.return_value = get_job_timeseries_from_file(job_id=jobid)
         mock_get_kc_token.return_value = 'token'
+        mock_get_node_count.return_value = 1
         # init the job decomposer
 
         # decompose and app/job
@@ -465,9 +503,9 @@ class QualifyJobDecomposer1Signal(unittest.TestCase):
         # plot_job_signal(jobid=jobid)
 
 
-        # if SHOW_FIGURE:
-        fig = display_original_sim_signals((time, read_bw, write_bw),
+        if SHOW_FIGURE:
+            fig = display_original_sim_signals((time, read_bw, write_bw),
                                            (timestamps, original_read, original_write),
                                            width=800, height=900)
-        fig.show()
+            fig.show()
 

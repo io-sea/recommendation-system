@@ -394,10 +394,15 @@ class ComplexDecomposer:
         self.config = Configuration(path=DEFAULT_CONFIGURATION)
         api_uri = f"{self.config.get_api_uri()}:{self.config.get_api_port()}"
         api_token = self.config.get_kc_token()
-        self.timestamps, self.read_signal, self.write_signal = self.get_job_timeseries(api_uri, api_token)
+        self.node_count = self.get_job_node_count(api_uri, api_token)
+        self.timeseries = self.get_job_timeseries(api_uri, api_token)
+        self.timestamps = self.timeseries["volume"]["timestamp"]
+        self.read_signal = self.timeseries["volume"]["bytesRead"]
+        self.write_signal = self.timeseries["volume"]["bytesWritten"]
         self.complex_signal = self.read_signal + 1j * self.write_signal
         self.norm_signal = np.abs(self.read_signal + 1j * self.write_signal)
-        #self.norm_signal = np.abs(self.read_signal) + np.abs(self.write_signal)
+        # NOTE: an alternative to complex norm
+        # self.norm_signal = np.abs(self.read_signal) + np.abs(self.write_signal)
 
 
     def get_job_timeseries(self, api_uri, api_token):
@@ -408,7 +413,17 @@ class ComplexDecomposer:
             timestamps, read_signal, write_signal (numpy array): various arrays of the job timeseries.
         """
         job_connector = JobConnector(api_uri, api_token)
-        return job_connector.get_data(self.job_id)
+        return job_connector.get_job_timeseries(self.job_id)
+
+    def get_job_node_count(self, api_uri, api_token):
+        """Retrieves node count data for a given job id.
+
+        Returns:
+            (int): data needed for job decomposition, node count and a dict containing all dataseries
+        """
+        job_connector = JobConnector(api_uri, api_token)
+        object_id = job_connector.slurm_id_2_obj_id(self.job_id)
+        return job_connector.get_node_count(object_id)
 
     def get_phases(self):
         """Get phases from each timeserie of the job but using mixed complex signal."""
@@ -649,30 +664,17 @@ class JobConnector:
                 }
             }
         """
-        job_timeseries = dict()
-        for ts in ["volume", "operationsCount", "accessPattern"]:
-            job_timeseries[ts]  = TimeSeries(api_uri=self.api_uri,
-                                      api_token=f"Bearer {self.api_token}",
-                                      object_id=object_id,
-                                      type_series=ts).get_data_by_label()
-
-        return job_timeseries
-
-
+        return {ts:
+            TimeSeries(api_uri=self.api_uri, api_token=f"Bearer {self.api_token}", object_id=object_id, type_series=ts).get_data_by_label() for ts in ["volume", "operationsCount", "accessPattern"]}
 
     def get_data(self, job_id):
         """Retrieves necessary data for JobDecomposer to extract phases and representation.
 
         Returns:
-            tuple (int, dict): data needed for job decomposition.
+            tuple (int, dict): data needed for job decomposition, node count and a dict containing all dataseries
         """
         object_id = self.slurm_id_2_obj_id(job_id)
         node_count = self.get_node_count(object_id)
         timeseries = self.get_job_timeseries(object_id)
         return node_count, timeseries
-
-
-
-
-
 
