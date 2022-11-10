@@ -14,6 +14,7 @@ Please contact Bull S. A. S. for details about its license.
 import os
 import pandas as pd
 import random
+from os.path import dirname, abspath
 import numpy as np
 from loguru import logger
 from scipy import integrate
@@ -477,6 +478,20 @@ class ComplexDecomposer:
 
         Returns:
             (dict): representation of the job as a set of numpy.ndarray.
+
+        Example:
+            {
+                'events': [0, 1],
+                'read_volumes': [0, 10],
+                'read_bw': [0, 10.0],
+                'write_volumes': [0, 40],
+                'write_bw': [0, 40.0],
+                'read_pattern': ['Uncl', 'Seq'],
+                'write_pattern': ['Uncl', 'Str'],
+                'read_operations': [0, 2],
+                'write_operations': [0, 1]
+            }
+
         """
 
         read_breakpoints, read_labels, write_breakpoints, write_labels, norm_breakpoints, norm_labels = self.get_phases()
@@ -508,12 +523,13 @@ class ComplexDecomposer:
         compute = []
         read_bw = []
         read_volumes = []
-        access_pattern_read = []
+        read_pattern = []
+        read_operations = []
+
         write_bw = []
         write_volumes = []
-        pattern_read = []
-        pattern_write = []
-
+        write_pattern = []
+        write_operations = []
 
         phase_duration = 0
         excess_phase_durations = 0
@@ -565,8 +581,8 @@ class ComplexDecomposer:
             # for a given "norm" phase
             read_volume = 0
             read_extent = 0
-            access_pattern_read = {}
-            access_pattern_write = {}
+            access_read_pattern = {}
+            read_op = 0
 
             # iterating subphases
             for starting_point, ending_point in zip(read_start_points, read_end_points):
@@ -581,23 +597,29 @@ class ComplexDecomposer:
                                     dx=1)
                 read_extent += ending_point - starting_point
 
+
                 for access_key in ['accessUnclRead', 'accessRandRead', 'accessSeqRead', 'accessStrRead', ]:
                     # set default value to 0 if key does not exist
-                    access_pattern_read.setdefault(access_key, 0)
-                    access_pattern_read[access_key] += get_phase_volume(self.timeseries["accessPattern"][access_key], start_index=starting_point, end_index=ending_point, dx=1)
+                    access_read_pattern.setdefault(access_key, 0)
+                    if "accessPattern" in self.timeseries:
+                        access_read_pattern[access_key] += get_phase_volume(self.timeseries["accessPattern"][access_key], start_index=starting_point, end_index=ending_point, dx=1)
+                if "operationsCount" in self.timeseries:
+                    read_op += get_phase_volume(self.timeseries["operationsCount"]["operationRead"], start_index=starting_point, end_index=ending_point, dx=1)
 
                 assert ending_point >= starting_point
             read_volumes.append(read_volume)
             bw = read_volume/(read_extent) if read_extent else 0
             read_bw.append(bw)
             # Getting biggest access read
-            pattern_read.append(ComplexDecomposer.get_dominant_pattern(access_pattern_read))
+            read_pattern.append(ComplexDecomposer.get_dominant_pattern(access_read_pattern))
+            read_operations.append(read_op)
 
             logger.info(f"Phase intervals {i_start}->{i_end} (dx={dx}) | read volume : {read_volume} | phase extent : {read_extent} | read bw : {bw}")
 
             write_volume = 0
             write_extent = 0
-            access_pattern_write = {}
+            access_write_pattern = {}
+            write_op = 0
             for starting_point, ending_point in zip(write_start_points, write_end_points):
                 # iterate over read subphases
                 #if i_start <= starting_point <= i_end and starting_point <= ending_point <= i_end:
@@ -613,15 +635,21 @@ class ComplexDecomposer:
 
                 for access_key in ['accessUnclWrite', 'accessRandWrite', 'accessSeqWrite', 'accessStrWrite']:
                     # set default value to 0 if key does not exist
-                    access_pattern_write.setdefault(access_key, 0)
-                    access_pattern_write[access_key] += get_phase_volume(self.timeseries["accessPattern"][access_key], start_index=starting_point, end_index=ending_point, dx=1)
+                    access_write_pattern.setdefault(access_key, 0)
+                    if "accessPattern" in self.timeseries:
+                        access_write_pattern[access_key] += get_phase_volume(self.timeseries["accessPattern"][access_key], start_index=starting_point, end_index=ending_point, dx=1)
+
+                if "operationsCount" in self.timeseries:
+                    write_op += get_phase_volume(self.timeseries["operationsCount"]["operationWrite"], start_index=starting_point, end_index=ending_point, dx=1)
+
 
             write_volumes.append(write_volume)
             bw = write_volume/(write_extent) if write_extent else 0
             write_bw.append(bw)
 
             # Getting biggest access write
-            pattern_write.append(ComplexDecomposer.get_dominant_pattern(access_pattern_write, suffix="Write"))
+            write_pattern.append(ComplexDecomposer.get_dominant_pattern(access_write_pattern, suffix="Write"))
+            write_operations.append(write_op)
 
             logger.info(f"Phase intervals {i_start}->{i_end} (dx={dx}) | write volume : {write_volume} | phase extent : {write_extent} | write bw : {bw}")
 
@@ -631,24 +659,73 @@ class ComplexDecomposer:
 
         # formatting output dict
         output = {}
+        output["node_count"] = self.node_count
         output["events"] = compute
         output["read_volumes"] = read_volumes or [0]
         output["read_bw"] = read_bw or [0]
         output["write_volumes"] = write_volumes or [0]
         output["write_bw"] = write_bw or [0]
-        output["pattern_read"] = pattern_read or ["Uncl"]
-        output["pattern_write"] = pattern_write or ["Uncl"]
+        output["read_pattern"] = read_pattern or ["Uncl"]
+        output["write_pattern"] = write_pattern or ["Uncl"]
+        output["read_operations"] = read_operations or [0]
+        output["write_operations"] = write_operations or [0]
 
         return output
 
+    @staticmethod
+    def get_phases_features(representation, update_csv=False):
+        """Builds from job representation an phases features dict to feed a performance model.
 
-    def get_phases_features(self):
-        """_summary_
+        Args:
+            representation (dict): job representation containing various information about the job.
+            update
+        Example:
+            representation = {
+                'events': [0, 1],
+                'read_volumes': [0, 10],
+                'read_bw': [0, 10.0],
+                'write_volumes': [0, 40],
+                'write_bw': [0, 40.0],
+                'read_pattern': ['Uncl', 'Seq'],
+                'write_pattern': ['Uncl', 'Str'],
+                'read_operations': [0, 2],
+                'write_operations': [0, 1]
+                }
 
         Returns:
-            _type_: _description_
+            list of dicts: features dict as showed in example below.
+
+        Example:
+            features = [{
+                "volume": 1e9,
+                "operation": "read" or "write",
+                "pattern": "seq" or "str" or "rand" or "uncl",
+                "io_size": 4e3,
+                "nodes_count": 1
+                }, ...]
         """
-        pass
+        phases_features = []
+        for i_phase, _ in enumerate(representation["events"]):
+            features = {}
+            # take the dominant operation for mixed phases (simple model)
+            mode = "read" if representation["read_volumes"][i_phase] >= representation["write_volumes"][i_phase] else "write"
+            features["volume"] = representation[f"{mode}_volumes"][i_phase]
+            features["operation"] = mode
+            features["pattern"] = representation[f"{mode}_pattern"][i_phase].lower()
+            features["io_size"] = representation[f"{mode}_volumes"][i_phase] / representation[f"{mode}_operations"][i_phase] if representation[f"{mode}_operations"][i_phase] else 0
+            features["node_count"] = representation["node_count"]
+
+            phases_features.append(features)
+
+        if update_csv:
+            current_dir = dirname(dirname(dirname(abspath(__file__))))
+            csv_path = os.path.join(current_dir, "dataset_generation", "dataset_generation",
+                                     "performance_model", "perfromance_model_dataset.csv")
+            pd.DataFrame(phases_features).to_csv(csv_path, mode='a',
+                                                 header=not os.path.exists(csv_path))
+
+        return phases_features
+
 
 class JobConnector:
     """Given a slurm job id, this class allows to retrieve volume timeseries and nodecount metadata to be used later by the job decomposer."""
