@@ -20,7 +20,7 @@ from scipy import integrate
 from app_decomposer.signal_decomposer import KmeansSignalDecomposer, get_lowest_cluster
 from app_decomposer.api_connector import TimeSeries, MetaData, JobSearch
 from app_decomposer.config_parser import Configuration
-from app_decomposer import DEFAULT_CONFIGURATION
+from app_decomposer import DEFAULT_CONFIGURATION, API_DICT_TS
 
 def get_phase_volume(signal, method="sum", start_index=0, end_index=-1, dx=1):
     """Method allowing many functions to compute the total volume of data for a given phase boundary in a signal array.
@@ -442,7 +442,42 @@ class ComplexDecomposer:
 
             return read_breakpoints, read_labels, write_breakpoints, write_labels, norm_breakpoints, norm_labels
 
+    @staticmethod
+    def get_dominant_pattern(pattern_freq, suffix="Read"):
+        """Given a dict with pattern names and their respective frequencies. In case of equality, first key of the dict is returned by the max routine. Make sure "Uncl" pattern is the first entry of the pattern_freq dict.
+
+        Example:
+        {
+            'accessUnclRead': 1,
+            'accessRandRead': 2,
+            'accessSeqRead': 3,
+            'accessStrRead': 4
+        }
+        Should return 'Str' as it is the most frequent pattern.
+
+
+        Args:
+            suffix (str, optional): suffix to be removed from the pattern name. Defaults to "Read".
+            pattern_freq (dict): _description_
+
+        Returns:
+            string: string name of the dominant pattern.
+        """
+        if not pattern_freq:
+            return "Uncl"
+        dominant_pattern = max(pattern_freq, key=pattern_freq.get) if pattern_freq else "Uncl"
+        return dominant_pattern.split("access")[1].split(suffix)[0]
+
+
     def get_job_representation(self, merge_clusters=False):
+        """Compute the job representation.
+
+        Args:
+            merge_clusters (bool, optional): Whether to merge points having belonging to one phase or not. Defaults to False.
+
+        Returns:
+            (dict): representation of the job as a set of numpy.ndarray.
+        """
 
         read_breakpoints, read_labels, write_breakpoints, write_labels, norm_breakpoints, norm_labels = self.get_phases()
 
@@ -473,8 +508,12 @@ class ComplexDecomposer:
         compute = []
         read_bw = []
         read_volumes = []
+        access_pattern_read = []
         write_bw = []
         write_volumes = []
+        pattern_read = []
+        pattern_write = []
+
 
         phase_duration = 0
         excess_phase_durations = 0
@@ -526,6 +565,10 @@ class ComplexDecomposer:
             # for a given "norm" phase
             read_volume = 0
             read_extent = 0
+            access_pattern_read = {}
+            access_pattern_write = {}
+
+            # iterating subphases
             for starting_point, ending_point in zip(read_start_points, read_end_points):
                 # iterate over read subphases
                 #if i_start <= starting_point <= i_end and starting_point <= ending_point <= i_end:
@@ -537,15 +580,24 @@ class ComplexDecomposer:
                                     end_index=ending_point,
                                     dx=1)
                 read_extent += ending_point - starting_point
+
+                for access_key in ['accessUnclRead', 'accessRandRead', 'accessSeqRead', 'accessStrRead', ]:
+                    # set default value to 0 if key does not exist
+                    access_pattern_read.setdefault(access_key, 0)
+                    access_pattern_read[access_key] += get_phase_volume(self.timeseries["accessPattern"][access_key], start_index=starting_point, end_index=ending_point, dx=1)
+
                 assert ending_point >= starting_point
             read_volumes.append(read_volume)
             bw = read_volume/(read_extent) if read_extent else 0
             read_bw.append(bw)
+            # Getting biggest access read
+            pattern_read.append(ComplexDecomposer.get_dominant_pattern(access_pattern_read))
 
             logger.info(f"Phase intervals {i_start}->{i_end} (dx={dx}) | read volume : {read_volume} | phase extent : {read_extent} | read bw : {bw}")
 
             write_volume = 0
             write_extent = 0
+            access_pattern_write = {}
             for starting_point, ending_point in zip(write_start_points, write_end_points):
                 # iterate over read subphases
                 #if i_start <= starting_point <= i_end and starting_point <= ending_point <= i_end:
@@ -558,9 +610,18 @@ class ComplexDecomposer:
                                     end_index=ending_point,
                                     dx=1)
                 write_extent += ending_point - starting_point
+
+                for access_key in ['accessUnclWrite', 'accessRandWrite', 'accessSeqWrite', 'accessStrWrite']:
+                    # set default value to 0 if key does not exist
+                    access_pattern_write.setdefault(access_key, 0)
+                    access_pattern_write[access_key] += get_phase_volume(self.timeseries["accessPattern"][access_key], start_index=starting_point, end_index=ending_point, dx=1)
+
             write_volumes.append(write_volume)
             bw = write_volume/(write_extent) if write_extent else 0
             write_bw.append(bw)
+
+            # Getting biggest access write
+            pattern_write.append(ComplexDecomposer.get_dominant_pattern(access_pattern_write, suffix="Write"))
 
             logger.info(f"Phase intervals {i_start}->{i_end} (dx={dx}) | write volume : {write_volume} | phase extent : {write_extent} | write bw : {bw}")
 
@@ -568,13 +629,26 @@ class ComplexDecomposer:
             compute.append(len(self.norm_signal) - 1*1 - excess_phase_durations)
             [output_list.append(0) for output_list in [read_volumes, write_volumes, read_bw, write_bw]]
 
-        read_volumes = read_volumes or [0]
-        read_bw = read_bw or [0]
-        write_volumes = write_volumes or [0]
-        write_bw = write_bw or [0]
+        # formatting output dict
+        output = {}
+        output["events"] = compute
+        output["read_volumes"] = read_volumes or [0]
+        output["read_bw"] = read_bw or [0]
+        output["write_volumes"] = write_volumes or [0]
+        output["write_bw"] = write_bw or [0]
+        output["pattern_read"] = pattern_read or ["Uncl"]
+        output["pattern_write"] = pattern_write or ["Uncl"]
 
-        return compute, read_volumes, read_bw, write_volumes, write_bw
+        return output
 
+
+    def get_phases_features(self):
+        """_summary_
+
+        Returns:
+            _type_: _description_
+        """
+        pass
 
 class JobConnector:
     """Given a slurm job id, this class allows to retrieve volume timeseries and nodecount metadata to be used later by the job decomposer."""
