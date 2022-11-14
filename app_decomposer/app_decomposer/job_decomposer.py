@@ -534,24 +534,6 @@ class ComplexDecomposer:
         phase_duration = 0
         excess_phase_durations = 0
 
-        # # if no breakpoints, no I/O phases
-        # if not read_breakpoints and not write_breakpoints:
-        #     if len(self.norm_signal) == 1:
-        #         return [0], [0], [0], [0], [0]
-        #     else:
-        #         return [0, len(self.norm_signal)-1], [0, 0], [0, 0], [0, 0], [0, 0]
-
-
-        # if no breakpoints, no I/O phases
-        # if not norm_start_points and not norm_end_points:
-        #     if len(self.norm_signal) == 1:
-        #         return [0], [0], [0], [0], [0]
-        #     else:
-        #         return [0, len(self.norm_signal)-1], [0, 0], [0, 0], [0, 0], [0, 0]
-
-        # if no phases
-
-        # TODO : adjust suppl. zero padding point
         if not norm_start_points and not norm_end_points:
             if sum(self.norm_signal) > 0:
                 # one I/O phase, assign extrem points and let do calculations
@@ -655,7 +637,9 @@ class ComplexDecomposer:
 
         if norm_end_points[-1] < len(self.norm_signal):
             compute.append(len(self.norm_signal) - 1*1 - excess_phase_durations)
-            [output_list.append(0) for output_list in [read_volumes, write_volumes, read_bw, write_bw]]
+            [output_list.append(0) for output_list in [read_volumes, write_volumes, read_bw, write_bw, read_operations, write_operations]]
+            [output_list.append("Uncl") for output_list in [read_pattern, write_pattern]]
+
 
         # formatting output dict
         output = {}

@@ -785,5 +785,26 @@ class TestJobDecomposerFeatures(unittest.TestCase):
                 'read_operations': [0, 2],
                 'write_operations': [0, 1]
                 }
-        phases_features = ComplexDecomposer.get_phases_features(representation, update_csv=True)
+        phases_features = ComplexDecomposer.get_phases_features(representation, update_csv=False)
+
+    @patch.object(ComplexDecomposer, 'get_job_node_count')
+    @patch.object(Configuration, 'get_kc_token')
+    @patch.object(ComplexDecomposer, 'get_job_timeseries')
+    def test_job_3912_phases_features(self, mock_get_timeseries, mock_get_kc_token, mock_get_node_count):
+        """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
+        # mock the method to return some dataset file content
+        jobid=3912
+        timeseries = get_job_timeseries_from_file(job_id=jobid)
+        mock_get_timeseries.return_value = timeseries
+        mock_get_kc_token.return_value = 'token'
+        mock_get_node_count.return_value = 1
+        # init the job decomposer
+        cd = ComplexDecomposer()
+
+        #print(cd.timeseries)
+
+        representation = cd.get_job_representation()
+        phases_features = cd.get_phases_features(representation)
+        print(pd.DataFrame(phases_features))
+        # representation["events"], representation["read_volumes"], representation["read_bw"], representation["write_volumes"], representation["write_bw"]
 
