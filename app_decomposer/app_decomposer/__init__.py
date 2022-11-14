@@ -42,3 +42,8 @@ API_DICT_TS = {
                     'IODurationWriteRange14', 'IODurationWriteRange15'],
     'operationsCount': ['operationRead', 'operationWrite']
     }
+# sampling period of IO Instrumentation
+IOI_SAMPLING_PERIOD = 5 # in seconds
+
+# dataset file name for performance model
+PERF_MODEL_DATASET_NAME = "performance_model_dataset.csv"

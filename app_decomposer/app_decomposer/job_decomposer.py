@@ -21,7 +21,7 @@ from scipy import integrate
 from app_decomposer.signal_decomposer import KmeansSignalDecomposer, get_lowest_cluster
 from app_decomposer.api_connector import TimeSeries, MetaData, JobSearch
 from app_decomposer.config_parser import Configuration
-from app_decomposer import DEFAULT_CONFIGURATION, API_DICT_TS
+from app_decomposer import DEFAULT_CONFIGURATION, API_DICT_TS, IOI_SAMPLING_PERIOD, PERF_MODEL_DATASET_NAME
 
 def get_phase_volume(signal, method="sum", start_index=0, end_index=-1, dx=1):
     """Method allowing many functions to compute the total volume of data for a given phase boundary in a signal array.
@@ -675,6 +675,7 @@ class ComplexDecomposer:
     @staticmethod
     def get_phases_features(representation, update_csv=False):
         """Builds from job representation an phases features dict to feed a performance model.
+        Excludes phases having 0 volume (artefact of the decomposition).
 
         Args:
             representation (dict): job representation containing various information about the job.
@@ -701,7 +702,8 @@ class ComplexDecomposer:
                 "operation": "read" or "write",
                 "pattern": "seq" or "str" or "rand" or "uncl",
                 "io_size": 4e3,
-                "nodes_count": 1
+                "nodes_count": 1,
+                "ioi_bw": 1e9,
                 }, ...]
         """
         phases_features = []
@@ -712,15 +714,20 @@ class ComplexDecomposer:
             features["volume"] = representation[f"{mode}_volumes"][i_phase]
             features["operation"] = mode
             features["pattern"] = representation[f"{mode}_pattern"][i_phase].lower()
+            # replace "str" pattern by "stride" for compatibility with the model
+            features["pattern"] = "stride" if features["pattern"]=="str" else features["pattern"]
             features["io_size"] = representation[f"{mode}_volumes"][i_phase] / representation[f"{mode}_operations"][i_phase] if representation[f"{mode}_operations"][i_phase] else 0
             features["node_count"] = representation["node_count"]
-
-            phases_features.append(features)
+            # express measured ioi bandwidth in bytes per second
+            features["ioi_bw"] = representation[f"{mode}_bw"][i_phase]/IOI_SAMPLING_PERIOD
+            # exclude phases having 0 volume (artefact of the decomposition)
+            if features["volume"] > 0:
+                phases_features.append(features)
 
         if update_csv:
             current_dir = dirname(dirname(dirname(abspath(__file__))))
             csv_path = os.path.join(current_dir, "dataset_generation", "dataset_generation",
-                                     "performance_model", "perfromance_model_dataset.csv")
+                                     "performance_model", PERF_MODEL_DATASET_NAME)
             pd.DataFrame(phases_features).to_csv(csv_path, mode='a',
                                                  header=not os.path.exists(csv_path))
 

@@ -732,7 +732,7 @@ class TestJobDecomposerFeatures(unittest.TestCase):
         self.assertEqual(representation["write_operations"], [0, 1])
 
 
-    def test_get_phases_features(self):
+    def test_get_phases_features_read_write(self):
         """Test if JobDecomposer issues phases features in suitable format."""
         # mock the representation issued by the job decomposer.
         representation = {
@@ -743,6 +743,25 @@ class TestJobDecomposerFeatures(unittest.TestCase):
                 'write_volumes': [0, 40],
                 'write_bw': [0, 40.0],
                 'read_pattern': ['Uncl', 'Seq'],
+                'write_pattern': ['Uncl', 'Str'],
+                'read_operations': [0, 2],
+                'write_operations': [0, 1]
+                }
+        phases_features = ComplexDecomposer.get_phases_features(representation)
+        print(pd.DataFrame(phases_features))
+        print(phases_features)
+
+    def test_get_phases_features_read(self):
+        """Test if JobDecomposer issues phases features in suitable format."""
+        # mock the representation issued by the job decomposer.
+        representation = {
+                'node_count': 1,
+                'events': [0, 1],
+                'read_volumes': [0, 50],
+                'read_bw': [0, 10.0],
+                'write_volumes': [0, 0],
+                'write_bw': [0, 0.0],
+                'read_pattern': ['Uncl', 'Str'],
                 'write_pattern': ['Uncl', 'Str'],
                 'read_operations': [0, 2],
                 'write_operations': [0, 1]
