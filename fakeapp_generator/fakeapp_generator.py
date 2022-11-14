@@ -58,9 +58,9 @@ def gen_fakeapp(volume, mode, IOpattern, IOsize, nodes, target, accelerator ="",
     #generate fakeapp from template
     lead = 1
     scatter = 0
-    if (IOpattern=="Stride"):
+    if (IOpattern=="stride"):
         lead = 3
-    if (IOpattern=="Random"):
+    if (IOpattern=="rand"):
         scatter = 1000000
 
     mod_sbatch = sbatch.replace("$VOLUME", str(volume))
@@ -70,7 +70,7 @@ def gen_fakeapp(volume, mode, IOpattern, IOsize, nodes, target, accelerator ="",
     mod_sbatch = mod_sbatch.replace("$SCATTER", str(scatter))
     mod_sbatch = mod_sbatch.replace("$NODES", str(nodes))
     mod_sbatch = mod_sbatch.replace("$TARGET", target)
-    if mode == "Read":
+    if mode == "read":
         mod_sbatch = mod_sbatch.replace("$MODE", "-R")
     else:
         mod_sbatch = mod_sbatch.replace("$MODE", "")

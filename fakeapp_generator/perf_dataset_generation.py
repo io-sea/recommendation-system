@@ -48,7 +48,7 @@ class PhasePerformance:
         self.perf_data = pd.read_csv(filename)
 
     def extract_phases(self):
-        # transform rows in the dataframe to a list of phase feature
+        # transform rows in the dataframe to a list of phase features
         self.phases = self.perf_data.to_dict('records')
 
     def export_to_csv(self, filename):
@@ -106,8 +106,9 @@ class PhasePerformance:
 if __name__ == '__main__':
     target = dict(lfs="/fsiof/phamtt/tmp", nfs="/scratch/phamtt/tmp")
     acc = "SBB" # currently SBB works only with the lfs target
-    phase1=dict(volume=100000000, mode="Write", IOpattern="Random", IOsize=10000, nodes=1)
-    phase2=dict(volume=100000000, mode="Read", IOpattern="Seq", IOsize=10000, nodes=1)
+    phase0=dict(volume=100000000, mode="write", IOpattern="stride", IOsize=10000, nodes=1)
+    phase1=dict(volume=100000000, mode="write", IOpattern="rand", IOsize=10000, nodes=1)
+    phase2=dict(volume=100000000, mode="read", IOpattern="seq", IOsize=10000, nodes=1)
     phases = [phase1, phase2]
     perf_data = PhasePerformance(phases, target, acc)
     df=perf_data.get_perfomrances(2)
