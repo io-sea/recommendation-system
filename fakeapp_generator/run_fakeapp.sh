@@ -1,4 +1,5 @@
 #!/bin/bash
+
 DIR_FILE=$1 # for read mode
 if [ -z "$6" ] # empty string for write mode
 then

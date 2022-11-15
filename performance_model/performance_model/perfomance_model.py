@@ -5,8 +5,10 @@ This is not Free or Open Source software.
 Please contact Bull S. A. S. for details about its license.
 """
 import os
+import sys
+sys.path.append('../../')
 import pandas as pd
-import fakeapp_generator
+from fakeapp_generator.fakeapp_generator import gen_fakeapp
 
 class PhaseFeatures:
     def __init__(self, volume, mode, IOpattern, IOsize, nodes):
@@ -62,7 +64,7 @@ class PhasePerformance:
         Return:
             per_df (pandas): performances in each tier
         """
-        self.extract_phases()
+        #self.extract_phases()
         perf_nfs = []
         perf_lfs = []
         perf_sbb = []
@@ -96,7 +98,7 @@ class PhasePerformance:
         #run fakeapp n times to get the avg bandwidth
         sum = 0
         for i in range(1, sample+1):
-            (t, bw) = fakeapp_generator.gen_fakeapp(phase["volume"], phase["mode"], phase["IOpattern"],
+            (t, bw) = gen_fakeapp(phase["volume"], phase["mode"], phase["IOpattern"],
                     phase["IOsize"], phase["nodes"], target, accelerator, self.ioi)
             sum += bw
         avg_bw = (float)(sum/sample)
@@ -109,7 +111,7 @@ if __name__ == '__main__':
     phase0=dict(volume=100000000, mode="write", IOpattern="stride", IOsize=10000, nodes=1)
     phase1=dict(volume=100000000, mode="write", IOpattern="rand", IOsize=10000, nodes=1)
     phase2=dict(volume=100000000, mode="read", IOpattern="seq", IOsize=10000, nodes=1)
-    phases = [phase1, phase2]
+    phases = [phase0, phase1, phase2]
     perf_data = PhasePerformance(phases, target, acc)
     df=perf_data.get_perfomrances(2)
     print(df)
