@@ -786,6 +786,7 @@ class TestJobDecomposerFeatures(unittest.TestCase):
                 'write_operations': [0, 1]
                 }
         phases_features = ComplexDecomposer.get_phases_features(representation, update_csv=False)
+        print(phases_features)
 
     @patch.object(ComplexDecomposer, 'get_job_node_count')
     @patch.object(Configuration, 'get_kc_token')
@@ -794,17 +795,59 @@ class TestJobDecomposerFeatures(unittest.TestCase):
         """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
         # mock the method to return some dataset file content
         jobid=3912
+        #jobid=5171 no data in this job
         timeseries = get_job_timeseries_from_file(job_id=jobid)
         mock_get_timeseries.return_value = timeseries
         mock_get_kc_token.return_value = 'token'
         mock_get_node_count.return_value = 1
+        phases_features = []
         # init the job decomposer
-        cd = ComplexDecomposer()
+        try:
+            cd = ComplexDecomposer()
+            print(cd.timeseries)
+            representation = cd.get_job_representation()
+            phases_features = cd.get_phases_features(representation,
+                                                    job_id = jobid,
+                                                    update_csv=True)
+        except AssertionError:
+            print("Cannot process job with no data")
 
-        #print(cd.timeseries)
 
-        representation = cd.get_job_representation()
-        phases_features = cd.get_phases_features(representation)
         print(pd.DataFrame(phases_features))
         # representation["events"], representation["read_volumes"], representation["read_bw"], representation["write_volumes"], representation["write_bw"]
 
+
+
+
+    @patch.object(ComplexDecomposer, 'get_job_node_count')
+    @patch.object(Configuration, 'get_kc_token')
+    @patch.object(ComplexDecomposer, 'get_job_timeseries')
+    def test_generating_dataset_comparison_jobs(self, mock_get_timeseries, mock_get_kc_token, mock_get_node_count):
+        """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
+        # mock the method to return some dataset file content
+        #jobids = list(range(5168, 5195))
+        #jobids = list(range(5281, 5297))
+        #jobid=3912
+        phases_features = []
+        for jobid in list(range(5168, 5195)) + list(range(5281, 5297)):
+            print(f"Extracting phases for Job id: {jobid}")
+            timeseries = get_job_timeseries_from_file(job_id=jobid)
+            mock_get_timeseries.return_value = timeseries
+            mock_get_kc_token.return_value = 'token'
+            mock_get_node_count.return_value = 1
+            # init the job decomposer
+            try:
+                cd = ComplexDecomposer()
+                print(cd.timeseries)
+                representation = cd.get_job_representation()
+                phases_features = cd.get_phases_features(representation,
+                                                        job_id = jobid,
+                                                        update_csv=True)
+                print(f"{len(phases_features)} jobs already registered")
+            except AssertionError:
+                print("Cannot process job with no data")
+
+
+
+        print(pd.DataFrame(phases_features))
+        # representation["events"], representation["read_volumes"], representation["read_bw"], representation["write_volumes"], representation["write_bw"]

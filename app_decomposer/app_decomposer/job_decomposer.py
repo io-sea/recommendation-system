@@ -21,6 +21,7 @@ from scipy import integrate
 from app_decomposer.signal_decomposer import KmeansSignalDecomposer, get_lowest_cluster
 from app_decomposer.api_connector import TimeSeries, MetaData, JobSearch
 from app_decomposer.config_parser import Configuration
+from app_decomposer.utils import convert_size
 from app_decomposer import DEFAULT_CONFIGURATION, API_DICT_TS, IOI_SAMPLING_PERIOD, PERF_MODEL_DATASET_NAME
 
 def get_phase_volume(signal, method="sum", start_index=0, end_index=-1, dx=1):
@@ -404,6 +405,7 @@ class ComplexDecomposer:
         self.norm_signal = np.abs(self.read_signal + 1j * self.write_signal)
         # NOTE: an alternative to complex norm
         # self.norm_signal = np.abs(self.read_signal) + np.abs(self.write_signal)
+        assert self.timestamps.size > 0, "No data found for this job."
 
 
     def get_job_timeseries(self, api_uri, api_token):
@@ -596,7 +598,7 @@ class ComplexDecomposer:
             read_pattern.append(ComplexDecomposer.get_dominant_pattern(access_read_pattern))
             read_operations.append(read_op)
 
-            logger.info(f"Phase intervals {i_start}->{i_end} (dx={dx}) | read volume : {read_volume} | phase extent : {read_extent} | read bw : {bw}")
+            logger.info(f"Phase intervals {i_start}->{i_end} (dx={dx}) | read volume : {convert_size(read_volume)} | phase extent : {read_extent} | read bw : {convert_size(bw)}/s")
 
             write_volume = 0
             write_extent = 0
@@ -633,7 +635,7 @@ class ComplexDecomposer:
             write_pattern.append(ComplexDecomposer.get_dominant_pattern(access_write_pattern, suffix="Write"))
             write_operations.append(write_op)
 
-            logger.info(f"Phase intervals {i_start}->{i_end} (dx={dx}) | write volume : {write_volume} | phase extent : {write_extent} | write bw : {bw}")
+            logger.info(f"Phase intervals {i_start}->{i_end} (dx={dx}) | write volume : {convert_size(write_volume)} | phase extent : {write_extent} | write bw : {convert_size(bw)}/s")
 
         if norm_end_points[-1] < len(self.norm_signal):
             compute.append(len(self.norm_signal) - 1*1 - excess_phase_durations)
@@ -657,7 +659,7 @@ class ComplexDecomposer:
         return output
 
     @staticmethod
-    def get_phases_features(representation, update_csv=False):
+    def get_phases_features(representation, job_id=None, update_csv=False):
         """Builds from job representation an phases features dict to feed a performance model.
         Excludes phases having 0 volume (artefact of the decomposition).
 
@@ -683,25 +685,27 @@ class ComplexDecomposer:
         Example:
             features = [{
                 "volume": 1e9,
-                "operation": "read" or "write",
-                "pattern": "seq" or "str" or "rand" or "uncl",
-                "io_size": 4e3,
-                "nodes_count": 1,
+                "mode": "read" or "write",
+                "IOpattern": "seq" or "str" or "rand" or "uncl",
+                "IOsize": 4e3,
+                "nodes": 1,
                 "ioi_bw": 1e9,
                 }, ...]
         """
         phases_features = []
         for i_phase, _ in enumerate(representation["events"]):
             features = {}
+            # register job_id if known
+            features["job_id"] = job_id if job_id else "unknown"
             # take the dominant operation for mixed phases (simple model)
             mode = "read" if representation["read_volumes"][i_phase] >= representation["write_volumes"][i_phase] else "write"
             features["volume"] = representation[f"{mode}_volumes"][i_phase]
-            features["operation"] = mode
-            features["pattern"] = representation[f"{mode}_pattern"][i_phase].lower()
+            features["mode"] = mode
+            features["IOpattern"] = representation[f"{mode}_pattern"][i_phase].lower()
             # replace "str" pattern by "stride" for compatibility with the model
-            features["pattern"] = "stride" if features["pattern"]=="str" else features["pattern"]
-            features["io_size"] = representation[f"{mode}_volumes"][i_phase] / representation[f"{mode}_operations"][i_phase] if representation[f"{mode}_operations"][i_phase] else 0
-            features["node_count"] = representation["node_count"]
+            features["IOpattern"] = "stride" if features["IOpattern"]=="str" else features["IOpattern"]
+            features["IOsize"] = representation[f"{mode}_volumes"][i_phase] / representation[f"{mode}_operations"][i_phase] if representation[f"{mode}_operations"][i_phase] else 0
+            features["nodes"] = representation["node_count"]
             # express measured ioi bandwidth in bytes per second
             features["ioi_bw"] = representation[f"{mode}_bw"][i_phase]/IOI_SAMPLING_PERIOD
             # exclude phases having 0 volume (artefact of the decomposition)
@@ -709,11 +713,16 @@ class ComplexDecomposer:
                 phases_features.append(features)
 
         if update_csv:
+            # Enable updating csv dataset file
             current_dir = dirname(dirname(dirname(abspath(__file__))))
             csv_path = os.path.join(current_dir, "dataset_generation", "dataset_generation",
                                      "performance_model", PERF_MODEL_DATASET_NAME)
-            pd.DataFrame(phases_features).to_csv(csv_path, mode='a',
-                                                 header=not os.path.exists(csv_path))
+            # dump the new features in the csv file
+            pd.DataFrame(phases_features).to_csv(csv_path, mode='a', header=not os.path.exists(csv_path), index=False)
+            # reset index
+            #df = pd.read_csv(csv_path, index_col=False).reset_index(drop=True)
+            #df.to_csv(csv_path, index=False)
+
 
         return phases_features
 
