@@ -297,9 +297,19 @@ if __name__ == '__main__':
     # dump_extractor.extract_job()
 
     # KIWI database for validation
-    absolute_dump_path = "C:\\Users\\a770398\\IO-SEA\\io-sea-3.4-analytics\\dataset_generation\\dump\kiwi"
-    target_folder = "C:\\Users\\a770398\\IO-SEA\\io-sea-3.4-analytics\\dataset_generation\\dataset_generation\\dataset_kiwi_validation"
-    jobids = list(range(3906, 3920))
+    # absolute_dump_path = "C:\\Users\\a770398\\IO-SEA\\io-sea-3.4-analytics\\dataset_generation\\dump\kiwi"
+    # target_folder = "C:\\Users\\a770398\\IO-SEA\\io-sea-3.4-analytics\\dataset_generation\\dataset_generation\\dataset_kiwi_validation"
+    # jobids = list(range(3906, 3920))
+    # dump_extractor = DumpExtractor(absolute_dump_path=absolute_dump_path,
+    # target_folder=target_folder, jobs=jobids)
+    # #dump_extractor.extract_job()
+    # dump_extractor.extract_job_features() # extract full features
+    
+    # KIWI database for comparison
+    absolute_dump_path = "/fsiof/phamtt/tmp/dump"
+    target_folder = "/home_nfs/mimounis/iosea-wp3-recommandation-system/dataset_generation/dataset_generation/dataset_kiwi_comparison"
+    #jobids = list(range(5168, 5195))
+    jobids = list(range(5281, 5297))
     dump_extractor = DumpExtractor(absolute_dump_path=absolute_dump_path,
     target_folder=target_folder, jobs=jobids)
     #dump_extractor.extract_job()
