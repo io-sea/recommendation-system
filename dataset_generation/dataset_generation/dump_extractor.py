@@ -308,8 +308,8 @@ if __name__ == '__main__':
     # KIWI database for comparison
     absolute_dump_path = "/fsiof/phamtt/tmp/dump"
     target_folder = "/home_nfs/mimounis/iosea-wp3-recommandation-system/dataset_generation/dataset_generation/dataset_kiwi_comparison"
-    #jobids = list(range(5168, 5195))
-    jobids = list(range(5281, 5297))
+    #jobids = list(range(5168, 5195)) # mono pattern
+    jobids = list(range(5281, 5297))  # mixed patterns
     dump_extractor = DumpExtractor(absolute_dump_path=absolute_dump_path,
     target_folder=target_folder, jobs=jobids)
     #dump_extractor.extract_job()
