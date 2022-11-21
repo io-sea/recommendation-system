@@ -7,8 +7,10 @@ Please contact Bull S. A. S. for details about its license.
 
 import os, re
 import subprocess
-
 from numpy import size
+
+path = os.path.abspath(__file__)
+dir_path = os.path.dirname(path)
 
 def open_file(fname):
     with open(fname, "r") as file:
@@ -51,7 +53,7 @@ def gen_fakeapp(volume, mode, IOpattern, IOsize, nodes, target, accelerator ="",
     print("IO Accelerator: ", accelerator)
 
     #read template file
-    template = "fakeapp.sbatch"
+    template = os.path.join(dir_path, "fakeapp.sbatch")
     sbatch = open_file(template)
     #print(sbatch)
 
@@ -100,9 +102,8 @@ def run_sbatch(sbatch, ioi, wait=True):
     Returns:
         The applicaiton elapsed time in seconds
     """
-
     #write generated script to sbatch file
-    sbatch_file="mod_sbatch.sbatch"
+    sbatch_file=os.path.join(dir_path, "mod_sbatch.sbatch")
     write_to_file(sbatch_file, sbatch)
 
     # If the wait option is enabled, use the --wait flag
@@ -115,10 +116,11 @@ def run_sbatch(sbatch, ioi, wait=True):
     if ioi:
         ioi_flag = " --ioi=yes "
 
-    cmd_line = "sbatch" + wait_flag + ioi_flag + "mod_sbatch.sbatch"
+    cmd_line = "sbatch" + wait_flag + ioi_flag + sbatch_file
+    #print("CMD: ", cmd_line)
 
     # Run the script using subprocess
-    sub_ps = subprocess.run(cmd_line.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    sub_ps = subprocess.run(cmd_line.split(), cwd=dir_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     output_stdout = sub_ps.stdout.decode()
     output_stderr = sub_ps.stderr.decode()
     # Get and store the job_id from the stdout
@@ -126,7 +128,7 @@ def run_sbatch(sbatch, ioi, wait=True):
         job_id = int(output_stdout.split()[-1])
         print("Job id:", job_id)
     else:
-        print("Could not run sbatch:", output_stderr)
+        print("Could not run sbatch file:", sbatch_file)
         raise Exception(f"Could not submit job: \n stderr: {output_stderr}")
 
     #get avg time from slurm out
@@ -144,8 +146,7 @@ def get_slurm_times(job_id):
     Returns:
         The time real value
     """
-    cwd = os.getcwd() #get current directory
-    out_file = os.path.join(cwd, "slurm-" + str(job_id) + ".out")
+    out_file = os.path.join(dir_path, "slurm-" + str(job_id) + ".out")
     print("Slurm output: ", out_file)
     real_time = None
     try:
@@ -153,7 +154,7 @@ def get_slurm_times(job_id):
             lines = file.readlines()
             for line in lines:
                 if line.startswith("real"):
-                    time = re.split('[ \t]*', line)[-1].strip()
+                    time = line.split("real")[-1].strip()
                     real_time = parse_milliseconds(time)
         if real_time:
             return real_time
@@ -172,12 +173,27 @@ def parse_milliseconds(string_time):
     Returns:
         The number of elapsed seconds
     """
-    minutes = int(string_time.split("m")[0])
+    minutes = 0
+    seconds = 0
+    milliseconds = 0
+    try:
+        minutes = int(string_time.split("m")[0])
+    except ValueError:
+        pass
+
     string_time = string_time.replace(str(minutes) + "m", "")
-    seconds = int(string_time.split(".")[0])
+    try:
+        seconds = int(string_time.split(".")[0])
+    except ValueError:
+        pass
+
     milliseconds_string = string_time.split(".")[1]
     milliseconds_string = milliseconds_string.replace("s", "")
-    milliseconds = int(milliseconds_string)
+    try:
+        milliseconds = int(milliseconds_string)
+    except ValueError:
+        pass
+
     return minutes * 60 + seconds + milliseconds / 1000
 
 def get_bandwidth(volume, time):
@@ -204,8 +220,8 @@ if __name__ == '__main__':
     lfs="/fsiof/phamtt/tmp"
     nfs="/scratch/phamtt/tmp"
     acc = "SBB"
-    gen_fakeapp(1000000000, "Write", "Random", 10000, 2, lfs, True, acc)
-    gen_fakeapp(1000000000, "Write", "Random", 10000, 2, lfs, True)
+    gen_fakeapp(1000000000, "read", "seq", 10000, 1, lfs, True)
+    gen_fakeapp(1000000000, "read", "rand", 10000, 1, nfs, True)
     #gen_fakeapp(1000000000, "Write", "Seq", 1000, nfs, 2, True)
     #gen_fakeapp(10000000, "Read", "Stride", 1000, lfs, 2, True)
     #gen_fakeapp(10000000, "Read", "Seq", 1000, lfs, 2, True)
