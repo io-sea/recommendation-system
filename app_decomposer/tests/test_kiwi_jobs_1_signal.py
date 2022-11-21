@@ -26,6 +26,7 @@ from app_decomposer.signal_decomposer import KmeansSignalDecomposer, get_lowest_
 
 from cluster_simulator.analytics import get_execution_signal, get_execution_signal_2, display_original_sim_signals
 
+from app_decomposer import API_DICT_TS
 
 SHOW_FIGURE = False
 
@@ -69,7 +70,24 @@ def get_job_timeseries_from_file(job_id=None):
 
     df = pd.read_csv(csv_file, index_col=0)
     df_clean = df.drop_duplicates(subset=['timestamp'])
-    return df_clean[["timestamp"]].to_numpy(), df_clean[["bytesRead"]].to_numpy(), df_clean[["bytesWritten"]].to_numpy()
+    # timeseries = {}
+    # timeseries["volume"] = {}
+    # timeseries["volume"]["timestamp"] = df_clean[["timestamp"]].to_numpy().flatten()
+    # timeseries["volume"]["bytesRead"] = df_clean[["bytesRead"]].to_numpy().flatten()
+    # timeseries["volume"]["bytesWritten"] = df_clean[["bytesWritten"]].to_numpy().flatten()
+    # timeseries["operationsCount"] = {}
+    # timeseries["operationsCount"]["operationRead"] = df_clean[["operationRead"]].to_numpy().flatten()
+    # timeseries["operationsCount"]["operationWrite"] = df_clean[["operationWrite"]].to_numpy().flatten()
+    # timeseries["accessPattern"]
+    timeseries = {}
+    for ts_type in ["volume", "operationsCount", "accessPattern"]:
+        timeseries[ts_type] = {}
+        ts_list = API_DICT_TS[ts_type]
+        ts_list.append("timestamp")
+        for ts in ts_list:
+            timeseries[ts_type][ts] = df_clean[[ts]].to_numpy().flatten()
+    return timeseries
+    #return , df_clean[["bytesRead"]].to_numpy(), df_clean[["bytesWritten"]].to_numpy()
 
 def plot_job_signal(jobid=None):
     x, read_signal, write_signal = get_job_timeseries_from_file(job_id=jobid)
@@ -97,19 +115,27 @@ class QualifyComplexDecomposerOnSyntheticSignals(unittest.TestCase):
         self.nvram_tier = Tier(self.env, 'NVRAM', bandwidth=nvram_bandwidth, capacity=80e9)
 
 
+    @patch.object(ComplexDecomposer, 'get_job_node_count')
     @patch.object(Configuration, 'get_kc_token')
     @patch.object(ComplexDecomposer, 'get_job_timeseries')
-    def test_job_read_1(self, mock_get_timeseries, mock_get_kc_token):
+    def test_job_read_1(self, mock_get_timeseries, mock_get_kc_token, mock_get_node_count):
         """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
         # mock the method to return some manual content
+        timeseries = {}
+        timeseries["volume"] = {}
         timestamps = np.arange(4)
         read_signal = np.array([1e6, 0, 0, 0])
         write_signal = np.array([0, 0, 0, 0])
-        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        timeseries["volume"]["timestamp"] = timestamps
+        timeseries["volume"]["bytesRead"] = read_signal
+        timeseries["volume"]["bytesWritten"] = write_signal
+        mock_get_timeseries.return_value = timeseries
         mock_get_kc_token.return_value = 'token'
+        mock_get_node_count.return_value = 1
         # init the job decomposer
         cd = ComplexDecomposer()
-        compute, reads, read_bw, writes, write_bw = cd.get_job_representation()
+        representation = cd.get_job_representation()
+        compute, reads, read_bw, writes, write_bw = representation["events"], representation["read_volumes"], representation["read_bw"], representation["write_volumes"], representation["write_bw"]
 
         print(f"representation for read_bw={read_bw}")
         input_bw = list(map(lambda x: x/1e6, read_bw))
@@ -153,19 +179,27 @@ class QualifyComplexDecomposerOnSyntheticSignals(unittest.TestCase):
             plt.legend()
             plt.show()
 
+    @patch.object(ComplexDecomposer, 'get_job_node_count')
     @patch.object(Configuration, 'get_kc_token')
     @patch.object(ComplexDecomposer, 'get_job_timeseries')
-    def test_job_read_2(self, mock_get_timeseries, mock_get_kc_token):
+    def test_job_read_2(self, mock_get_timeseries, mock_get_kc_token, mock_get_node_count):
         """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
         # mock the method to return some manual content
         timestamps = np.arange(4)
         read_signal = np.array([0, 1e6, 0, 0])
         write_signal = np.array([0, 0, 0, 0])
-        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        timeseries = {}
+        timeseries["volume"] = {}
+        timeseries["volume"]["timestamp"] = timestamps
+        timeseries["volume"]["bytesRead"] = read_signal
+        timeseries["volume"]["bytesWritten"] = write_signal
+        mock_get_timeseries.return_value = timeseries
         mock_get_kc_token.return_value = 'token'
+        mock_get_node_count.return_value = 1
         # init the job decomposer
         cd = ComplexDecomposer()
-        compute, reads, read_bw, writes, write_bw = cd.get_job_representation()
+        representation = cd.get_job_representation()
+        compute, reads, read_bw, writes, write_bw = representation["events"], representation["read_volumes"], representation["read_bw"], representation["write_volumes"], representation["write_bw"]
 
         print(f"representation for read_bw={read_bw}")
         input_bw = list(map(lambda x: x/1e6, read_bw))
@@ -210,19 +244,27 @@ class QualifyComplexDecomposerOnSyntheticSignals(unittest.TestCase):
             plt.show()
 
 
+    @patch.object(ComplexDecomposer, 'get_job_node_count')
     @patch.object(Configuration, 'get_kc_token')
     @patch.object(ComplexDecomposer, 'get_job_timeseries')
-    def test_job_long_read(self, mock_get_timeseries, mock_get_kc_token):
+    def test_job_long_read(self, mock_get_timeseries, mock_get_kc_token, mock_get_node_count):
         """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
         # mock the method to return some manual content
         timestamps = np.arange(8)
         read_signal = np.array([1e6, 1e6, 1e6, 0, 5e6, 5e6, 5e6, 0])
         write_signal = np.array([0, 0, 0, 0, 0, 0, 0, 0])
-        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        timeseries = {}
+        timeseries["volume"] = {}
+        timeseries["volume"]["timestamp"] = timestamps
+        timeseries["volume"]["bytesRead"] = read_signal
+        timeseries["volume"]["bytesWritten"] = write_signal
+        mock_get_timeseries.return_value = timeseries
         mock_get_kc_token.return_value = 'token'
+        mock_get_node_count.return_value = 1
         # init the job decomposer
         cd = ComplexDecomposer()
-        compute, reads, read_bw, writes, write_bw = cd.get_job_representation()
+        representation = cd.get_job_representation()
+        compute, reads, read_bw, writes, write_bw = representation["events"], representation["read_volumes"], representation["read_bw"], representation["write_volumes"], representation["write_bw"]
         print(f"representation for read_bw={read_bw}")
         input_bw = list(map(lambda x: x/1e6, read_bw))
         print(f"to be injected in Sim read_bw={input_bw}")
@@ -268,19 +310,27 @@ class QualifyComplexDecomposerOnSyntheticSignals(unittest.TestCase):
 
 
 
+    @patch.object(ComplexDecomposer, 'get_job_node_count')
     @patch.object(Configuration, 'get_kc_token')
     @patch.object(ComplexDecomposer, 'get_job_timeseries')
-    def test_job_long_read_with_merge(self, mock_get_timeseries, mock_get_kc_token):
+    def test_job_long_read_with_merge(self, mock_get_timeseries, mock_get_kc_token, mock_get_node_count):
         """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
         # mock the method to return some manual content
         timestamps = np.arange(8)
         read_signal = np.array([1e6, 2e6, 1e6, 0, 5e6, 6e6, 5e6, 0])
         write_signal = np.array([0, 0, 0, 0, 0, 0, 0, 0])
-        mock_get_timeseries.return_value = timestamps, read_signal, write_signal
+        timeseries = {}
+        timeseries["volume"] = {}
+        timeseries["volume"]["timestamp"] = timestamps
+        timeseries["volume"]["bytesRead"] = read_signal
+        timeseries["volume"]["bytesWritten"] = write_signal
+        mock_get_timeseries.return_value = timeseries
         mock_get_kc_token.return_value = 'token'
+        mock_get_node_count.return_value = 1
         # init the job decomposer
         cd = ComplexDecomposer()
-        compute, reads, read_bw, writes, write_bw = cd.get_job_representation()
+        representation = cd.get_job_representation()
+        compute, reads, read_bw, writes, write_bw = representation["events"], representation["read_volumes"], representation["read_bw"], representation["write_volumes"], representation["write_bw"]
         print(f"representation for read_bw={read_bw}")
         input_bw = list(map(lambda x: x/1e6, read_bw))
         print(f"to be injected in Sim read_bw={input_bw}")
@@ -309,7 +359,7 @@ class QualifyComplexDecomposerOnSyntheticSignals(unittest.TestCase):
               f"read_signal={output[app.name]['read_bw']}, "
               f"write_signal={output[app.name]['write_bw']}")
 
-        SHOW_FIGURE = True
+
         if SHOW_FIGURE:
 
 
@@ -348,20 +398,23 @@ class QualifyJobDecomposer1Signal(unittest.TestCase):
         self.ssd_tier = Tier(self.env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
         self.nvram_tier = Tier(self.env, 'NVRAM', bandwidth=nvram_bandwidth, capacity=80e9)
 
+    @patch.object(ComplexDecomposer, 'get_job_node_count')
     @patch.object(Configuration, 'get_kc_token')
     @patch.object(ComplexDecomposer, 'get_job_timeseries')
-    def test_job_3912(self, mock_get_timeseries, mock_get_kc_token):
+    def test_job_3912(self, mock_get_timeseries, mock_get_kc_token, mock_get_node_count):
         """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
         # mock the method to return some dataset file content
         jobid=3912
-        SHOW_FIGURE = True
+
         mock_get_timeseries.return_value = get_job_timeseries_from_file(job_id=jobid)
         mock_get_kc_token.return_value = 'token'
+        mock_get_node_count.return_value = 1
         # init the job decomposer
         cd = ComplexDecomposer()
 
 
-        compute, reads, read_bw, writes, write_bw = cd.get_job_representation()
+        representation = cd.get_job_representation()
+        compute, reads, read_bw, writes, write_bw = representation["events"], representation["read_volumes"], representation["read_bw"], representation["write_volumes"], representation["write_bw"]
         # This is the app encoding representation for Execution Simulator
         print(f"compute={compute}, reads={reads}, read_bw={read_bw}")
         print(f"compute={compute}, writes={writes}, write_bw={write_bw}")
@@ -415,20 +468,23 @@ class QualifyJobDecomposer1Signal(unittest.TestCase):
             plt.title(f"timeserie for jobid = {jobid}")
             plt.show()
 
+    @patch.object(ComplexDecomposer, 'get_job_node_count')
     @patch.object(Configuration, 'get_kc_token')
     @patch.object(ComplexDecomposer, 'get_job_timeseries')
-    def test_job_with_plots(self, mock_get_timeseries, mock_get_kc_token):
+    def test_job_with_plots(self, mock_get_timeseries, mock_get_kc_token, mock_get_node_count):
         """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
         # mock the method to return some dataset file content
         jobid=3911
         merge_clusters = True
         mock_get_timeseries.return_value = get_job_timeseries_from_file(job_id=jobid)
         mock_get_kc_token.return_value = 'token'
+        mock_get_node_count.return_value = 1
         # init the job decomposer
 
         # decompose and app/job
         cd = ComplexDecomposer()
-        compute, reads, read_bw, writes, write_bw = cd.get_job_representation(merge_clusters=merge_clusters)
+        representation = cd.get_job_representation(merge_clusters=merge_clusters)
+        compute, reads, read_bw, writes, write_bw = representation["events"], representation["read_volumes"], representation["read_bw"], representation["write_volumes"], representation["write_bw"]
         read_bw = list(map(lambda x: x/1e6, read_bw))
         write_bw = list(map(lambda x: x/1e6, write_bw))
 
@@ -465,9 +521,333 @@ class QualifyJobDecomposer1Signal(unittest.TestCase):
         # plot_job_signal(jobid=jobid)
 
 
-        # if SHOW_FIGURE:
-        fig = display_original_sim_signals((time, read_bw, write_bw),
+        if SHOW_FIGURE:
+            fig = display_original_sim_signals((time, read_bw, write_bw),
                                            (timestamps, original_read, original_write),
                                            width=800, height=900)
-        fig.show()
+            fig.show()
 
+
+class TestJobDecomposerFeatures(unittest.TestCase):
+    """Examine and qualify JobDecomposer output phases features"""
+
+    def test_get_dominant_pattern_all_zeros(self):
+        """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
+        # mock the method to return some dataset file content
+        pattern_freq = {
+            'accessUnclRead': 0,
+            'accessRandRead': 0,
+            'accessSeqRead': 0,
+            'accessStrRead': 0
+        }
+        pattern = ComplexDecomposer.get_dominant_pattern(pattern_freq)
+        self.assertEqual(pattern, "Uncl")
+
+    def test_get_dominant_pattern_dominant(self):
+        """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
+        # mock the method to return some dataset file content
+        pattern_freq = {
+            'accessUnclRead': 0,
+            'accessRandRead': 1,
+            'accessSeqRead': 0,
+            'accessStrRead': 0
+        }
+        pattern = ComplexDecomposer.get_dominant_pattern(pattern_freq)
+        self.assertEqual(pattern, "Rand")
+
+    def test_get_dominant_pattern_empty(self):
+        """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
+        # mock the method to return some dataset file content
+        pattern_freq = {}
+        pattern = ComplexDecomposer.get_dominant_pattern(pattern_freq)
+        self.assertEqual(pattern, "Uncl")
+
+    @patch.object(ComplexDecomposer, 'get_job_node_count')
+    @patch.object(Configuration, 'get_kc_token')
+    @patch.object(ComplexDecomposer, 'get_job_timeseries')
+    def test_job_3912_features(self, mock_get_timeseries, mock_get_kc_token, mock_get_node_count):
+        """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
+        # mock the method to return some dataset file content
+        jobid=3912
+        timeseries = get_job_timeseries_from_file(job_id=jobid)
+        mock_get_timeseries.return_value = timeseries
+        mock_get_kc_token.return_value = 'token'
+        mock_get_node_count.return_value = 1
+        # init the job decomposer
+        cd = ComplexDecomposer()
+
+        #print(cd.timeseries)
+
+        representation = cd.get_job_representation()
+        print(representation)
+        # representation["events"], representation["read_volumes"], representation["read_bw"], representation["write_volumes"], representation["write_bw"]
+
+    @patch.object(ComplexDecomposer, 'get_job_node_count')
+    @patch.object(Configuration, 'get_kc_token')
+    @patch.object(ComplexDecomposer, 'get_job_timeseries')
+    def test_job_access_patterns_read(self, mock_get_timeseries, mock_get_kc_token, mock_get_node_count):
+        """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
+        # mock the method to return some dataset file content
+        timeseries = {
+            'volume': {
+                'timestamp': np.array([0, 1], dtype=int),
+                'bytesRead': np.array([0, 10], dtype=int),
+                'bytesWritten': np.array([ 0, 0], dtype=int)},
+            'operationsCount': {
+                'timestamp': np.array([0, 1], dtype=int),
+                'operationRead': np.array([0, 2], dtype=int),
+                'operationWrite': np.array([0, 1], dtype=int)},
+            'accessPattern': {
+                'timestamp': np.array([0, 1], dtype=int),
+                'accessRandRead': np.array([0, 12], dtype=int),
+                'accessSeqRead': np.array([5, 13], dtype=int),
+                'accessStrRead': np.array([0, 0], dtype=int),
+                'accessUnclRead': np.array([0, 1], dtype=int),
+                'accessRandWrite': np.array([0, 0], dtype=int),
+                'accessSeqWrite': np.array([0, 0], dtype=int),
+                'accessStrWrite': np.array([0, 10], dtype=int),
+                'accessUnclWrite': np.array([0, 1], dtype=int)
+            }
+        }
+        mock_get_timeseries.return_value = timeseries
+        mock_get_kc_token.return_value = 'token'
+        mock_get_node_count.return_value = 1
+        # init the job decomposer
+        cd = ComplexDecomposer()
+
+        representation = cd.get_job_representation()
+        self.assertEqual(representation["read_pattern"][-1], "Seq")
+
+
+    @patch.object(ComplexDecomposer, 'get_job_node_count')
+    @patch.object(Configuration, 'get_kc_token')
+    @patch.object(ComplexDecomposer, 'get_job_timeseries')
+    def test_job_access_patterns_write(self, mock_get_timeseries, mock_get_kc_token, mock_get_node_count):
+        """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
+        # mock the method to return some dataset file content
+        timeseries = {
+            'volume': {
+                'timestamp': np.array([0, 1], dtype=int),
+                'bytesRead': np.array([0, 10], dtype=int),
+                'bytesWritten': np.array([ 0, 40], dtype=int)},
+            'operationsCount': {
+                'timestamp': np.array([0, 1], dtype=int),
+                'operationRead': np.array([0, 2], dtype=int),
+                'operationWrite': np.array([0, 1], dtype=int)},
+            'accessPattern': {
+                'timestamp': np.array([0, 1], dtype=int),
+                'accessRandRead': np.array([0, 12], dtype=int),
+                'accessSeqRead': np.array([5, 13], dtype=int),
+                'accessStrRead': np.array([0, 0], dtype=int),
+                'accessUnclRead': np.array([0, 1], dtype=int),
+                'accessRandWrite': np.array([0, 0], dtype=int),
+                'accessSeqWrite': np.array([0, 0], dtype=int),
+                'accessStrWrite': np.array([0, 10], dtype=int),
+                'accessUnclWrite': np.array([0, 1], dtype=int)
+            }
+        }
+        mock_get_timeseries.return_value = timeseries
+        mock_get_kc_token.return_value = 'token'
+        mock_get_node_count.return_value = 1
+        # init the job decomposer
+        cd = ComplexDecomposer()
+
+        representation = cd.get_job_representation()
+        print(representation)
+        self.assertEqual(representation["write_pattern"][-1], "Str")
+
+
+    @patch.object(ComplexDecomposer, 'get_job_node_count')
+    @patch.object(Configuration, 'get_kc_token')
+    @patch.object(ComplexDecomposer, 'get_job_timeseries')
+    def test_job_access_patterns_read_ops(self, mock_get_timeseries, mock_get_kc_token, mock_get_node_count):
+        """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
+        # mock the method to return some dataset file content
+        timeseries = {
+            'volume': {
+                'timestamp': np.array([0, 1], dtype=int),
+                'bytesRead': np.array([0, 10], dtype=int),
+                'bytesWritten': np.array([ 0, 40], dtype=int)},
+            'operationsCount': {
+                'timestamp': np.array([0, 1], dtype=int),
+                'operationRead': np.array([0, 2], dtype=int),
+                'operationWrite': np.array([0, 1], dtype=int)},
+            'accessPattern': {
+                'timestamp': np.array([0, 1], dtype=int),
+                'accessRandRead': np.array([0, 12], dtype=int),
+                'accessSeqRead': np.array([5, 13], dtype=int),
+                'accessStrRead': np.array([0, 0], dtype=int),
+                'accessUnclRead': np.array([0, 1], dtype=int),
+                'accessRandWrite': np.array([0, 0], dtype=int),
+                'accessSeqWrite': np.array([0, 0], dtype=int),
+                'accessStrWrite': np.array([0, 10], dtype=int),
+                'accessUnclWrite': np.array([0, 1], dtype=int)
+            }
+        }
+        mock_get_timeseries.return_value = timeseries
+        mock_get_kc_token.return_value = 'token'
+        mock_get_node_count.return_value = 1
+        # init the job decomposer
+        cd = ComplexDecomposer()
+
+        representation = cd.get_job_representation()
+        print(representation)
+        self.assertEqual(representation["read_operations"], [0, 2])
+
+    @patch.object(ComplexDecomposer, 'get_job_node_count')
+    @patch.object(Configuration, 'get_kc_token')
+    @patch.object(ComplexDecomposer, 'get_job_timeseries')
+    def test_job_access_patterns_write_ops(self, mock_get_timeseries, mock_get_kc_token, mock_get_node_count):
+        """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
+        # mock the method to return some dataset file content
+        timeseries = {
+            'volume': {
+                'timestamp': np.array([0, 1], dtype=int),
+                'bytesRead': np.array([0, 10], dtype=int),
+                'bytesWritten': np.array([ 0, 40], dtype=int)},
+            'operationsCount': {
+                'timestamp': np.array([0, 1], dtype=int),
+                'operationRead': np.array([0, 2], dtype=int),
+                'operationWrite': np.array([0, 1], dtype=int)},
+            'accessPattern': {
+                'timestamp': np.array([0, 1], dtype=int),
+                'accessRandRead': np.array([0, 12], dtype=int),
+                'accessSeqRead': np.array([5, 13], dtype=int),
+                'accessStrRead': np.array([0, 0], dtype=int),
+                'accessUnclRead': np.array([0, 1], dtype=int),
+                'accessRandWrite': np.array([0, 0], dtype=int),
+                'accessSeqWrite': np.array([0, 0], dtype=int),
+                'accessStrWrite': np.array([0, 10], dtype=int),
+                'accessUnclWrite': np.array([0, 1], dtype=int)
+            }
+        }
+        mock_get_timeseries.return_value = timeseries
+        mock_get_kc_token.return_value = 'token'
+        mock_get_node_count.return_value = 1
+        # init the job decomposer
+        cd = ComplexDecomposer()
+
+        representation = cd.get_job_representation()
+        print(representation)
+        self.assertEqual(representation["write_operations"], [0, 1])
+
+
+    def test_get_phases_features_read_write(self):
+        """Test if JobDecomposer issues phases features in suitable format."""
+        # mock the representation issued by the job decomposer.
+        representation = {
+                'node_count': 1,
+                'events': [0, 1],
+                'read_volumes': [0, 10],
+                'read_bw': [0, 10.0],
+                'write_volumes': [0, 40],
+                'write_bw': [0, 40.0],
+                'read_pattern': ['Uncl', 'Seq'],
+                'write_pattern': ['Uncl', 'Str'],
+                'read_operations': [0, 2],
+                'write_operations': [0, 1]
+                }
+        phases_features = ComplexDecomposer.get_phases_features(representation)
+        print(pd.DataFrame(phases_features))
+        print(phases_features)
+
+    def test_get_phases_features_read(self):
+        """Test if JobDecomposer issues phases features in suitable format."""
+        # mock the representation issued by the job decomposer.
+        representation = {
+                'node_count': 1,
+                'events': [0, 1],
+                'read_volumes': [0, 50],
+                'read_bw': [0, 10.0],
+                'write_volumes': [0, 0],
+                'write_bw': [0, 0.0],
+                'read_pattern': ['Uncl', 'Str'],
+                'write_pattern': ['Uncl', 'Str'],
+                'read_operations': [0, 2],
+                'write_operations': [0, 1]
+                }
+        phases_features = ComplexDecomposer.get_phases_features(representation)
+        print(pd.DataFrame(phases_features))
+        print(phases_features)
+
+    def test_get_phases_features_with_csv(self):
+        """Test if JobDecomposer issues phases features in suitable format with csv update."""
+        # mock the representation issued by the job decomposer.
+        representation = {
+                'node_count': 1,
+                'events': [0, 1],
+                'read_volumes': [0, 10],
+                'read_bw': [0, 10.0],
+                'write_volumes': [0, 40],
+                'write_bw': [0, 40.0],
+                'read_pattern': ['Uncl', 'Seq'],
+                'write_pattern': ['Uncl', 'Str'],
+                'read_operations': [0, 2],
+                'write_operations': [0, 1]
+                }
+        phases_features = ComplexDecomposer.get_phases_features(representation, update_csv=False)
+        print(phases_features)
+
+    @patch.object(ComplexDecomposer, 'get_job_node_count')
+    @patch.object(Configuration, 'get_kc_token')
+    @patch.object(ComplexDecomposer, 'get_job_timeseries')
+    def test_job_3912_phases_features(self, mock_get_timeseries, mock_get_kc_token, mock_get_node_count):
+        """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
+        # mock the method to return some dataset file content
+        jobid=3912
+        #jobid=5171 no data in this job
+        timeseries = get_job_timeseries_from_file(job_id=jobid)
+        mock_get_timeseries.return_value = timeseries
+        mock_get_kc_token.return_value = 'token'
+        mock_get_node_count.return_value = 1
+        phases_features = []
+        # init the job decomposer
+        try:
+            cd = ComplexDecomposer()
+            print(cd.timeseries)
+            representation = cd.get_job_representation()
+            phases_features = cd.get_phases_features(representation,
+                                                    job_id = jobid,
+                                                    update_csv=True)
+        except AssertionError:
+            print("Cannot process job with no data")
+
+
+        print(pd.DataFrame(phases_features))
+        # representation["events"], representation["read_volumes"], representation["read_bw"], representation["write_volumes"], representation["write_bw"]
+
+
+
+
+    @patch.object(ComplexDecomposer, 'get_job_node_count')
+    @patch.object(Configuration, 'get_kc_token')
+    @patch.object(ComplexDecomposer, 'get_job_timeseries')
+    def test_generating_dataset_comparison_jobs(self, mock_get_timeseries, mock_get_kc_token, mock_get_node_count):
+        """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
+        # mock the method to return some dataset file content
+        #jobids = list(range(5168, 5195))
+        #jobids = list(range(5281, 5297))
+        #jobid=3912
+        phases_features = []
+        for jobid in list(range(5168, 5195)) + list(range(5281, 5297)):
+            print(f"Extracting phases for Job id: {jobid}")
+            timeseries = get_job_timeseries_from_file(job_id=jobid)
+            mock_get_timeseries.return_value = timeseries
+            mock_get_kc_token.return_value = 'token'
+            mock_get_node_count.return_value = 1
+            # init the job decomposer
+            try:
+                cd = ComplexDecomposer()
+                print(cd.timeseries)
+                representation = cd.get_job_representation()
+                phases_features = cd.get_phases_features(representation,
+                                                        job_id = jobid,
+                                                        update_csv=True)
+                print(f"{len(phases_features)} jobs already registered")
+            except AssertionError:
+                print("Cannot process job with no data")
+
+
+
+        print(pd.DataFrame(phases_features))
+        # representation["events"], representation["read_volumes"], representation["read_bw"], representation["write_volumes"], representation["write_bw"]

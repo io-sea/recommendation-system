@@ -110,6 +110,60 @@ class DumpExtractor:
                                             "ioActiveProcessCount": y})])
         return df.drop_duplicates().sort_values(by=['timestamp'])
     
+    def get_operation_dataframe(self, job_id):
+        # filepath = os.path.join(os.getcwd(), "dump", "cmdb_database", "FileIOSummaryGw.bson")
+        df = pd.DataFrame(columns=["timestamp", "operationRead", "operationWrite"])
+        for filepath in [self.get_bson_path(filename="FileIOSummaryGw.bson")]:
+            
+            with open(filepath,'rb') as f:
+                # Get a list of timestamps elements for all jobs
+                # {'_id': ObjectId('591ac4e02db96207ae2b5e92'), 'jobid': 2665, 'hostname': 'lima16.bullx', 'timeFrame': datetime.datetime(2017, 5, 16, 9, 22, 35), 'bytesRead': 0, 'bytesWritten': 0, 'filesRW': 0, 'filesRO': 0, 'filesWO': 0, 'filesCreated': 0, 'filesDeleted': 0, 'accessRandRead': 0, 'accessSeqRead': 0, 'accessStrRead': 0, 'accessUnclRead': 0, 'accessRandWrite': 0, 'accessSeqWrite': 0, 'accessStrWrite': 0, 'accessUnclWrite': 0}
+                jdata = bson.decode_all(f.read())
+
+            # Get specific ts from specific jobid with ts available in bson file
+            x = [dp["operationRead"] for dp in jdata if dp["jobid"]==job_id]
+            y = [dp["operationWrite"] for dp in jdata if dp["jobid"]==job_id]
+            t = [dp["timeFrame"].timestamp() for dp in jdata if dp["jobid"]==job_id]
+        
+            df = pd.concat([df, pd.DataFrame({"timestamp": t,
+                                            "operationRead": x,
+                                            "operationWrite": y})])
+        return df.drop_duplicates().sort_values(by=['timestamp'])
+    
+    def get_access_pattern_dataframe(self, job_id):
+        # filepath = os.path.join(os.getcwd(), "dump", "cmdb_database", "FileIOSummaryGw.bson")
+        df = pd.DataFrame(columns=["timestamp", "accessRandRead", "accessSeqRead",
+                                   "accessStrRead", "accessUnclRead", "accessRandWrite",
+                                   "accessSeqWrite", "accessStrWrite", "accessUnclWrite"])
+        for filepath in [self.get_bson_path(filename="FileIOSummaryGw.bson")]:
+            
+            with open(filepath,'rb') as f:
+                # Get a list of timestamps elements for all jobs
+                # {'_id': ObjectId('591ac4e02db96207ae2b5e92'), 'jobid': 2665, 'hostname': 'lima16.bullx', 'timeFrame': datetime.datetime(2017, 5, 16, 9, 22, 35), 'bytesRead': 0, 'bytesWritten': 0, 'filesRW': 0, 'filesRO': 0, 'filesWO': 0, 'filesCreated': 0, 'filesDeleted': 0, 'accessRandRead': 0, 'accessSeqRead': 0, 'accessStrRead': 0, 'accessUnclRead': 0, 'accessRandWrite': 0, 'accessSeqWrite': 0, 'accessStrWrite': 0, 'accessUnclWrite': 0}
+                jdata = bson.decode_all(f.read())
+
+            # Get specific ts from specific jobid with ts available in bson file
+            a = [dp["accessRandRead"] for dp in jdata if dp["jobid"]==job_id]
+            b = [dp["accessSeqRead"] for dp in jdata if dp["jobid"]==job_id]
+            c = [dp["accessStrRead"] for dp in jdata if dp["jobid"]==job_id]
+            d = [dp["accessUnclRead"] for dp in jdata if dp["jobid"]==job_id]
+            e = [dp["accessRandWrite"] for dp in jdata if dp["jobid"]==job_id]
+            g = [dp["accessSeqWrite"] for dp in jdata if dp["jobid"]==job_id]
+            h = [dp["accessStrWrite"] for dp in jdata if dp["jobid"]==job_id]
+            j = [dp["accessUnclWrite"] for dp in jdata if dp["jobid"]==job_id]
+            t = [dp["timeFrame"].timestamp() for dp in jdata if dp["jobid"]==job_id]
+        
+            df = pd.concat([df, pd.DataFrame({"timestamp": t,
+                                            "accessRandRead": a,
+                                            "accessSeqRead": b,
+                                            "accessStrRead": c,
+                                            "accessUnclRead": d,
+                                            "accessRandWrite": e,
+                                            "accessSeqWrite": g,
+                                            "accessStrWrite": h,
+                                            "accessUnclWrite": j})])
+        return df.drop_duplicates().sort_values(by=['timestamp'])
+    
     def get_event_dataframe(self, job_id):
         """add ioi-event column to job dataframe"""
         # check if JobEvent.bson exists
@@ -172,6 +226,29 @@ class DumpExtractor:
             print(df_job)
             df_job.to_csv(self.target_file(job_id))
             
+    def extract_job_features(self):
+        """Extract job more features from the dataset."""
+        # if number of jobs are given, then choose randomly
+        job_item_file = self.get_bson_path()
+        if self.n_jobs:
+            list_of_jobs = self.get_random_jobs(job_item_file, number_of_jobs=self.n_jobs)
+        elif not self.n_jobs and self.jobs:
+            list_of_jobs = self.jobs
+            
+        for i, job_id in enumerate(list_of_jobs):
+            print(f"\n Extracting job {job_id} step #{i+1}/{len(list_of_jobs)} from dataset {self.prefix} -> {self.target_file(job_id)}")
+            df_io = self.get_io_dataframe(job_id)
+            # not used : df_pr = self.get_process_dataframe(job_id)
+            df_pr = self.get_operation_dataframe(job_id)
+            df_ap = self.get_access_pattern_dataframe(job_id)
+            df_ev = self.get_event_dataframe(job_id)
+            print(df_ev)
+            df_job = df_io.merge(df_pr)
+            df_job = df_job.merge(df_ap)
+            df_job = df_job.join(df_ev.set_index("timestamp"), on='timestamp')
+            print(df_job)
+            df_job.to_csv(self.target_file(job_id))
+            
             
 
 if __name__ == '__main__':
@@ -220,10 +297,21 @@ if __name__ == '__main__':
     # dump_extractor.extract_job()
 
     # KIWI database for validation
-    absolute_dump_path = "C:\\Users\\a770398\\IO-SEA\\io-sea-3.4-analytics\\dataset_generation\\dump\kiwi"
-    target_folder = "C:\\Users\\a770398\\IO-SEA\\io-sea-3.4-analytics\\dataset_generation\\dataset_generation\\dataset_kiwi_validation"
-    jobids = list(range(3906, 3920))
+    # absolute_dump_path = "C:\\Users\\a770398\\IO-SEA\\io-sea-3.4-analytics\\dataset_generation\\dump\kiwi"
+    # target_folder = "C:\\Users\\a770398\\IO-SEA\\io-sea-3.4-analytics\\dataset_generation\\dataset_generation\\dataset_kiwi_validation"
+    # jobids = list(range(3906, 3920))
+    # dump_extractor = DumpExtractor(absolute_dump_path=absolute_dump_path,
+    # target_folder=target_folder, jobs=jobids)
+    # #dump_extractor.extract_job()
+    # dump_extractor.extract_job_features() # extract full features
+    
+    # KIWI database for comparison
+    absolute_dump_path = "/fsiof/phamtt/tmp/dump"
+    target_folder = "/home_nfs/mimounis/iosea-wp3-recommandation-system/dataset_generation/dataset_generation/dataset_kiwi_comparison"
+    #jobids = list(range(5168, 5195)) # mono pattern
+    jobids = list(range(5281, 5297))  # mixed patterns
     dump_extractor = DumpExtractor(absolute_dump_path=absolute_dump_path,
     target_folder=target_folder, jobs=jobids)
-    dump_extractor.extract_job()
+    #dump_extractor.extract_job()
+    dump_extractor.extract_job_features() # extract full features
     

@@ -25,6 +25,7 @@ from app_decomposer.config_parser import Configuration
 from app_decomposer.signal_decomposer import KmeansSignalDecomposer, get_lowest_cluster
 
 from cluster_simulator.analytics import get_execution_signal, get_execution_signal_2, display_original_sim_signals
+from app_decomposer import DEFAULT_CONFIGURATION, API_DICT_TS, IOI_SAMPLING_PERIOD, PERF_MODEL_DATASET_NAME
 
 
 def list_jobs(dataset_path):
@@ -47,7 +48,46 @@ def list_jobs(dataset_path):
                 dataset_names.append(os.path.split(root)[-1])
     return job_files, job_ids, dataset_names
 
+
 def get_job_timeseries_from_file(job_id=None):
+    """Method to extract read and write timeseries from a job.
+    TODO: connect this method directly to the IOI database.
+    For the moment, data will be mocked by a csv file containing the timeseries.
+
+    Returns:
+        timestamps, read_signal, write_signal (numpy array): various arrays of the job timeseries.
+    """
+    # get out tests, and package folder
+    current_dir = dirname(dirname(dirname(abspath(__file__))))
+    dataset_path = os.path.join(current_dir, "dataset_generation", "dataset_generation")
+    # Get list of jobs
+    job_files, job_ids, dataset_names = list_jobs(dataset_path=dataset_path)
+    if job_id is None:
+        csv_file = random.choice(job_files)
+    else:
+        csv_file = job_files[job_ids.index(str(job_id))]
+
+    df = pd.read_csv(csv_file, index_col=0)
+    df_clean = df.drop_duplicates(subset=['timestamp'])
+    # timeseries = {}
+    # timeseries["volume"] = {}
+    # timeseries["volume"]["timestamp"] = df_clean[["timestamp"]].to_numpy().flatten()
+    # timeseries["volume"]["bytesRead"] = df_clean[["bytesRead"]].to_numpy().flatten()
+    # timeseries["volume"]["bytesWritten"] = df_clean[["bytesWritten"]].to_numpy().flatten()
+    # timeseries["operationsCount"] = {}
+    # timeseries["operationsCount"]["operationRead"] = df_clean[["operationRead"]].to_numpy().flatten()
+    # timeseries["operationsCount"]["operationWrite"] = df_clean[["operationWrite"]].to_numpy().flatten()
+    # timeseries["accessPattern"]
+    timeseries = {}
+    for ts_type in ["volume", "operationsCount", "accessPattern"]:
+        timeseries[ts_type] = {}
+        ts_list = API_DICT_TS[ts_type]
+        ts_list.append("timestamp")
+        for ts in ts_list:
+            timeseries[ts_type][ts] = df_clean[[ts]].to_numpy().flatten()
+    return timeseries
+
+def get_job_timeseries_from_file_as_array(job_id=None):
     """Method to extract read and write timeseries from a job.
     TODO: connect this method directly to the IOI database.
     For the moment, data will be mocked by a csv file containing the timeseries.
@@ -82,7 +122,7 @@ def plot_job_signal(jobid=None):
     plt.show()
 
 def plot_detected_phases(jobid, merge=False, show_phases=False, width=1200, height=600):
-    timestamps, read_signal, write_signal = get_job_timeseries_from_file(job_id=jobid) #457344
+    timestamps, read_signal, write_signal = get_job_timeseries_from_file_as_array(job_id=jobid) #457344
     ab = np.arange(len(read_signal))
     read_dec = KmeansSignalDecomposer(read_signal, merge=merge)
     read_bkps, read_labels = read_dec.decompose()
