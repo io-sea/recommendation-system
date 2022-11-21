@@ -104,18 +104,18 @@ class PerformanceModel:
         if {'nfs_bw', 'lfs_bw', 'sbb_bw'}.issubset(self.perf_data.columns):
             #keep the part already has performance
             old_data = self.perf_data[~self.perf_data.isna().any(axis=1)]
-            print(old_data)
+            #print(old_data)
 
             #update the performance phases which has NAN value in the bandwidth
             new_data = self.perf_data[self.perf_data.isna().any(axis=1)]
             new_data = new_data.drop(['nfs_bw', 'lfs_bw', 'sbb_bw'], axis=1)
-            print(new_data)
+            #print(new_data)
             phases = new_data.to_dict('records')
             phases_perf = PhasePerformance(phases, self.targets, self.accelerator, self.ioi)
             perf_df = phases_perf.get_performances()
             perf_df.index = new_data.index
             new_data = new_data.join(perf_df)
-            print(new_data)
+            #print(new_data)
 
             self.perf_data = pd.concat([old_data, new_data], axis=0)
             #self.perf_data.reset_index(drop=True)
@@ -133,8 +133,8 @@ class PerformanceModel:
 if __name__ == '__main__':
     target = dict(lfs="/fsiof/phamtt/tmp", nfs="/scratch/phamtt/tmp")
     acc = "SBB" # currently support onyly SBB with the lfs target
-    filename = "/home_nfs/phamtt/IO-SEA/iosea-wp3-recommandation-system/performance_model/dataset/performance_model_dataset_small.csv"
-    filename = "/home_nfs/phamtt/IO-SEA/iosea-wp3-recommandation-system/performance_model/dataset/performance_model_dataset_small_partial.csv"
+    filename = "../dataset/performance_model_dataset.csv"
+    filename = "../dataset/performance_model_dataset_small_partial.csv"
 
     pm = PerformanceModel(filename, target, acc)
     df = pm.get_perfomance_table()
