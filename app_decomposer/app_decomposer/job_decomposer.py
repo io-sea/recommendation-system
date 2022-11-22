@@ -709,14 +709,16 @@ class ComplexDecomposer:
             # express measured ioi bandwidth in bytes per second
             features["ioi_bw"] = representation[f"{mode}_bw"][i_phase]/IOI_SAMPLING_PERIOD
             # exclude phases having 0 volume (artefact of the decomposition)
-            if features["volume"] > 0:
-                phases_features.append(features)
+            # TODO: should not, just put bw = 0, otherwise reconstruction will be impossible
+            #if features["volume"] > 0:
+            phases_features.append(features)
 
         if update_csv:
             # Enable updating csv dataset file
             current_dir = dirname(dirname(dirname(abspath(__file__))))
-            csv_path = os.path.join(current_dir, "dataset_generation", "dataset_generation",
-                                     "performance_model", PERF_MODEL_DATASET_NAME)
+            # csv_path = os.path.join(current_dir, "dataset_generation", "dataset_generation",
+            #                          "performance_model", PERF_MODEL_DATASET_NAME)
+            csv_path = os.path.join(current_dir, "performance_model", "dataset", PERF_MODEL_DATASET_NAME)
             # dump the new features in the csv file
             pd.DataFrame(phases_features).to_csv(csv_path, mode='a', header=not os.path.exists(csv_path), index=False)
             # reset index
