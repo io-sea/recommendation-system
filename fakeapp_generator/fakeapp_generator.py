@@ -212,16 +212,17 @@ def get_bandwidth(volume, time):
     if (time > 0):
         bw = volume/time
 
-    print("IO bandwidth: ", format(bw/(1024*1024), '.2f'), "(Mb/s)")
+    print("IO bandwidth: ", format(bw/(1000*1000), '.2f'), "(MB/s)")
 
     return bw
 
 if __name__ == '__main__':
-    lfs="/fsiof/phamtt/tmp"
-    nfs="/scratch/phamtt/tmp"
+    lfs="/fsiof/mimounis/tmp"
+    nfs="/scratch/mimounis/tmp"
     acc = "SBB"
-    gen_fakeapp(1000000000, "read", "seq", 10000, 1, lfs, True)
-    gen_fakeapp(1000000000, "read", "rand", 10000, 1, nfs, True)
+    #gen_fakeapp(1000000000, "read", "seq", 10000, 1, lfs, False)
+    #gen_fakeapp(1000000000, "write", "rand", 1000000, 1, nfs, False)
+    gen_fakeapp(1000000000, "read", "rand", 1000000, 1, lfs, acc, True)
     #gen_fakeapp(1000000000, "Write", "Seq", 1000, nfs, 2, True)
     #gen_fakeapp(10000000, "Read", "Stride", 1000, lfs, 2, True)
     #gen_fakeapp(10000000, "Read", "Seq", 1000, lfs, 2, True)

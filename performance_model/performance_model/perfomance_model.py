@@ -6,9 +6,14 @@ Please contact Bull S. A. S. for details about its license.
 """
 import os
 import sys
-sys.path.append('../../')
+sys.path.append('../../') # TODO: to be removed for proper import
 import pandas as pd
 from fakeapp_generator import fakeapp_generator
+
+# TODO: iodrop cache before perf measurement
+# TODO: exclusive mode for sbatch to avoid perf crosstalk
+# TODO: update dataframe for each row so dataset updates iteratively (more robust)
+# TODO: refactor + unittests
 
 class PhasePerformance:
 
@@ -63,12 +68,14 @@ class PhasePerformance:
             avg_bw (float):  average bandwidth
         """
         #run fakeapp n times to get the avg bandwidth
-        sum = 0
+        bandwidths = 0
         for i in range(0, self.sample):
+            # find a way to clean cache
+            # os.system("sync; echo 3 > /proc/sys/vm/drop_caches")
             (t, bw) = fakeapp_generator.gen_fakeapp(phase["volume"], phase["mode"], phase["IOpattern"],
                     phase["IOsize"], phase["nodes"], target, accelerator, self.ioi)
-            sum += bw
-        avg_bw = (float)(sum/self.sample)
+            bandwidths += bw
+        avg_bw = (float)(bandwidths/self.sample)
         print("Performance on tier", target, accelerator, ": ", format(avg_bw/(1024*1024), '.2f'), "(Mb/s)")
         return avg_bw
 
@@ -131,14 +138,15 @@ class PerformanceModel:
         return self.perf_data
 
 if __name__ == '__main__':
-    target = dict(lfs="/fsiof/phamtt/tmp", nfs="/scratch/phamtt/tmp")
+    target = dict(lfs="/fsiof/mimounis/tmp", nfs="/scratch/mimounis/tmp")
     acc = "SBB" # currently support onyly SBB with the lfs target
-    filename = "../dataset/performance_model_dataset.csv"
-    filename = "../dataset/performance_model_dataset_small_partial.csv"
+    filename = "/home_nfs/mimounis/iosea-wp3-recommandation-system/performance_model/dataset/performance_model_dataset.csv"
+    # filename = "/home_nfs/mimounis/iosea-wp3-recommandation-system/performance_model/dataset/performance_model_dataset_small_partial.csv"
 
     pm = PerformanceModel(filename, target, acc)
     df = pm.get_perfomance_table()
-    filename_pm = "/home_nfs/phamtt/IO-SEA/iosea-wp3-recommandation-system/performance_model/dataset/performance_model_dataset_small_out.csv"
+    print(df)
+    filename_pm = "/home_nfs/mimounis/iosea-wp3-recommandation-system/performance_model/dataset/performance_model_dataset_completed.csv"
     export_to_csv(df, filename_pm)
 
 """
