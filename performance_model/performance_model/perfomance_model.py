@@ -72,6 +72,7 @@ class PhasePerformance:
         for i in range(0, self.sample):
             # find a way to clean cache
             # os.system("sync; echo 3 > /proc/sys/vm/drop_caches")
+            # TODO : should be able to control volume of workload to adjust accuracy.
             (t, bw) = fakeapp_generator.gen_fakeapp(phase["volume"], phase["mode"], phase["IOpattern"],
                     phase["IOsize"], phase["nodes"], target, accelerator, self.ioi)
             bandwidths += bw
@@ -146,7 +147,7 @@ if __name__ == '__main__':
     pm = PerformanceModel(filename, target, acc)
     df = pm.get_perfomance_table()
     print(df)
-    filename_pm = "/home_nfs/mimounis/iosea-wp3-recommandation-system/performance_model/dataset/performance_model_dataset_completed.csv"
+    filename_pm = "/home_nfs/mimounis/iosea-wp3-recommandation-system/performance_model/dataset/performance_model_dataset_completed_2.csv"
     export_to_csv(df, filename_pm)
 
 """

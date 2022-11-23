@@ -5,9 +5,7 @@ This module proposes integration tests for the API connector module
 """
 
 from __future__ import division, absolute_import, generators, print_function, unicode_literals, \
-
     with_statement, nested_scopes  # ensure python2.x compatibility
-
 
 __copyright__ = """
 
@@ -44,9 +42,7 @@ from app_decomposer.job_decomposer import JobConnector
 
 from app_decomposer.config_parser import Configuration
 
-from app_decomposer.api_connector import request_delegator, check_http_code, TimeSeries, \
-
-    MetaData, MinMax, MinMaxDuration, JobSearch
+from app_decomposer.api_connector import request_delegator, check_http_code, TimeSeries, MetaData, MinMax, MinMaxDuration, JobSearch
 
 
 CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -74,9 +70,7 @@ class TestFunctions(unittest.TestCase):
 
         """Test the 'request_delegator' standard behavior."""
 
-        api_uri = f"https://{get_backend_hostname()}:{get_backend_ipv4_port()}" \
-
-            "/backend/api/admin/db/stats"
+        api_uri = f"https://{get_backend_hostname()}:{get_backend_ipv4_port()}/backend/api/admin/db/stats"
 
         rqst = request_delegator(requests.get,
 
@@ -98,9 +92,7 @@ class TestFunctions(unittest.TestCase):
 
         """Test the 'request_delegator' error management."""
 
-        api_uri = f"https://{get_backend_hostname()}:{get_backend_ipv4_port()}" \
-
-            "/backend/api/admin/db/stats"
+        api_uri = f"https://{get_backend_hostname()}:{get_backend_ipv4_port()}/backend/api/admin/db/stats"
 
 
         # Test authentification errors (bad token)
@@ -129,9 +121,7 @@ class TestFunctions(unittest.TestCase):
 
         """Test 'check_http_code' method returns the True if the tested request succeeds."""
 
-        api_uri = f"https://{get_backend_hostname()}:{get_backend_ipv4_port()}" \
-
-            "/backend/api/admin/db/stats"
+        api_uri = f"https://{get_backend_hostname()}:{get_backend_ipv4_port()}/backend/api/admin/db/stats"
 
         code = check_http_code(api_uri,
 
@@ -146,9 +136,7 @@ class TestFunctions(unittest.TestCase):
 
         """Test 'check_http_code' method returns the True if the tested request succeeds."""
 
-        api_uri = f"https://{get_backend_hostname()}:{get_backend_ipv4_port()}" \
-
-            "/backend/api/admin/db/stats"
+        api_uri = f"https://{get_backend_hostname()}:{get_backend_ipv4_port()}/backend/api/admin/db/stats"
 
         code = check_http_code(api_uri, 403)
 

@@ -47,7 +47,7 @@ def gen_fakeapp(volume, mode, IOpattern, IOsize, nodes, target, accelerator ="",
     print("Compute nodes: ", nodes)
     print("Backend target: ", target)
 
-    N = int(volume / IOsize)
+    N = int(volume / IOsize) if IOsize else 0
     print("Number of IO: ", N)
     print("IOI Enabled: ", ioi)
     print("IO Accelerator: ", accelerator)
@@ -82,11 +82,15 @@ def gen_fakeapp(volume, mode, IOpattern, IOsize, nodes, target, accelerator ="",
 
     print("------------------")
 
-    #run sbacth to get executed time
-    elap_time = run_sbatch(mod_sbatch, ioi)
+    if volume > 0:
+        #run sbacth to get executed time
+        elap_time = run_sbatch(mod_sbatch, ioi)
 
-    #compute bandwidth
-    bandwidth = get_bandwidth(volume, elap_time)
+        #compute bandwidth
+        bandwidth = get_bandwidth(volume, elap_time)
+    else:
+        elap_time = 0
+        bandwidth = 0
 
     return elap_time, bandwidth
 
