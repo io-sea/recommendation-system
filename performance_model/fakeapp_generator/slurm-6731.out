@@ -1,2 +1,0 @@
-/var/spool/slurmd/job06731/slurm_script: line 13: syntax error near unexpected token `;'
-/var/spool/slurmd/job06731/slurm_script: line 13: `    srun -N 1 ./run_fakeapp.sh /fsiof/phamtt/tmp 1 10000 0 100000 -R &;'
