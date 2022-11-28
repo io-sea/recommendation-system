@@ -9,4 +9,4 @@
 ############# ENABLE TO USE IOI ###############
 #export IOI_PROTECTED=1
 
-time(srun -N $NODES ./run_fakeapp.sh $TARGET $LEAD $SIZE $SCATTER $OPS $MODE)
+time(srun --io-drop-cache=yes -N $NODES ./run_fakeapp.sh $TARGET $LEAD $SIZE $SCATTER $OPS $MODE)

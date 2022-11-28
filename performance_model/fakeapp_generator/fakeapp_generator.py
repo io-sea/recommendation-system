@@ -220,8 +220,8 @@ if __name__ == '__main__':
     lfs="/fsiof/phamtt/tmp"
     nfs="/scratch/phamtt/tmp"
     acc = "SBB"
-    gen_fakeapp(1000000000, "read", "seq", 10000, 1, lfs, True)
-    gen_fakeapp(1000000000, "read", "rand", 10000, 1, nfs, True)
+#    gen_fakeapp(1000000000, "read", "seq", 10000, 1, nfs,"", True)
+    gen_fakeapp(1000000000, "write", "rand", 10000, 1, lfs,"", False)
     #gen_fakeapp(1000000000, "Write", "Seq", 1000, nfs, 2, True)
     #gen_fakeapp(10000000, "Read", "Stride", 1000, lfs, 2, True)
     #gen_fakeapp(10000000, "Read", "Seq", 1000, lfs, 2, True)
