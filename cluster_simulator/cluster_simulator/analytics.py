@@ -555,7 +555,8 @@ def display_run_with_signal(data, cluster, app_signal, width=1200, height=600):
 
 
 
-def display_original_sim_signals(simulated, originals, width=1200, height=600):
+def display_original_sim_signals(simulated, originals, str_org="Original",
+                                 str_sim="Simulated", width=1200, height=600):
 
     timestamps, original_read, original_write = originals
     time, read_bw, write_bw = simulated
@@ -570,14 +571,14 @@ def display_original_sim_signals(simulated, originals, width=1200, height=600):
                                 # legendgroup="Timeseries",
                                 textposition="top center", mode='lines+markers',
                                 marker_size = 5,
-                                name="Original I/O Read Volume Signal (IOI)", line_shape='linear',
+                                name=f"{str_org} I/O Read Volume Signal (IOI)", line_shape='linear',
                                 line_color = "blue"), row=1, col=1)
     fig.append_trace(go.Scatter(x=np.array(timestamps), y=np.array(original_write),
                                 # text=text,
                                 # legendgroup="Timeseries",
                                 textposition="top center", mode='lines+markers',
                                 marker_size = 5,
-                                name="Original I/O Written Volume Signal (IOI)", line_shape='linear',
+                                name=f"{str_org} I/O Written Volume Signal (IOI)", line_shape='linear',
                                 line_color="green"), row=1, col=1)
 
     # plot simulated signals
@@ -585,14 +586,14 @@ def display_original_sim_signals(simulated, originals, width=1200, height=600):
                                 # text=text,
                                 # legendgroup="Timeseries",
                                 textposition="top center", mode='lines',
-                                name="Simulated I/O Read Volume Signal", line_shape='linear',
+                                name=f"{str_sim} I/O Read Volume Signal", line_shape='linear',
                                 line={'dash': 'dot'},
                                 line_color = "blue"), row=1, col=1)
     fig.append_trace(go.Scatter(x=np.array(time), y=np.array(write_bw),
                                 # text=text,
                                 # legendgroup="Timeseries",
                                 textposition="top center", mode='lines',
-                                name="Simulated I/O Written Volume Signal", line_shape='linear',
+                                name=f"{str_sim} I/O Written Volume Signal", line_shape='linear',
                                 line={'dash': 'dot'},
                                 line_color="green"), row=1, col=1)
 
@@ -602,14 +603,14 @@ def display_original_sim_signals(simulated, originals, width=1200, height=600):
                                 # legendgroup="Cumulated Timeseries",
                                 textposition="top center", mode='lines+markers',
                                 marker_size = 5,
-                                name="Cumulated Original I/O Read Volume Signal (IOI)", line_shape='linear',
+                                name=f"Cumulated {str_org} I/O Read Volume Signal (IOI)", line_shape='linear',
                                 line_color = "blue"), row=2, col=1)
     fig.append_trace(go.Scatter(x=np.array(timestamps), y=np.cumsum(np.array(original_write)),
                                 # text=text,
                                 # legendgroup="Cumulated Timeseries",
                                 textposition="top center", mode='lines+markers',
                                 marker_size = 5,
-                                name="Cumulated Original I/O Written Volume Signal (IOI)", line_shape='linear',
+                                name=f"Cumulated {str_org} I/O Written Volume Signal (IOI)", line_shape='linear',
                                 line_color="green"), row=2, col=1)
 
     # plot cumulated simulated signals
@@ -617,14 +618,14 @@ def display_original_sim_signals(simulated, originals, width=1200, height=600):
                                 # text=text,
                                 # legendgroup="Cumulated Timeseries",
                                 textposition="top center", mode='lines',
-                                name="Simulated I/O Read Cumulative Volume Signal", line_shape='linear',
+                                name=f"{str_sim} I/O Read Cumulative Volume Signal", line_shape='linear',
                                 line={'dash': 'dot'},
                                 line_color = "blue"), row=2, col=1)
     fig.append_trace(go.Scatter(x=np.array(time), y=np.cumsum(np.array(write_bw)),
                                 # text=text,
                                 # legendgroup="Cumulated Timeseries",
                                 textposition="top center", mode='lines',
-                                name="Simulated I/O Written Cumulative Volume Signal", line_shape='linear',
+                                name=f"{str_sim} I/O Written Cumulative Volume Signal", line_shape='linear',
                                 line={'dash': 'dot'},
                                 line_color="green"), row=2, col=1)
 
@@ -642,3 +643,4 @@ def display_original_sim_signals(simulated, originals, width=1200, height=600):
                       title_text="Comparing simulated and IOI signals")
 
     return fig
+

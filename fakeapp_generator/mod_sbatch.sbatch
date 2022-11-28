@@ -9,4 +9,4 @@
 ############# ENABLE TO USE IOI ###############
 #export IOI_PROTECTED=1
 
-time(srun --exclusive --io-drop-cache=yes -N 1 ./run_fakeapp.sh /fsiof/mimounis/tmp 1 10485760.0 0 1095 )
+time(srun --exclusive --io-drop-cache=yes -N 1 ./run_fakeapp.sh /fsiof/mimounis/tmp 1 10485760.0 0 3000 )

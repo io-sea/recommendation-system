@@ -107,7 +107,7 @@ def get_job_timeseries_from_file_as_array(job_id=None):
 
     df = pd.read_csv(csv_file, index_col=0)
     df_clean = df.drop_duplicates(subset=['timestamp'])
-    return df_clean[["timestamp"]].to_numpy(), df_clean[["bytesRead"]].to_numpy(), df_clean[["bytesWritten"]].to_numpy()
+    return df_clean[["timestamp"]].to_numpy().flatten(), df_clean[["bytesRead"]].to_numpy().flatten(), df_clean[["bytesWritten"]].to_numpy().flatten()
 
 def plot_job_signal(jobid=None):
     x, read_signal, write_signal = get_job_timeseries_from_file(job_id=jobid)
@@ -121,8 +121,11 @@ def plot_job_signal(jobid=None):
     plt.title(f"timeserie for jobid = {jobid}")
     plt.show()
 
-def plot_detected_phases(jobid, merge=False, show_phases=False, width=1200, height=600):
-    timestamps, read_signal, write_signal = get_job_timeseries_from_file_as_array(job_id=jobid) #457344
+def plot_detected_phases(jobid, merge=False, show_phases=False, ts=None, width=1200, height=600):
+    if not ts:
+        timestamps, read_signal, write_signal = get_job_timeseries_from_file_as_array(job_id=jobid)
+    else:
+        timestamps, read_signal, write_signal = ts
     ab = np.arange(len(read_signal))
     read_dec = KmeansSignalDecomposer(read_signal, merge=merge)
     read_bkps, read_labels = read_dec.decompose()

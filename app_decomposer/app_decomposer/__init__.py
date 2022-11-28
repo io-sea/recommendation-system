@@ -3,6 +3,7 @@ import os
 
 CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
 DEFAULT_CONFIGURATION = os.path.join(CURRENT_DIR, "defaults", "config.yaml")
+KIWI_CONFIG = os.path.join(os.path.dirname(CURRENT_DIR), "tests_integration", "test_data", "test_kiwi_config.yaml")
 
 __author__ = """Salim Mimouni"""
 __email__ = 'salim.mimouni@atos.net'
