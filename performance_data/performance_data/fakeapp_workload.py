@@ -37,8 +37,8 @@ class FakeappWorkload:
             io_size (string): size of IO
             nodes (int): number of nodes, default = 1
             target (string): storage backend file (nfs or lfs)
-            accelerator (bool): IO accelerator to be used (sbb), default=""
-            ioi (bool): enable/disable IOI, default = False
+            accelerator (bool): IO accelerator to be used (sbb), default=False
+            ioi (bool): enable/disable the instrumentation using IOI, default = False
 
         Returns:
             elapsed_time (float): elapsed time
@@ -212,6 +212,19 @@ class FakeappWorkload:
             os.rename(self.sbatch_file, final_sbatch)
             self.sbatch_file = final_sbatch
         return real_time
+
+    def get_data(self):
+        bandwidth = 0
+        if self.volume > 0:
+            self.write_sbatch_file()
+            elapsed_time = self.run_sbatch_file(clean=True)
+            if elapsed_time > 0:
+                bandwidth = self.volume / elapsed_time
+
+        logger.info(f"Workload duration: {elapsed_time} | bandwidth: {bandwidth}")
+        return elapsed_time, bandwidth
+
+
 
 
 

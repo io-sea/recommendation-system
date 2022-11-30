@@ -9,7 +9,7 @@ from performance_data.fakeapp_workload import FakeappWorkload
 from performance_data import cli
 
 
-class TestPerformanceData(unittest.TestCase):
+class TestFakeappWorkload(unittest.TestCase):
     """Tests for `performance_data` package."""
 
     def setUp(self):
@@ -58,3 +58,31 @@ class TestPerformanceData(unittest.TestCase):
         job_time = workload.run_sbatch_file(clean=True)
         self.assertTrue(isinstance(job_time, float))
         self.assertFalse(os.path.isfile(workload.sbatch_file))
+
+    def test_cmdline_sbatch_with_SBB(self):
+        """Test something."""
+        workload = FakeappWorkload(volume=0.5e9, mode="read",
+                                   io_pattern="rand",
+                                   io_size=4e3,
+                                   nodes=1,
+                                   target_tier="/fsiof/mimounis/tmp",
+                                   accelerator=True,
+                                   ioi=False)
+        workload.write_sbatch_file()
+        job_time = workload.run_sbatch_file(clean=True)
+        self.assertTrue(isinstance(job_time, float))
+        self.assertFalse(os.path.isfile(workload.sbatch_file))
+
+    def test_get_data(self):
+        """Test something."""
+        workload = FakeappWorkload(volume=0.5e9, mode="read",
+                                   io_pattern="rand",
+                                   io_size=4e3,
+                                   nodes=1,
+                                   target_tier="/fsiof/mimounis/tmp",
+                                   accelerator=True,
+                                   ioi=False)
+
+        elapsed_time, bw = workload.get_data()
+        self.assertTrue(isinstance(elapsed_time, float))
+

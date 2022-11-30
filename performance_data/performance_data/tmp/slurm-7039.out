@@ -18,18 +18,18 @@ Number of tasks = 1
 	share_file = 0
 	clean_file = 0
 Test runtime(s):
-	min = 4.694
-	avg = 4.694
-	max = 4.694
+	min = 4.349
+	avg = 4.349
+	max = 4.349
 Fsync duration(s):
 	min = 0.000
 	avg = 0.000
 	max = 0.000
 Total time(s):
-	min = 4.695
-	avg = 4.695
-	max = 4.695
+	min = 4.350
+	avg = 4.350
+	max = 4.350
 
-real	0m4.978s
-user	0m0.005s
-sys	0m0.006s
+real	0m5.029s
+user	0m0.008s
+sys	0m0.004s
