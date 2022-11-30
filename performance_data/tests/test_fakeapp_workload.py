@@ -3,6 +3,7 @@
 """Tests for `performance_data` package."""
 
 
+import os
 import unittest
 from performance_data.fakeapp_workload import FakeappWorkload
 from performance_data import cli
@@ -23,31 +24,37 @@ class TestPerformanceData(unittest.TestCase):
                                    io_pattern="rand",
                                    io_size=4e3,
                                    nodes=1,
-                                   target_tier="nfs",
+                                   target_tier="/fsiof/mimounis/tmp",
                                    accelerator=False,
                                    ioi=False)
-        temp_file = workload.updated_sbatch_template()
-        print(temp_file)
+        workload.write_sbatch_file()
+        self.assertTrue(os.path.isfile(workload.sbatch_file))
+        os.remove(workload.sbatch_file)
 
-    def test_cmdline_sbatch(self):
+    def test_cmdline_sbatch_no_clean(self):
         """Test something."""
-        workload = FakeappWorkload(volume=1e6, mode="read",
+        workload = FakeappWorkload(volume=0.5e9, mode="read",
                                    io_pattern="rand",
                                    io_size=4e3,
                                    nodes=1,
-                                   target_tier="nfs",
+                                   target_tier="/fsiof/mimounis/tmp",
                                    accelerator=False,
                                    ioi=False)
-        temp_file = workload.updated_sbatch_template()
-        cmd = workload.run_sbatch(temp_file, ioi=False)
-        self.assertEquals(cmd, "sbatch --wait /home_nfs/mimounis/iosea-wp3-recommandation-system/performance_data/performance_data/defaults/mod_sbatch.sbatch")
+        workload.write_sbatch_file()
+        job_time = workload.run_sbatch_file()
+        self.assertTrue(isinstance(job_time, float))
+        self.assertTrue(os.path.isfile(workload.sbatch_file))
 
-    # def test_command_line_interface(self):
-    #     """Test the CLI."""
-    #     runner = CliRunner()
-    #     result = runner.invoke(cli.main)
-    #     assert result.exit_code == 0
-    #     assert 'performance_data.cli.main' in result.output
-    #     help_result = runner.invoke(cli.main, ['--help'])
-    #     assert help_result.exit_code == 0
-    #     assert '--help  Show this message and exit.' in help_result.output
+    def test_cmdline_sbatch_with_clean(self):
+        """Test something."""
+        workload = FakeappWorkload(volume=0.5e9, mode="read",
+                                   io_pattern="rand",
+                                   io_size=4e3,
+                                   nodes=1,
+                                   target_tier="/fsiof/mimounis/tmp",
+                                   accelerator=False,
+                                   ioi=False)
+        workload.write_sbatch_file()
+        job_time = workload.run_sbatch_file(clean=True)
+        self.assertTrue(isinstance(job_time, float))
+        self.assertFalse(os.path.isfile(workload.sbatch_file))
