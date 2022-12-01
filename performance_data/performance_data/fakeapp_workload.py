@@ -221,7 +221,7 @@ class FakeappWorkload:
             if elapsed_time > 0:
                 bandwidth = self.volume / elapsed_time
 
-        logger.info(f"Workload duration: {elapsed_time} | bandwidth: {bandwidth}")
+        logger.info(f"Workload duration: {elapsed_time} | bandwidth: {convert_size(bandwidth)}/s")
         return elapsed_time, bandwidth
 
 
