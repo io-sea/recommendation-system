@@ -2,6 +2,7 @@
 import os
 
 CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
+REPO_DIR = os.path.dirname(os.path.dirname(CURRENT_DIR))
 DEFAULT_CONFIGURATION = os.path.join(CURRENT_DIR, "defaults", "config.yaml")
 KIWI_CONFIG = os.path.join(os.path.dirname(CURRENT_DIR), "tests_integration", "test_data", "test_kiwi_config.yaml")
 
@@ -47,4 +48,7 @@ API_DICT_TS = {
 IOI_SAMPLING_PERIOD = 5 # in seconds
 
 # dataset file name for performance model
-PERF_MODEL_DATASET_NAME = "performance_model_dataset.csv"
+DATASET_SOURCE = os.path.join(REPO_DIR, "performance_data",
+                              "performance_data", "dataset",
+                              "performance_model_dataset.csv")
+

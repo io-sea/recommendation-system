@@ -14,14 +14,6 @@ from app_decomposer.utils import convert_size
 path = os.path.abspath(__file__)
 dir_path = os.path.dirname(path)
 
-# def open_file(fname):
-#     with open(fname, "r") as file:
-#         data = file.read()
-#     return data
-
-# def write_to_file(fname, text):
-#     f= open(fname, "w")
-#     f.write(text)
 
 class FakeappWorkload:
     """Class to create and manage an IO Workload using fakeapp binary. """
@@ -215,6 +207,7 @@ class FakeappWorkload:
 
     def get_data(self):
         bandwidth = 0
+        elapsed_time = 0
         if self.volume > 0:
             self.write_sbatch_file()
             elapsed_time = self.run_sbatch_file(clean=True)

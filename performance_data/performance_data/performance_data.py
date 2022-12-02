@@ -10,17 +10,10 @@ import sys
 import pandas as pd
 from loguru import logger
 from app_decomposer.utils import convert_size
+from app_decomposer import DATASET_SOURCE
+from performance_data import DATASET_FILE
 from performance_data.fakeapp_workload import FakeappWorkload as Workload
 
-# TODO: iodrop cache before perf measurement # Done
-# TODO: exclusive mode for sbatch to avoid perf crosstalk # Done
-# TODO: update dataframe for each row so dataset updates iteratively (more robust) # No
-# TODO: refactor + unittests # Done
-
-DATASET_SOURCE = os.path.join(dirname(os.path.abspath(__file__)),
-                            "dataset", "performance_model_dataset_test.csv")
-DATASET_FILE = os.path.join(dirname(os.path.abspath(__file__)),
-                            "dataset", "performance_model_dataset_complete.csv")
 class PhaseData:
     def __init__(self, phases, target, ioi=False, sample=1):
         """Initializes the phases data with features extracted from AppDecomposer, runs the associated workload and return data.
@@ -59,7 +52,7 @@ class PhaseData:
             latencies += latency
             volumes += phase["volume"]
         # print(f"n_samples = {self.sample}")
-        avg_bw = (float)(volumes/latencies)
+        avg_bw = (float)(volumes/latencies) if latencies else 0
         logger.info(f"Measured throughput on tier: {target} | use SBB: {accelerator} | result: {convert_size(avg_bw)}/s")
         return avg_bw
 
@@ -121,7 +114,7 @@ class DataTable:
             #print(new_data)
             phases = new_data.to_dict('records')
             phases_perf = PhaseData(phases, self.targets, self.ioi)
-            perf_df = phases_perf.get_performances()
+            perf_df = phases_perf.get_phase_data()
             perf_df.index = new_data.index
             new_data = new_data.join(perf_df)
             #print(new_data)

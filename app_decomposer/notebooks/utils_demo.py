@@ -25,7 +25,7 @@ from app_decomposer.config_parser import Configuration
 from app_decomposer.signal_decomposer import KmeansSignalDecomposer, get_lowest_cluster
 
 from cluster_simulator.analytics import get_execution_signal, get_execution_signal_2, display_original_sim_signals
-from app_decomposer import DEFAULT_CONFIGURATION, API_DICT_TS, IOI_SAMPLING_PERIOD, PERF_MODEL_DATASET_NAME
+from app_decomposer import DEFAULT_CONFIGURATION, API_DICT_TS, IOI_SAMPLING_PERIOD, DATASET_SOURCE
 
 
 def list_jobs(dataset_path):

@@ -26,15 +26,15 @@ class TestPhaseData(unittest.TestCase):
     def tearDown(self):
         """Tear down test fixtures, if any."""
 
-    def test_(self):
-        """Test something."""
-        #print(self.phases)
-        phases_data = PhaseData(self.phases, self.targets, self.ioi)
-        df = phases_data.get_phase_data()
-        #print(df)
-        dt = DataTable(self.targets, accelerator=True, filename=self.dataset_file)
-        df = dt.get_performance_table()
-        #print(df)
+    # def test_(self):
+    #     """Test something."""
+    #     #print(self.phases)
+    #     phases_data = PhaseData(self.phases, self.targets, self.ioi)
+    #     df = phases_data.get_phase_data()
+    #     #print(df)
+    #     dt = DataTable(self.targets, accelerator=True, filename=self.dataset_file)
+    #     df = dt.get_performance_table()
+    #     #print(df)
 
     def test_standalone(self):
         """Tests the whole pipeline."""

@@ -22,7 +22,7 @@ from app_decomposer.signal_decomposer import KmeansSignalDecomposer, get_lowest_
 from app_decomposer.api_connector import TimeSeries, MetaData, JobSearch
 from app_decomposer.config_parser import Configuration
 from app_decomposer.utils import convert_size
-from app_decomposer import DEFAULT_CONFIGURATION, API_DICT_TS, IOI_SAMPLING_PERIOD, PERF_MODEL_DATASET_NAME
+from app_decomposer import DEFAULT_CONFIGURATION, API_DICT_TS, IOI_SAMPLING_PERIOD, DATASET_SOURCE
 
 def get_phase_volume(signal, method="sum", start_index=0, end_index=-1, dx=1):
     """Method allowing many functions to compute the total volume of data for a given phase boundary in a signal array.
@@ -716,12 +716,8 @@ class ComplexDecomposer:
 
         if update_csv:
             # Enable updating csv dataset file
-            current_dir = dirname(dirname(dirname(abspath(__file__))))
-            # csv_path = os.path.join(current_dir, "dataset_generation", "dataset_generation",
-            #                          "performance_model", PERF_MODEL_DATASET_NAME)
-            csv_path = os.path.join(current_dir, "performance_model", "dataset", PERF_MODEL_DATASET_NAME)
             # dump the new features in the csv file
-            pd.DataFrame(phases_features).to_csv(csv_path, mode='a', header=not os.path.exists(csv_path), index=False)
+            pd.DataFrame(phases_features).to_csv(DATASET_SOURCE, mode='a', header=not os.path.exists(DATASET_SOURCE), index=False)
             # reset index
             #df = pd.read_csv(csv_path, index_col=False).reset_index(drop=True)
             #df.to_csv(csv_path, index=False)
