@@ -22,7 +22,7 @@ from app_decomposer.signal_decomposer import KmeansSignalDecomposer, get_lowest_
 from app_decomposer.api_connector import TimeSeries, MetaData, JobSearch
 from app_decomposer.config_parser import Configuration
 from app_decomposer.utils import convert_size
-from app_decomposer import DEFAULT_CONFIGURATION, API_DICT_TS, IOI_SAMPLING_PERIOD, PERF_MODEL_DATASET_NAME
+from app_decomposer import DEFAULT_CONFIGURATION, API_DICT_TS, IOI_SAMPLING_PERIOD, DATASET_SOURCE
 
 def get_phase_volume(signal, method="sum", start_index=0, end_index=-1, dx=1):
     """Method allowing many functions to compute the total volume of data for a given phase boundary in a signal array.
@@ -382,7 +382,8 @@ class JobDecomposer:
 
 class ComplexDecomposer:
     """This class takes separate read and write dataflow timeseries in order to extract separated phases for each type: compute, read and write phases."""
-    def __init__(self, job_id=None, signal_decomposer=KmeansSignalDecomposer, v0_threshold=0.05):
+    def __init__(self, job_id=None, signal_decomposer=KmeansSignalDecomposer, v0_threshold=0.05,
+                 config=Configuration(DEFAULT_CONFIGURATION)):
         """Initiates JobDecomposer class by fetching job related data.
 
         Args:
@@ -393,7 +394,7 @@ class ComplexDecomposer:
         self.signal_decomposer = signal_decomposer
         self.v0_threshold = v0_threshold
         # Initialize the IOI Connector Configuration
-        self.config = Configuration(path=DEFAULT_CONFIGURATION)
+        self.config = config #Configuration(path=DEFAULT_CONFIGURATION)
         api_uri = f"{self.config.get_api_uri()}:{self.config.get_api_port()}"
         api_token = self.config.get_kc_token()
         self.node_count = self.get_job_node_count(api_uri, api_token)
@@ -709,16 +710,14 @@ class ComplexDecomposer:
             # express measured ioi bandwidth in bytes per second
             features["ioi_bw"] = representation[f"{mode}_bw"][i_phase]/IOI_SAMPLING_PERIOD
             # exclude phases having 0 volume (artefact of the decomposition)
-            if features["volume"] > 0:
-                phases_features.append(features)
+            # TODO: should not, just put bw = 0, otherwise reconstruction will be impossible
+            #if features["volume"] > 0:
+            phases_features.append(features)
 
         if update_csv:
             # Enable updating csv dataset file
-            current_dir = dirname(dirname(dirname(abspath(__file__))))
-            csv_path = os.path.join(current_dir, "dataset_generation", "dataset_generation",
-                                     "performance_model", PERF_MODEL_DATASET_NAME)
             # dump the new features in the csv file
-            pd.DataFrame(phases_features).to_csv(csv_path, mode='a', header=not os.path.exists(csv_path), index=False)
+            pd.DataFrame(phases_features).to_csv(DATASET_SOURCE, mode='a', header=not os.path.exists(DATASET_SOURCE), index=False)
             # reset index
             #df = pd.read_csv(csv_path, index_col=False).reset_index(drop=True)
             #df.to_csv(csv_path, index=False)
@@ -784,7 +783,7 @@ class JobConnector:
         data = time_series.get_data_by_label()
         return data["timestamp"], data["bytesRead"], data["bytesWritten"]
 
-    def get_job_timeseries(self, object_id):
+    def get_job_timeseries(self, job_id):
         """Get volume, operationsCount and accessPattern arrays from job's data.
 
         Args:
@@ -815,6 +814,7 @@ class JobConnector:
                 }
             }
         """
+        object_id = self.slurm_id_2_obj_id(job_id)
         return {ts:
             TimeSeries(api_uri=self.api_uri, api_token=f"Bearer {self.api_token}", object_id=object_id, type_series=ts).get_data_by_label() for ts in ["volume", "operationsCount", "accessPattern"]}
 

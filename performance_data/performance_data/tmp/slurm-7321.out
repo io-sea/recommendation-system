@@ -1,0 +1,35 @@
+srun: dropcache-spank: Bull Drop Cache Library enabled upon user request
+/fsiof/mimounis/tmp
+Number of tasks = 1
+	seed = 1
+	nr_operations = 17
+	leads = 1
+	lead_advance = 359
+	lead_repeat = 1
+	sequential = 0
+	do_reads = 1
+	do_fsync = 1
+	align = 1
+	scatter = 0
+	min_op_size = 359
+	max_op_size = 359
+	file_size = 10737418240
+	random_leads = 0
+	share_file = 0
+	clean_file = 0
+Test runtime(s):
+	min = 0.022
+	avg = 0.022
+	max = 0.022
+Fsync duration(s):
+	min = 0.005
+	avg = 0.005
+	max = 0.005
+Total time(s):
+	min = 0.028
+	avg = 0.028
+	max = 0.028
+
+real	0m0.243s
+user	0m0.007s
+sys	0m0.005s

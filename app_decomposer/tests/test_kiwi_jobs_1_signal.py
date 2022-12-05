@@ -848,6 +848,5 @@ class TestJobDecomposerFeatures(unittest.TestCase):
                 print("Cannot process job with no data")
 
 
-
         print(pd.DataFrame(phases_features))
         # representation["events"], representation["read_volumes"], representation["read_bw"], representation["write_volumes"], representation["write_bw"]

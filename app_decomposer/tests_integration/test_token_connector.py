@@ -94,7 +94,7 @@ class TestKeycloakToken(unittest.TestCase):
                                       api_token=f"Bearer {token}",
                                       object_id='6352a0af7992958a4b807942',
                                       type_series=ts).get_data_by_label()
-
+        print(ts_data)
 
 
 

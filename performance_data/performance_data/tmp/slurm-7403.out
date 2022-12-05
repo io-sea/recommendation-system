@@ -1,0 +1,35 @@
+srun: dropcache-spank: Bull Drop Cache Library enabled upon user request
+/scratch/mimounis/tmp/kiwi3
+Number of tasks = 1
+	seed = 1
+	nr_operations = 10000
+	leads = 1
+	lead_advance = 10485760
+	lead_repeat = 1
+	sequential = 0
+	do_reads = 0
+	do_fsync = 1
+	align = 1
+	scatter = 0
+	min_op_size = 10485760
+	max_op_size = 10485760
+	file_size = 10737418240
+	random_leads = 0
+	share_file = 0
+	clean_file = 0
+Test runtime(s):
+	min = 1190.013
+	avg = 1190.013
+	max = 1190.013
+Fsync duration(s):
+	min = 35.748
+	avg = 35.748
+	max = 35.748
+Total time(s):
+	min = 1225.761
+	avg = 1225.761
+	max = 1225.761
+
+real	20m26.070s
+user	0m0.004s
+sys	0m0.007s

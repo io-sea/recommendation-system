@@ -799,11 +799,11 @@ class TestComplexDecomposer(unittest.TestCase):
             read_signal = np.array([0]*N)
             write_signal = np.array([0]*N)
             timeseries = {}
-        timeseries["volume"] = {}
-        timeseries["volume"]["timestamp"] = timestamps
-        timeseries["volume"]["bytesRead"] = read_signal
-        timeseries["volume"]["bytesWritten"] = write_signal
-        mock_get_timeseries.return_value = timeseries
+            timeseries["volume"] = {}
+            timeseries["volume"]["timestamp"] = timestamps
+            timeseries["volume"]["bytesRead"] = read_signal
+            timeseries["volume"]["bytesWritten"] = write_signal
+            mock_get_timeseries.return_value = timeseries
             mock_get_kc_token.return_value = 'token'
             # init the job decomposer
             cd = ComplexDecomposer()
