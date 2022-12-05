@@ -3,6 +3,11 @@ Copyright(C) 2022 Bull S. A. S. - All rights reserved
 Bull, Rue Jean Jaures, B.P.68, 78340, Les Clayes-sous-Bois, France
 This is not Free or Open Source software.
 Please contact Bull S. A. S. for details about its license.
+""" = """
+Copyright(C) 2022 Bull S. A. S. - All rights reserved
+Bull, Rue Jean Jaures, B.P.68, 78340, Les Clayes-sous-Bois, France
+This is not Free or Open Source software.
+Please contact Bull S. A. S. for details about its license.
 """
 import os
 from os.path import dirname
@@ -29,12 +34,13 @@ class PhaseData:
         self.ioi = ioi
         self.sample = sample
 
-    def run_phase_workload(self, phase, target, accelerator=False):
+    def run_phase_workload(self, phase, target, accelerator=False, lite=False):
         """Compute the average bandwidht on a storage tier with the phase features extracted from AppDecomposer
         Args:
             phase (dict): phase to be measured
             target (string): storage backend
             accelerator (string): using IO acclerator such as SBB/FIOL
+            lite (bool): whether or not use lite IO capping volume to 1GB and Ops to 100.
 
         Return:
             avg_bw (float):  average bandwidth
@@ -42,15 +48,19 @@ class PhaseData:
         #run fakeapp n times to get the avg bandwidth
         latencies = 0
         volumes = 0
+        phase_volume = phase["volume"]
+        if lite:
+            phase_volume = max(volume, 100*phase["IOsize"])
+
         for _ in range(self.sample):
             # TODO : should be able to control volume of workload to adjust accuracy.
-            workload = Workload(volume=phase["volume"], mode=phase["mode"],
+            workload = Workload(volume=phase_volume, mode=phase["mode"],
                                 io_pattern=phase["IOpattern"], io_size=phase["IOsize"],
                                 nodes=phase["nodes"], target_tier=target,
                                 accelerator=accelerator, ioi=self.ioi)
             (latency, bw) = workload.get_data()
             latencies += latency
-            volumes += phase["volume"]
+            volumes += phase_volume
         # print(f"n_samples = {self.sample}")
         avg_bw = (float)(volumes/latencies) if latencies else 0
         logger.info(f"Measured throughput on tier: {target} | use SBB: {accelerator} | result: {convert_size(avg_bw)}/s")
@@ -99,7 +109,7 @@ class DataTable:
             accelerator (string): using IO acclerator such as SBB/FIOL
             sample (int): number of sampling of the same phase
         """
-        self.filename = filename if filename else DATASET_SOURCE
+        self.filename = filename or DATASET_SOURCE
         self.targets = targets
         self.accelerator = accelerator
         self.ioi = ioi
