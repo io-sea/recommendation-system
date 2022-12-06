@@ -29,7 +29,7 @@ class PhaseData:
         self.ioi = ioi
         self.sample = sample
 
-    def run_phase_workload(self, phase, target, accelerator=False, lite=False):
+    def run_phase_workload(self, phase, target, accelerator=False, lite=True):
         """Compute the average bandwidht on a storage tier with the phase features extracted from AppDecomposer
         Args:
             phase (dict): phase to be measured
@@ -43,9 +43,7 @@ class PhaseData:
         #run fakeapp n times to get the avg bandwidth
         latencies = 0
         volumes = 0
-        phase_volume = phase["volume"]
-        if lite:
-            phase_volume = max(volume, 100*phase["IOsize"])
+        phase_volume = max(5e9, 100*phase["IOsize"]) if lite and phase["volume"] > 0 else phase["volume"]
 
         for _ in range(self.sample):
             # TODO : should be able to control volume of workload to adjust accuracy.
@@ -137,7 +135,7 @@ class DataTable:
             new_data = new_data.drop(tiers_names, axis=1)
             #print(new_data)
             phases = new_data.to_dict('records')
-            phases_perf = PhaseData(phases, self.targets, self.ioi)
+            phases_perf = PhaseData(phases, self.targets, self.ioi, sample=3)
             perf_df = phases_perf.get_phase_data(tiers_names)
             perf_df.index = new_data.index
             new_data = new_data.join(perf_df)
@@ -149,7 +147,7 @@ class DataTable:
         else:
             # transform rows in the dataframe to a list of phase features
             phases = self.perf_data.to_dict('records')
-            phases_perf = PhaseData(phases, self.targets, self.ioi)
+            phases_perf = PhaseData(phases, self.targets, self.ioi, sample=3)
             perf_df = phases_perf.get_phase_data(tiers_names)
             self.perf_data = self.perf_data.join(perf_df)
 
