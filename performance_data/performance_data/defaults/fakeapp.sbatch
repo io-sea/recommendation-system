@@ -8,5 +8,11 @@
 
 ############# ENABLE TO USE IOI ###############
 #export IOI_PROTECTED=1
+run_fakeapp ()
+{
+    #srun --exclusive --io-drop-cache=yes -N $NODES /home_nfs/phamtt/IO-SEA/iosea-wp3-recommandation-system/performance_data/performance_data/defaults/./run_fakeapp.sh $TARGET $LEAD $SIZE $SCATTER $OPS $MODE
+    srun --exclusive --io-drop-cache=yes -N $NODES /home_nfs/phamtt/IO-SEA/iosea-wp3-recommandation-system/performance_data/performance_data/defaults/./run_fakeapp.sh $TARGET $LEAD_R $SIZE_R $SCATTER_R $OPS_R -R
+    srun --exclusive --io-drop-cache=yes -N $NODES /home_nfs/phamtt/IO-SEA/iosea-wp3-recommandation-system/performance_data/performance_data/defaults/./run_fakeapp.sh $TARGET $LEAD_W $SIZE_W $SCATTER_W $OPS_W 
+}
 
-time(srun --exclusive --io-drop-cache=yes -N $NODES /home_nfs/mimounis/iosea-wp3-recommandation-system/performance_data/performance_data/defaults/./run_fakeapp.sh $TARGET $LEAD $SIZE $SCATTER $OPS $MODE)
+time (run_fakeapp)
