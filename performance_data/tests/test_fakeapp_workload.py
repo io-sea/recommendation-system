@@ -103,7 +103,7 @@ class TestBwRepeatability(unittest.TestCase):
                                          "performance_model_dataset.csv")
         self.dataset_stats = os.path.join(dirname(dirname(os.path.abspath(__file__))),
                                          "performance_data", "dataset",
-                                         "performance_model_dataset_stats_lfs_1G.csv")
+                                         "performance_model_dataset_stats_lfs_sbb_1G.csv")
         self.dataset = pd.read_csv(self.dataset_file)
         self.phases = self.dataset.to_dict('records')
         self.target = dict(lfs="/fsiof/mimounis/tmp")
@@ -132,8 +132,8 @@ class TestBwRepeatability(unittest.TestCase):
             phase_volume = max(1e9, 100*phase["IOsize"]) if lite and phase["volume"] > 0 else phase["volume"]
             workload = Workload(volume=phase_volume, mode=phase["mode"],
                                 io_pattern=phase["IOpattern"], io_size=phase["IOsize"],
-                                nodes=phase["nodes"], target_tier="lfs",
-                                accelerator=False, ioi=self.ioi)
+                                nodes=phase["nodes"], target_tier=self.target["lfs"],
+                                accelerator=True, ioi=self.ioi)
             phase_stat = phase
             phase_stat["wl_volume"] = convert_size(phase_volume)
 

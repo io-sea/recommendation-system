@@ -210,7 +210,7 @@ class FakeappWorkload:
         elapsed_time = 0
         if self.volume > 0:
             self.write_sbatch_file()
-            elapsed_time = self.run_sbatch_file(clean=True)
+            elapsed_time = self.run_sbatch_file(clean=False)
             if elapsed_time > 0:
                 bandwidth = self.volume / elapsed_time
 

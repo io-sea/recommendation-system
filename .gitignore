@@ -10,6 +10,7 @@ __pycache__/
 
 # Special folders and vscode
 job_decomposer/
+performance_data/performance_data/tmp/
 jobmodel
 .vscode/
 .VSCodeCounter/

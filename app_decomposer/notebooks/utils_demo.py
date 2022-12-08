@@ -33,7 +33,6 @@ def print_readable_values(dataset_path, columns_list):
     df = pd.read_csv(dataset_path, index_col=False)
     for column in columns_list:
         df[column] = list(map(lambda x: convert_size(x), df[column].to_numpy().flatten()))
-
     print(df)
 
 
