@@ -11,8 +11,8 @@
 run_fakeapp ()
 {
     #srun --exclusive --io-drop-cache=yes -N $NODES /home_nfs/phamtt/IO-SEA/iosea-wp3-recommandation-system/performance_data/performance_data/defaults/./run_fakeapp.sh $TARGET $LEAD $SIZE $SCATTER $OPS $MODE
-    srun --exclusive --io-drop-cache=yes -N $NODES /home_nfs/phamtt/IO-SEA/iosea-wp3-recommandation-system/performance_data/performance_data/defaults/./run_fakeapp.sh $TARGET $LEAD_R $SIZE_R $SCATTER_R $OPS_R -R
-    srun --exclusive --io-drop-cache=yes -N $NODES /home_nfs/phamtt/IO-SEA/iosea-wp3-recommandation-system/performance_data/performance_data/defaults/./run_fakeapp.sh $TARGET $LEAD_W $SIZE_W $SCATTER_W $OPS_W 
+    srun --exclusive --io-drop-cache=yes -N $NODES /home_nfs/phamtt/IO-SEA/iosea-wp3-recommandation-system/performance_data/performance_data/defaults/./run_fakeapp.sh $TARGET $LEAD_R $SIZE_R $SCATTER_R $OPS_R -R #& to run job in parallel
+    srun --exclusive --io-drop-cache=yes -N $NODES /home_nfs/phamtt/IO-SEA/iosea-wp3-recommandation-system/performance_data/performance_data/defaults/./run_fakeapp.sh $TARGET $LEAD_W $SIZE_W $SCATTER_W $OPS_W  #& to run job in parallel
 }
 
 time (run_fakeapp)

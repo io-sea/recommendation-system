@@ -31,9 +31,11 @@ class FakeappWorkload:
         self.target_tier = target_tier
         self.accelerator = accelerator
         self.ioi = ioi
-        self.phase["ops"] = int(self.phase["volume"] / self.phase["IOsize"]) if self.phase["IOsize"] else 0
+        self.phase["read_ops"] = int(self.phase["read_volume"] / self.phase["read_IOsize"]) if self.phase["read_IOsize"] else 0
+        self.phase["write_ops"] = int(self.phase["write_volume"] / self.phase["write_IOsize"]) if self.phase["write_IOsize"] else 0
         # init logging
-        logger.info(f'Volume: {convert_size(self.phase["volume"])} | IO pattern: {self.phase["IOpattern"]} | IO size: {self.phase["IOsize"]} | #IO: {self.phase["ops"]} ')
+        logger.info(f'Volume read: {convert_size(self.phase["read_volume"])} | IO pattern: {self.phase["read_IOpattern"]} | IO size: {self.phase["read_IOsize"]} | #IO: {self.phase["read_ops"]}')
+        logger.info(f'Volume write: {convert_size(self.phase["write_volume"])} | IO pattern: {self.phase["write_IOpattern"]} | IO size: {self.phase["write_IOsize"]} | #IO: {self.phase["write_ops"]}')
         logger.info(f'Nodes: {self.phase["nodes"]} | Storage tier: {self.target_tier} | IOI enabled: {self.ioi} | SBB Accelerated: {self.accelerator}')
 
 
@@ -114,26 +116,30 @@ class FakeappWorkload:
         self.current_dir = os.path.dirname(os.path.abspath(__file__))
         self.working_dir = os.path.join(self.current_dir, "tmp")
         self.sbatch_template = os.path.join(self.current_dir, "defaults", "fakeapp.sbatch")
-        lead = 3 if self.phase["IOpattern"] == "stride" else 1
-        scatter = 1000000 if self.phase["IOpattern"] == "rand" else 0
+
+        #compute lead and scatter for stride a and random pattern
+        lead_r = 3 if self.phase["read_IOpattern"] == "stride" else 1
+        lead_w = 3 if self.phase["write_IOpattern"] == "stride" else 1
+        scatter_r = 1000000 if self.phase["read_IOpattern"] == "rand" else 0
+        scatter_w = 1000000 if self.phase["write_IOpattern"] == "rand" else 0
 
         # read the content of the template file
         with open(self.sbatch_template, "r") as temp_file:
             template_file = temp_file.read()
 
-        for entry, value in {"$VOLUME": str(self.phase["volume"]),
-                             "$OPS": str(self.phase["ops"]),
-                             "$LEAD": str(lead),
-                             "$SIZE": str(self.phase["IOsize"]),
-                             "$SCATTER": str(scatter),
+        for entry, value in {"$OPS_R": str(self.phase["read_ops"]),
+                             "$OPS_W": str(self.phase["write_ops"]),
+                             "$LEAD_R": str(lead_r),
+                             "$LEAD_W": str(lead_w),
+                             "$SIZE_R": str(self.phase["read_IOsize"]),
+                             "$SIZE_W": str(self.phase["write_IOsize"]),
+                             "$SCATTER_R": str(scatter_r),
+                             "$SCATTER_W": str(scatter_w),
                              "$NODES": str(self.phase["nodes"]),
                              "$TARGET": self.target_tier}.items():
             template_file = template_file.replace(entry, value)
 
-        if self.phase["mode"] == "read":
-            template_file = template_file.replace("$MODE", "-R")
-        else:
-            template_file = template_file.replace("$MODE", "")
+        #set up accelerator
         if self.accelerator:
             template_file = template_file.replace("$ACC", "SBB")
 
@@ -195,11 +201,11 @@ class FakeappWorkload:
     def get_data(self):
         bandwidth = 0
         elapsed_time = 0
-        if self.phase["volume"] > 0:
+        if self.phase["read_volume"] + self.phase["write_volume"] > 0:
             self.write_sbatch_file()
             elapsed_time = self.run_sbatch_file(clean=False)
             if elapsed_time > 0:
-                bandwidth = self.phase["volume"] / elapsed_time
+                bandwidth = self.phase["read_volume"] + self.phase["write_volume"] / elapsed_time
 
         logger.info(f"Workload duration: {elapsed_time} | bandwidth: {convert_size(bandwidth)}/s")
         return elapsed_time, bandwidth
@@ -209,12 +215,17 @@ if __name__ == '__main__':
     lfs="/fsiof/phamtt/tmp"
     nfs="/scratch/phamtt/tmp"
     acc = "SBB" # currently support onyly SBB with the lfs target
-    phase0=dict(volume=100000000, mode="write", IOpattern="stride", IOsize=10000, nodes=1)
-    phase1=dict(volume=100000000, mode="write", IOpattern="rand", IOsize=10000, nodes=1)
-    phase2=dict(volume=100000000, mode="read", IOpattern="seq", IOsize=10000, nodes=1)
-    fa = FakeappWorkload(phase0, lfs)
-    print(fa.get_data())
+
+    #phase1=dict(volume=100000000, mode="write", IOpattern="rand", IOsize=10000, nodes=1)
+    #phase2=dict(volume=100000000, mode="read", IOpattern="seq", IOsize=10000, nodes=1)
+    phase0=dict(read_volume=100000000, read_IOpattern="stride", read_IOsize=10000, write_volume=0, write_IOpattern="uncl", write_IOsize=0, nodes=1)
+    phase0=dict(read_volume=100000000, read_IOpattern="stride", read_IOsize=10000, write_volume=500000000, write_IOpattern="rand", write_IOsize=10000, nodes=1)
+
+    fa = FakeappWorkload(phase0, nfs)
+    fa.get_data()
+    """"
     fa = FakeappWorkload(phase1, lfs)
     print(fa.get_data())
     fa = FakeappWorkload(phase2, lfs)
     print(fa.get_data())
+    """
