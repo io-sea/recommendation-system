@@ -15,7 +15,7 @@ from performance_data import DATASET_FILE
 from performance_data.fakeapp_workload import FakeappWorkload as Workload
 
 class PhaseData:
-    def __init__(self, phases, target, ioi=False, sample=1):
+    def __init__(self, phases, target, ioi=False, sample=1, lite=False):
         """Initializes the phases data with features extracted from AppDecomposer, runs the associated workload and return data.
         Args:
             phases (list): list of phases to be measured
@@ -23,13 +23,15 @@ class PhaseData:
             ioi (bool): enable/disable IOI, default = False
             accelerator (string): using IO accelerator such as SBB/FIOL
             sample (int): number of sampling of the same phase
+            lite (bool): if True, caps the volume to 1GB, else use the phase volume for bw measurement.
         """
         self.phases = phases
         self.target = target
         self.ioi = ioi
         self.sample = sample
+        self.lite = lite
 
-    def run_phase_workload(self, phase, target, accelerator=False, lite=True):
+    def run_phase_workload(self, phase, target, accelerator=False):
         """Compute the average bandwidht on a storage tier with the phase features extracted from AppDecomposer
         Args:
             phase (dict): phase to be measured
@@ -43,7 +45,7 @@ class PhaseData:
         #run fakeapp n times to get the avg bandwidth
         latencies = 0
         volumes = 0
-        phase_volume = max(5e9, 100*phase["IOsize"]) if lite and phase["volume"] > 0 else phase["volume"]
+        phase_volume = max(1e9, 100*phase["IOsize"]) if self.lite and phase["volume"] > 0 else phase["volume"]
 
         for _ in range(self.sample):
             # TODO : should be able to control volume of workload to adjust accuracy.
@@ -93,7 +95,7 @@ class PhaseData:
         return perf_df
 
 class DataTable:
-    def __init__(self, targets,  accelerator=False, ioi=False, sample=1, filename=None):
+    def __init__(self, targets,  accelerator=False, ioi=False, sample=1, filename=None, lite=False):
         """Initializes the data model with the phase features extracted from AppDecomposer
         Args:
             filename (string): file name of dataset in csv, default to DATASET_FILE
@@ -101,12 +103,14 @@ class DataTable:
             ioi (bool): enable/disable IOI, default = False
             accelerator (string): using IO acclerator such as SBB/FIOL
             sample (int): number of sampling of the same phase
+            lite (bool): if True, caps the volume to 1GB, else use the phase volume for bw measurement.
         """
         self.filename = filename or DATASET_SOURCE
         self.targets = targets
         self.accelerator = accelerator
         self.ioi = ioi
         self.sample = sample
+        self.lite = lite
 
     def get_tiers_from_targets(self):
         """Given target directory and accelerator attribute, determine the list of tiers that will be used as columns to fill the dataset."""
@@ -135,7 +139,7 @@ class DataTable:
             new_data = new_data.drop(tiers_names, axis=1)
             #print(new_data)
             phases = new_data.to_dict('records')
-            phases_perf = PhaseData(phases, self.targets, self.ioi, sample=3)
+            phases_perf = PhaseData(phases, self.targets, self.ioi, sample=5, lite=self.lite)
             perf_df = phases_perf.get_phase_data(tiers_names)
             perf_df.index = new_data.index
             new_data = new_data.join(perf_df)
@@ -147,7 +151,7 @@ class DataTable:
         else:
             # transform rows in the dataframe to a list of phase features
             phases = self.perf_data.to_dict('records')
-            phases_perf = PhaseData(phases, self.targets, self.ioi, sample=3)
+            phases_perf = PhaseData(phases, self.targets, self.ioi, sample=5, lite=self.lite)
             perf_df = phases_perf.get_phase_data(tiers_names)
             self.perf_data = self.perf_data.join(perf_df)
 
