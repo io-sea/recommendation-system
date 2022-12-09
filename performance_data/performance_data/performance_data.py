@@ -133,25 +133,23 @@ class DataTable:
             #keep the part already has performance
             old_data = self.perf_data[~self.perf_data.isna().any(axis=1)]
             #print(old_data)
-
             #update the performance phases which has NAN value in the bandwidth
             new_data = self.perf_data[self.perf_data.isna().any(axis=1)]
             new_data = new_data.drop(tiers_names, axis=1)
             #print(new_data)
             phases = new_data.to_dict('records')
-            phases_perf = PhaseData(phases, self.targets, self.ioi, sample=5, lite=self.lite)
+            phases_perf = PhaseData(phases, self.targets, self.ioi, sample=self.sample, lite=self.lite)
             perf_df = phases_perf.get_phase_data(tiers_names)
             perf_df.index = new_data.index
             new_data = new_data.join(perf_df)
             #print(new_data)
-
             self.perf_data = pd.concat([old_data, new_data], axis=0)
             #self.perf_data.reset_index(drop=True)
 
         else:
             # transform rows in the dataframe to a list of phase features
             phases = self.perf_data.to_dict('records')
-            phases_perf = PhaseData(phases, self.targets, self.ioi, sample=5, lite=self.lite)
+            phases_perf = PhaseData(phases, self.targets, self.ioi, sample=self.sample, lite=self.lite)
             perf_df = phases_perf.get_phase_data(tiers_names)
             self.perf_data = self.perf_data.join(perf_df)
 

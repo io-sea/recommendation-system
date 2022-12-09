@@ -127,8 +127,11 @@ class FakeappWorkload:
         self.current_dir = os.path.dirname(os.path.abspath(__file__))
         self.working_dir = os.path.join(self.current_dir, "tmp")
         self.sbatch_template = os.path.join(self.current_dir, "defaults", "fakeapp.sbatch")
+
         lead = 3 if self.io_pattern == "stride" else 1
-        scatter = 1000000 if self.io_pattern == "rand" else 0
+        # this scatter value is smaller than the random value
+        # use 1GB in scatter
+        scatter = 1e9 if self.io_pattern == "rand" else 0
 
         # read the content of the template file
         with open(self.sbatch_template, "r") as temp_file:

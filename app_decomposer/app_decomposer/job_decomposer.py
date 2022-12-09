@@ -660,13 +660,14 @@ class ComplexDecomposer:
         return output
 
     @staticmethod
-    def get_phases_features(representation, job_id=None, update_csv=False):
+    def get_phases_features(representation, job_id=None, update_csv=False, dataset=None):
         """Builds from job representation an phases features dict to feed a performance model.
         Excludes phases having 0 volume (artefact of the decomposition).
 
         Args:
             representation (dict): job representation containing various information about the job.
             update
+            dataset (path to csv file): if note False dump the representation in form of a csv file.
         Example:
             representation = {
                 'events': [0, 1],
@@ -721,6 +722,12 @@ class ComplexDecomposer:
             # reset index
             #df = pd.read_csv(csv_path, index_col=False).reset_index(drop=True)
             #df.to_csv(csv_path, index=False)
+            logger.info(f"Updating csv file with features: {DATASET_SOURCE}")
+
+        if dataset:
+            pd.DataFrame(phases_features).to_csv(dataset, index=False)
+            logger.info(f"Dumping phases features in: {dataset}")
+
 
 
         return phases_features
