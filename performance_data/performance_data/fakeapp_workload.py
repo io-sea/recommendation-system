@@ -36,7 +36,7 @@ class FakeappWorkload:
         # init logging
         logger.info(f'Volume read: {convert_size(self.phase["read_volume"])} | IO pattern: {self.phase["read_IOpattern"]} | IO size: {self.phase["read_IOsize"]} | #IO: {self.phase["read_ops"]}')
         logger.info(f'Volume write: {convert_size(self.phase["write_volume"])} | IO pattern: {self.phase["write_IOpattern"]} | IO size: {self.phase["write_IOsize"]} | #IO: {self.phase["write_ops"]}')
-        logger.info(f'Nodes: {self.phase["nodes"]} | Storage tier: {self.target_tier} | IOI enabled: {self.ioi} | SBB Accelerated: {self.accelerator}')
+        logger.info(f'Nodes: {self.phase["nodes"]} | Storage tier: {self.target_tier} | SBB Accelerated: {self.accelerator} | IOI enabled: {self.ioi}')
 
 
     @staticmethod
@@ -203,7 +203,7 @@ class FakeappWorkload:
         elapsed_time = 0
         if self.phase["read_volume"] + self.phase["write_volume"] > 0:
             self.write_sbatch_file()
-            elapsed_time = self.run_sbatch_file(clean=False)
+            elapsed_time = self.run_sbatch_file(self.ioi, clean=False)
             if elapsed_time > 0:
                 bandwidth = self.phase["read_volume"] + self.phase["write_volume"] / elapsed_time
 
@@ -221,7 +221,7 @@ if __name__ == '__main__':
     phase0=dict(read_volume=100000000, read_IOpattern="stride", read_IOsize=10000, write_volume=0, write_IOpattern="uncl", write_IOsize=0, nodes=1)
     phase0=dict(read_volume=100000000, read_IOpattern="stride", read_IOsize=10000, write_volume=500000000, write_IOpattern="rand", write_IOsize=10000, nodes=1)
 
-    fa = FakeappWorkload(phase0, nfs)
+    fa = FakeappWorkload(phase0, lfs, False, True)
     fa.get_data()
     """"
     fa = FakeappWorkload(phase1, lfs)
