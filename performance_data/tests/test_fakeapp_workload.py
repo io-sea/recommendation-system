@@ -14,8 +14,8 @@ class TestFakeappWorkload(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures, if any."""
-        self.phase = dict(read_volume=1e8, read_IOpattern="stride", read_IOsize=1e4, 
-                          write_volume=1e8, write_IOpattern="uncl", write_IOsize=1e4, 
+        self.phase = dict(read_volume=1e8, read_io_pattern="stride", read_io_size=1e4, 
+                          write_volume=1e8, write_io_pattern="uncl", write_io_size=1e4, 
                           nodes=1)
         self.target_tier="/fsiof/phamtt/tmp"
 
