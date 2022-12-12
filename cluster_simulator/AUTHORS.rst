@@ -5,7 +5,7 @@ Credits
 Development
 -----------
 
-* Salim Mimouni <salim.mimouni@atos.net>
+* Data Management <'bds-datamanagement@atos.net'>
 
 Contributors
 ------------

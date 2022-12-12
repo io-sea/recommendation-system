@@ -47,8 +47,8 @@ master_doc = 'index'
 
 # General information about the project.
 project = 'performance_data'
-copyright = "2022, Salim Mimouni"
-author = "Salim Mimouni"
+copyright = "2022, Data Management"
+author = "Data Management"
 
 # The version info for the project you're documenting, acts as replacement
 # for |version| and |release|, also used in various other places throughout
@@ -129,7 +129,7 @@ latex_elements = {
 latex_documents = [
     (master_doc, 'performance_data.tex',
      'performance_data Documentation',
-     'Salim Mimouni', 'manual'),
+     'Data Management', 'manual'),
 ]
 
 

@@ -120,8 +120,8 @@ class FakeappWorkload:
         #compute lead and scatter for stride a and random pattern
         lead_r = 3 if self.phase["read_io_pattern"] == "stride" else 1
         lead_w = 3 if self.phase["write_io_pattern"] == "stride" else 1
-        scatter_r = 1000000 if self.phase["read_io_pattern"] == "rand" else 0
-        scatter_w = 1000000 if self.phase["write_io_pattern"] == "rand" else 0
+        scatter_r = 1e9 if self.phase["read_io_pattern"] == "rand" else 0
+        scatter_w = 1e9 if self.phase["write_io_pattern"] == "rand" else 0
 
         # read the content of the template file
         with open(self.sbatch_template, "r") as temp_file:
@@ -216,16 +216,9 @@ if __name__ == '__main__':
     nfs="/scratch/phamtt/tmp"
     acc = "SBB" # currently support onyly SBB with the lfs target
 
-    #phase1=dict(volume=100000000, mode="write", IOpattern="rand", IOsize=10000, nodes=1)
-    #phase2=dict(volume=100000000, mode="read", IOpattern="seq", IOsize=10000, nodes=1)
     phase0=dict(read_volume=100000000, read_io_pattern="stride", read_io_size=10000, write_volume=0, write_io_pattern="uncl", write_io_size=0, nodes=1)
     phase0=dict(read_volume=100000000, read_io_pattern="stride", read_io_size=10000, write_volume=500000000, write_io_pattern="rand", write_io_size=10000, nodes=1)
 
     fa = FakeappWorkload(phase0, lfs, False, True)
     fa.get_data()
-    """"
-    fa = FakeappWorkload(phase1, lfs)
-    print(fa.get_data())
-    fa = FakeappWorkload(phase2, lfs)
-    print(fa.get_data())
-    """
+

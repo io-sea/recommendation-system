@@ -28,6 +28,14 @@ from cluster_simulator.analytics import get_execution_signal, get_execution_sign
 from app_decomposer import DEFAULT_CONFIGURATION, API_DICT_TS, IOI_SAMPLING_PERIOD, DATASET_SOURCE
 
 
+def print_readable_values(dataset_path, columns_list):
+    """Allows to see csv dataframe with values converted in readable manner."""
+    df = pd.read_csv(dataset_path, index_col=False)
+    for column in columns_list:
+        df[column] = list(map(lambda x: convert_size(x), df[column].to_numpy().flatten()))
+    print(df)
+
+
 def list_jobs(dataset_path):
     """list all present jobs in the dataset folder and return list of files, ids and dataset names.
 
@@ -174,9 +182,10 @@ def simulate_app(compute, reads, writes, io_bw, app_name=""):
                         'write': {'seq': 515, 'rand': 505}}
     ssd_bandwidth = {'read':  {'seq': 1, 'rand': 1},
                         'write': {'seq': 1, 'rand': 1}}
-
-    ssd_tier = Tier(env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
-    nvram_tier = Tier(env, 'NVRAM', bandwidth=nvram_bandwidth, capacity=80e9)
+    # TODO : tier 0 capacity will be used as max
+    # capacity should be sum(writes+reads)
+    ssd_tier = Tier(env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e12)
+    nvram_tier = Tier(env, 'NVRAM', bandwidth=nvram_bandwidth, capacity=80e12)
 
     # Run the simulation with computed app representation
     data = simpy.Store(env)

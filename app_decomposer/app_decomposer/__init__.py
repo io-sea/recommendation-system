@@ -6,8 +6,7 @@ REPO_DIR = os.path.dirname(os.path.dirname(CURRENT_DIR))
 DEFAULT_CONFIGURATION = os.path.join(CURRENT_DIR, "defaults", "config.yaml")
 KIWI_CONFIG = os.path.join(os.path.dirname(CURRENT_DIR), "tests_integration", "test_data", "test_kiwi_config.yaml")
 
-__author__ = """Salim Mimouni"""
-__email__ = 'salim.mimouni@atos.net'
+__email__ = 'bds-datamanagement@atos.net'
 __version__ = '0.1.0'
 
 

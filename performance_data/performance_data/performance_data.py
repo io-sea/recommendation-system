@@ -15,7 +15,7 @@ from performance_data import DATASET_FILE
 from performance_data.fakeapp_workload import FakeappWorkload as Workload
 
 class PhaseData:
-    def __init__(self, phases, target, ioi=False, sample=1):
+    def __init__(self, phases, target, ioi=False, sample=1, lite=False):
         """Initializes the phases data with features extracted from AppDecomposer, runs the associated workload and return data.
         Args:
             phases (list): list of phases to be measured
@@ -23,11 +23,13 @@ class PhaseData:
             ioi (bool): enable/disable IOI, default = False
             accelerator (string): using IO accelerator such as SBB/FIOL
             sample (int): number of sampling of the same phase
+            lite (bool): if True, caps the volume to 1GB, else use the phase volume for bw measurement.
         """
         self.phases = phases
         self.target = target
         self.ioi = ioi
         self.sample = sample
+        self.lite = lite
 
     def run_phase_workload(self, phase, target, accelerator=False):
         """Compute the average bandwidht on a storage tier with the phase features extracted from AppDecomposer
@@ -35,6 +37,7 @@ class PhaseData:
             phase (dict): phase to be measured
             target (string): storage backend
             accelerator (string): using IO acclerator such as SBB/FIOL
+            lite (bool): whether or not use lite IO capping volume to 1GB and Ops to 100.
 
         Return:
             avg_bw (float):  average bandwidth
@@ -42,13 +45,15 @@ class PhaseData:
         #run fakeapp n times to get the avg bandwidth
         latencies = 0
         volumes = 0
+        phase_volume = max(1e9, 100*phase["IOsize"]) if self.lite and phase["volume"] > 0 else phase["volume"]
+
         for _ in range(self.sample):
             # TODO : should be able to control volume of workload to adjust accuracy.
             workload = Workload(phase=phase, target_tier=target,
                                 accelerator=accelerator, ioi=self.ioi)
             (latency, bw) = workload.get_data()
             latencies += latency
-            volumes += phase["volume"]
+            volumes += phase_volume
         # print(f"n_samples = {self.sample}")
         avg_bw = (float)(volumes/latencies) if latencies else 0
         logger.info(f"Measured throughput on tier: {target} | use SBB: {accelerator} | result: {convert_size(avg_bw)}/s")
@@ -88,7 +93,7 @@ class PhaseData:
         return perf_df
 
 class DataTable:
-    def __init__(self, targets,  accelerator=False, ioi=False, sample=1, filename=None):
+    def __init__(self, targets,  accelerator=False, ioi=False, sample=1, filename=None, lite=False):
         """Initializes the data model with the phase features extracted from AppDecomposer
         Args:
             filename (string): file name of dataset in csv, default to DATASET_FILE
@@ -96,12 +101,14 @@ class DataTable:
             ioi (bool): enable/disable IOI, default = False
             accelerator (string): using IO acclerator such as SBB/FIOL
             sample (int): number of sampling of the same phase
+            lite (bool): if True, caps the volume to 1GB, else use the phase volume for bw measurement.
         """
-        self.filename = filename if filename else DATASET_SOURCE
+        self.filename = filename or DATASET_SOURCE
         self.targets = targets
         self.accelerator = accelerator
         self.ioi = ioi
         self.sample = sample
+        self.lite = lite
 
     def get_tiers_from_targets(self):
         """Given target directory and accelerator attribute, determine the list of tiers that will be used as columns to fill the dataset."""
@@ -124,25 +131,23 @@ class DataTable:
             #keep the part already has performance
             old_data = self.perf_data[~self.perf_data.isna().any(axis=1)]
             #print(old_data)
-
             #update the performance phases which has NAN value in the bandwidth
             new_data = self.perf_data[self.perf_data.isna().any(axis=1)]
             new_data = new_data.drop(tiers_names, axis=1)
             #print(new_data)
             phases = new_data.to_dict('records')
-            phases_perf = PhaseData(phases, self.targets, self.ioi)
+            phases_perf = PhaseData(phases, self.targets, self.ioi, sample=self.sample, lite=self.lite)
             perf_df = phases_perf.get_phase_data(tiers_names)
             perf_df.index = new_data.index
             new_data = new_data.join(perf_df)
             #print(new_data)
-
             self.perf_data = pd.concat([old_data, new_data], axis=0)
             #self.perf_data.reset_index(drop=True)
 
         else:
             # transform rows in the dataframe to a list of phase features
             phases = self.perf_data.to_dict('records')
-            phases_perf = PhaseData(phases, self.targets, self.ioi)
+            phases_perf = PhaseData(phases, self.targets, self.ioi, sample=self.sample, lite=self.lite)
             perf_df = phases_perf.get_phase_data(tiers_names)
             self.perf_data = self.perf_data.join(perf_df)
 
