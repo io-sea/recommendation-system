@@ -53,7 +53,7 @@ Bull, Rue Jean Jaures, B.P.68, 78340, Les Clayes-sous-Bois, France
 This is not Free or Open Source software.
 Please contact Bull S. A. S. for details about its license.
 """
-author = 'Salim Mimouni, Bull SAS'
+author = 'Data Management, Bull SAS'
 
 # The version info for the project you're documenting, acts as replacement
 # for |version| and |release|, also used in various other places throughout
@@ -134,7 +134,7 @@ latex_elements = {
 latex_documents = [
     (master_doc, 'cluster_simulator.tex',
      'Cluster Simulator Documentation',
-     'Salim Mimouni', 'manual'),
+     'Data Management', 'manual'),
 ]
 
 

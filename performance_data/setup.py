@@ -15,8 +15,8 @@ requirements = ['Click>=7.0', ]
 test_requirements = [ ]
 
 setup(
-    author="Salim Mimouni",
-    author_email='salim.mimouni@atos.net',
+    author="Data Management",
+    author_email='bds-datamanagement@atos.net',
     python_requires='>=3.6',
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',

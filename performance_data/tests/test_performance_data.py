@@ -20,8 +20,12 @@ class TestPhaseData(unittest.TestCase):
                                     "performance_model_dataset_test.csv")
         self.dataset_target = os.path.join(current_dir, "performance_data", "dataset",
                                     "performance_model_dataset_test_complete.csv")
-        self.dataset_target_2 = os.path.join(current_dir, "performance_data", "dataset",
-                                    "performance_model_dataset_complete_2.csv")
+        self.dataset_target_4 = os.path.join(current_dir, "performance_data", "dataset",
+                                    "performance_model_dataset_complete_4.csv")
+        self.dataset_target_5 = os.path.join(current_dir, "performance_data", "dataset",
+                                    "performance_model_dataset_complete_5.csv")
+        self.dataset_target_6 = os.path.join(current_dir, "performance_data", "dataset",
+                                    "performance_model_dataset_complete_6.csv")
         self.dataset = pd.read_csv(self.dataset_file)
         self.phases = self.dataset.to_dict('records')
         self.targets = dict(lfs="/fsiof/mimounis/tmp", nfs="/scratch/mimounis/tmp")
@@ -49,11 +53,19 @@ class TestPhaseData(unittest.TestCase):
 
     def test_get_performance_table_default(self):
         """tests if get_tiers extract relevant list of tiers."""
-        targets = dict(lfs="/fsiof/mimounis/tmp", nfs="/scratch/mimounis/tmp")
-        #targets = dict(lfs="/fsiof/mimounis/tmp")
-        dt = DataTable(targets, accelerator=False)
-        perf_data = dt.get_performance_table(filename=self.dataset_target_2)
+        #targets = dict(lfs="/fsiof/mimounis/tmp", nfs="/scratch/mimounis/tmp")
+        targets = dict(lfs="/fsiof/mimounis/tmp")
+        dt = DataTable(targets, accelerator=True)
+        perf_data = dt.get_performance_table(filename=self.dataset_target_6)
         print(perf_data)
+
+    # def test_get_performance_table_with_capping(self):
+    #     """tests if get_tiers extract relevant list of tiers."""
+    #     #targets = dict(lfs="/fsiof/mimounis/tmp", nfs="/scratch/mimounis/tmp")
+    #     targets = dict(lfs="/fsiof/mimounis/tmp")
+    #     dt = DataTable(targets, accelerator=True, lite=True)
+    #     perf_data = dt.get_performance_table(filename=self.dataset_target_5)
+    #     print(perf_data)
 
     # def test_(self):
     #     """Test something."""
