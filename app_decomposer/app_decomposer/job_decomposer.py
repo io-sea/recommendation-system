@@ -707,22 +707,36 @@ class ComplexDecomposer:
         phases_features = []
         for i_phase, _ in enumerate(representation["events"]):
             features = {}
-            # register job_id if known
+            # register job_id if known as well as nodes count
             features["job_id"] = job_id if job_id else "unknown"
-            # take the dominant operation for mixed phases (simple model)
-            mode = "read" if representation["read_volumes"][i_phase] >= representation["write_volumes"][i_phase] else "write"
-            features["volume"] = representation[f"{mode}_volumes"][i_phase]
-            features["mode"] = mode
-            features["IOpattern"] = representation[f"{mode}_pattern"][i_phase].lower()
-            # replace "str" pattern by "stride" for compatibility with the model
-            features["IOpattern"] = "stride" if features["IOpattern"]=="str" else features["IOpattern"]
-            features["IOsize"] = representation[f"{mode}_volumes"][i_phase] / representation[f"{mode}_operations"][i_phase] if representation[f"{mode}_operations"][i_phase] else 0
             features["nodes"] = representation["node_count"]
-            # express measured ioi bandwidth in bytes per second
-            features["ioi_bw"] = representation[f"{mode}_bw"][i_phase]/IOI_SAMPLING_PERIOD
-            # exclude phases having 0 volume (artefact of the decomposition)
-            # TODO: should not, just put bw = 0, otherwise reconstruction will be impossible
-            #if features["volume"] > 0:
+            # job_id | read_volume | write_volume | read_io_pattern | write_io_pattern | read_io_size | write_io_size | nodes | ioi_bw
+            features["read_volume"] = representation["read_volumes"][i_phase]
+            features["write_volume"] = representation["write_volumes"][i_phase]
+            features["read_io_pattern"] = representation["read_pattern"][i_phase].lower()
+            features["write_io_pattern"] = representation["write_pattern"][i_phase].lower()
+
+            features["read_io_size"] = representation["read_volumes"][i_phase] / representation["read_operations"][i_phase] if representation["read_operations"][i_phase] else 0
+
+            features["write_io_size"] = representation["write_volumes"][i_phase] / representation["write_operations"][i_phase] if representation["write_operations"][i_phase] else 0
+
+            sum_of_latencies = representation["read_volumes"][i_phase]/representation["read_bw"][i_phase] if representation["read_bw"][i_phase] else 0 + representation["write_volumes"][i_phase]/representation["write_bw"][i_phase] if representation["write_bw"][i_phase] else 0
+            sum_of_volumes = representation["read_volume"][i_phase] + representation["write_volume"][i_phase]
+            features["ioi_bw"] = (sum_of_volumes / sum_of_latencies) / IOI_SAMPLING_PERIOD if sum_of_latencies else 0
+
+
+            # mode = "read" if representation["read_volumes"][i_phase] >= representation["write_volumes"][i_phase] else "write"
+            # features["volume"] = representation[f"{mode}_volumes"][i_phase]
+            # features["mode"] = mode
+            # features["IOpattern"] = representation[f"{mode}_pattern"][i_phase].lower()
+            # # replace "str" pattern by "stride" for compatibility with the model
+            # features["IOpattern"] = "stride" if features["IOpattern"]=="str" else features["IOpattern"]
+            # features["IOsize"] = representation[f"{mode}_volumes"][i_phase] / representation[f"{mode}_operations"][i_phase] if representation[f"{mode}_operations"][i_phase] else 0
+            # features["nodes"] = representation["node_count"]
+            # # express measured ioi bandwidth in bytes per second
+            # features["ioi_bw"] = representation[f"{mode}_bw"][i_phase]/IOI_SAMPLING_PERIOD
+            # # exclude phases having 0 volume (artefact of the decomposition)
+            # #if features["volume"] > 0:
             phases_features.append(features)
 
         if update_csv:
