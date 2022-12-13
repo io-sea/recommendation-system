@@ -159,8 +159,8 @@ class TestExecutionSignal2(unittest.TestCase):
         print(f"read_bw = {output[app.name]['read_bw']}")
         print(f"write_bw = {output[app.name]['write_bw']}")
         # self.assertListEqual(time, [0, 10, 20, 70])
-        # self.assertListEqual(read_bw, [0, 210, 0, 0])
-        # self.assertListEqual(write_bw, [0, 0, 0, 100])
+        # self.assertListEqual(output["read_bw"], [0, 210, 0, 0])
+        # self.assertListEqual(output["write_bw"], [0, 0, 0, 100])
         # np.testing.assert_array_almost_equal(np.array(read_bw), np.array([0, 210, 0, 0, 0]))
         fig1 = plt.figure("Throughput data")
         plt.plot(output[app.name]['time'], output[app.name]['read_bw'], marker='o',
@@ -200,8 +200,8 @@ class TestExecutionSignal2(unittest.TestCase):
         print(f"read_bw = {output[app.name]['read_bw']}")
         print(f"write_bw = {output[app.name]['write_bw']}")
         # self.assertListEqual(time, [0, 10, 20, 70])
-        # self.assertListEqual(read_bw, [0, 210, 0, 0])
-        # self.assertListEqual(write_bw, [0, 0, 0, 100])
+        # self.assertListEqual(output["read_bw"], [0, 210, 0, 0])
+        # self.assertListEqual(output["write_bw"], [0, 0, 0, 100])
         # np.testing.assert_array_almost_equal(np.array(read_bw), np.array([0, 210, 0, 0, 0]))
         fig1 = plt.figure("Throughput data")
         plt.plot(output[app.name]['time'], output[app.name]['read_bw'], marker='o',
@@ -261,8 +261,8 @@ class TestExecutionSignal(unittest.TestCase):
         read_bw = output[app.name]["read_bw"]
         write_bw = output[app.name]["write_bw"]
         self.assertListEqual(time, [0, 10, 20, 70])
-        self.assertListEqual(read_bw, [0, 210, 0, 0])
-        self.assertListEqual(write_bw, [0, 0, 0, 100])
+        self.assertListEqual(output["read_bw"], [0, 210, 0, 0])
+        self.assertListEqual(output["write_bw"], [0, 0, 0, 100])
         # np.testing.assert_array_almost_equal(np.array(read_bw), np.array([0, 210, 0, 0, 0]))
 
 
@@ -292,8 +292,8 @@ class TestExecutionSignal(unittest.TestCase):
         read_bw = output[app.name]["read_bw"]
         write_bw = output[app.name]["write_bw"]
         self.assertListEqual(time, [0, 5, 15, 40])
-        self.assertListEqual(read_bw, [0, 420, 0, 0])
-        self.assertListEqual(write_bw, [0, 0, 0, 200])
+        self.assertListEqual(output["read_bw"], [0, 420, 0, 0])
+        self.assertListEqual(output["write_bw"], [0, 0, 0, 200])
 
     def test_app_execution_real_app_read_write(self):
         """Test the output formatting of data once app is executed."""
@@ -324,8 +324,8 @@ class TestExecutionSignal(unittest.TestCase):
         print(read_bw)
         print(write_bw)
         # self.assertListEqual(time, [0, 10, 20, 70])
-        # self.assertListEqual(read_bw, [0, 210, 0, 0, 0])
-        # self.assertListEqual(write_bw, [0, 0, 0, 0, 100])
+        # self.assertListEqual(output["read_bw"], [0, 210, 0, 0, 0])
+        # self.assertListEqual(output["write_bw"], [0, 0, 0, 0, 100])
 
 
 

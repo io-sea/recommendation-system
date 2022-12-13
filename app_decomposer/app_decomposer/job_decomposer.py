@@ -534,6 +534,7 @@ class ComplexDecomposer:
         write_pattern = []
         write_operations = []
 
+        output = {}
         phase_duration = 0
         excess_phase_durations = 0
 
@@ -544,7 +545,17 @@ class ComplexDecomposer:
                 norm_end_points = [len(self.norm_signal)]
             else:
                 # pure compute phase
-                return [0, len(self.norm_signal)-1], [0, 0], [0, 0], [0, 0], [0, 0]
+                output["node_count"] = self.node_count
+                output["events"] = [0, len(self.norm_signal)-1]
+                output["read_volumes"] = [0, 0]
+                output["read_bw"] = [0, 0]
+                output["write_volumes"] = [0, 0]
+                output["write_bw"] = [0, 0]
+                output["read_pattern"] = ["Uncl", "Uncl"]
+                output["write_pattern"] = ["Uncl", "Uncl"]
+                output["read_operations"] = [0, 0]
+                output["write_operations"] = [0, 0]
+                return output
 
         # adding 0 as default start point if not already existing
         if norm_start_points[0] > 0:
@@ -645,7 +656,6 @@ class ComplexDecomposer:
 
 
         # formatting output dict
-        output = {}
         output["node_count"] = self.node_count
         output["events"] = compute
         output["read_volumes"] = read_volumes or [0]

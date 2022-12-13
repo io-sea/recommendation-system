@@ -28,22 +28,15 @@ from shutil import rmtree
 import numpy as np
 import os
 
-
 from tests_integration.iopa_integration_config import get_backend_hostname, get_backend_ipv4_port
-
 from tests_integration.iopa_integration_config import get_keycloak_token
-
 from tests_integration.iopa_integration_config import get_mongo_hostname, get_mongo_ipv4_port
-
 from tests_integration.iopa_integration_config import MongoDB, __MONGO_DUMP__
 
-
 from app_decomposer.job_decomposer import JobConnector
-
 from app_decomposer.config_parser import Configuration
 
 from app_decomposer.api_connector import request_delegator, check_http_code, TimeSeries, MetaData, MinMax, MinMaxDuration, JobSearch
-
 
 CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
 
@@ -51,21 +44,16 @@ TEST_CONFIG = os.path.join(CURRENT_DIR, "test_data", "test_config.yaml")
 
 
 class TestFunctions(unittest.TestCase):
-
     """TestCase to test the functions of the module."""
-
-
+    @unittest.skip("no integration platform yet")
     def setUp(self):
-
         """Prepare the test suite."""
-
         self.keycloakToken = get_keycloak_token()
-
         # To disable useless warnings with requests module on https without certificate
-
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
+    @unittest.skip("no integration platform yet")
     def test_request_delegator(self):
 
         """Test the 'request_delegator' standard behavior."""
@@ -88,6 +76,7 @@ class TestFunctions(unittest.TestCase):
         self.assertEqual(conf['dbName'], "cmdb_database")
 
 
+    @unittest.skip("no integration platform yet")
     def test_request_delegator_exception(self):
 
         """Test the 'request_delegator' error management."""
@@ -117,6 +106,7 @@ class TestFunctions(unittest.TestCase):
                               headers={'Authorization': f"Bearer {self.keycloakToken}"})
 
 
+    @unittest.skip("no integration platform yet")
     def test_check_http_code_200(self):
 
         """Test 'check_http_code' method returns the True if the tested request succeeds."""
@@ -132,6 +122,7 @@ class TestFunctions(unittest.TestCase):
         self.assertTrue(code)
 
 
+    @unittest.skip("no integration platform yet")
     def test_check_http_code_403(self):
 
         """Test 'check_http_code' method returns the True if the tested request succeeds."""
@@ -143,6 +134,7 @@ class TestFunctions(unittest.TestCase):
         self.assertTrue(code)
 
 
+    @unittest.skip("no integration platform yet")
     def test_check_http_code_ko(self):
 
         """Test 'check_http_code' method returns the False if the tested request does not
@@ -161,6 +153,7 @@ class TestTimeSeries(unittest.TestCase):
     """Test Time Series functionalities."""
 
 
+    @unittest.skip("no integration platform yet")
     def setUp(self):
 
         self.keycloakToken = get_keycloak_token()
@@ -173,6 +166,7 @@ class TestTimeSeries(unittest.TestCase):
         self.api_uri = f"https://{get_backend_hostname()}:{get_backend_ipv4_port()}"
 
 
+    @unittest.skip("no integration platform yet")
     def test_get_data_by_label_no_label(self):
 
         """Test get_data_by_label method without specifying a set of labels.
@@ -213,6 +207,7 @@ class TestMetadata(unittest.TestCase):
     """Test Metadata class functionalities"""
 
 
+    @unittest.skip("no integration platform yet")
     def setUp(self):
 
         self.keycloakToken = get_keycloak_token()
@@ -225,6 +220,7 @@ class TestMetadata(unittest.TestCase):
         self.api_uri = f"https://{get_backend_hostname()}:{get_backend_ipv4_port()}"
 
 
+    @unittest.skip("no integration platform yet")
     def test_get_all_metadata(self):
 
         """Test get_all_metadata method returns the good information for the selected job.
@@ -268,6 +264,7 @@ class TestMinMax(unittest.TestCase):
     """Test MinMax class functionalities"""
 
 
+    @unittest.skip("no integration platform yet")
     def setUp(self):
 
         self.keycloakToken = get_keycloak_token()
@@ -277,6 +274,7 @@ class TestMinMax(unittest.TestCase):
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
+    @unittest.skip("no integration platform yet")
     def test_get_data(self):
 
         """Test get_data method returns the good information of the min and max timeseries values
@@ -320,6 +318,7 @@ class TestMinMaxDuration(unittest.TestCase):
     """Test MinMaxDuration class functionalities"""
 
 
+    @unittest.skip("no integration platform yet")
     def setUp(self):
 
         self.keycloakToken = get_keycloak_token()
@@ -329,6 +328,7 @@ class TestMinMaxDuration(unittest.TestCase):
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
+    @unittest.skip("no integration platform yet")
     def test_get_data(self):
 
         """Test get_data method returns the the min and max duration values on all jobs in database.
@@ -351,6 +351,7 @@ class TestJobSearch(unittest.TestCase):
     """ Test JobSearch functionalities """
 
 
+    @unittest.skip("no integration platform yet")
     def setUp(self):
 
         self.keycloakToken = get_keycloak_token()
@@ -368,6 +369,7 @@ class TestJobSearch(unittest.TestCase):
                           port=get_mongo_ipv4_port()).database
 
 
+    @unittest.skip("no integration platform yet")
     def test_job_search_no_parameters(self):
 
         """ Test job search without parameters returns all the jobs from database. """
@@ -388,6 +390,7 @@ class TestJobSearch(unittest.TestCase):
         self.assertEqual(total_filter, db_count)
 
 
+    @unittest.skip("no integration platform yet")
     def test_job_search_filter(self):
 
         """ Test job search with filter returns only the requested jobs. """
@@ -441,6 +444,7 @@ class TestGetJobData(unittest.TestCase):
     """Test functionnalities needed for job decomposer to get job data."""
 
 
+    @unittest.skip("no integration platform yet")
     def setUp(self):
 
         self.keycloakToken = get_keycloak_token()
@@ -454,6 +458,7 @@ class TestGetJobData(unittest.TestCase):
 
 
 
+    @unittest.skip("no integration platform yet")
     def test_job_search_by_jobid(self):
 
         """Test job retrieval when having only the job id that is visible in IOI."""
@@ -468,6 +473,7 @@ class TestGetJobData(unittest.TestCase):
         self.assertEqual(job_search.job_objids_list[0], "5d7bd95e0187784d71fbbf38")
 
 
+    @unittest.skip("no integration platform yet")
     def test_get_nodecount_metadata(self):
 
         """Test nodecount method returns the good information for the selected job.
@@ -490,6 +496,7 @@ class TestGetJobData(unittest.TestCase):
         self.assertEqual(data["nodeCount"], 1)
 
 
+    @unittest.skip("no integration platform yet")
     def test_get_job_timeseries(self):
 
         """Test method that gathers all needed data from slurm jobid necessary for the app decomposer."""
@@ -538,6 +545,7 @@ class TestJobConnector(unittest.TestCase):
     """Test functionnalities of JobConnector class that is needed for job decomposer to get job data."""
 
 
+    @unittest.skip("no integration platform yet")
     def setUp(self):
 
         self.keycloakToken = get_keycloak_token()
@@ -553,6 +561,7 @@ class TestJobConnector(unittest.TestCase):
         self.job_connector = JobConnector(self.api_uri, self.keycloakToken)
 
 
+    @unittest.skip("no integration platform yet")
     def test_slurm_id_2_obj_id(self):
 
         """Test that method provides object id given a slurm jobid."""
@@ -562,6 +571,7 @@ class TestJobConnector(unittest.TestCase):
                          "5e78805e3a185aaa08517c1b")
 
 
+    @unittest.skip("no integration platform yet")
     def test_get_node_count(self):
 
         """Test that method provides the correct node count field value."""
@@ -571,6 +581,7 @@ class TestJobConnector(unittest.TestCase):
                          1)
 
 
+    @unittest.skip("no integration platform yet")
     def test_get_job_data(self):
 
         """Test if the output of the get_job_data method is correct from db."""
@@ -590,6 +601,7 @@ class TestJobConnector(unittest.TestCase):
         np.testing.assert_array_equal(write, c)
 
 
+    @unittest.skip("no integration platform yet")
     def test_get_data(self):
 
         """Test of get_data method from JobConnector gives the expected results."""
@@ -614,6 +626,7 @@ class TestJobkeyCloakConnector(unittest.TestCase):
     """Test functionnalities of JobConnector class using keycloak_connector that is needed for job decomposer to get job data."""
 
 
+    @unittest.skip("no integration platform yet")
     def setUp(self):
 
         #self.keycloakToken = get_keycloak_token()
@@ -634,6 +647,7 @@ class TestJobkeyCloakConnector(unittest.TestCase):
         self.job_connector = JobConnector(self.api_uri, keycloak_token)
 
 
+    @unittest.skip("no integration platform yet")
     def test_slurm_id_2_obj_id(self):
 
         """Test that method provides object id given a slurm jobid."""
@@ -643,6 +657,7 @@ class TestJobkeyCloakConnector(unittest.TestCase):
                          "5e78805e3a185aaa08517c1b")
 
 
+    @unittest.skip("no integration platform yet")
     def test_get_node_count(self):
 
         """Test that method provides the correct node count field value."""
@@ -652,6 +667,7 @@ class TestJobkeyCloakConnector(unittest.TestCase):
                          1)
 
 
+    @unittest.skip("no integration platform yet")
     def test_get_job_data(self):
 
         """Test if the output of the get_job_data method is correct from db."""
@@ -671,6 +687,7 @@ class TestJobkeyCloakConnector(unittest.TestCase):
         np.testing.assert_array_equal(write, c)
 
 
+    @unittest.skip("no integration platform yet")
     def test_get_data(self):
 
         """Test of get_data method from JobConnector gives the expected results."""

@@ -2,7 +2,7 @@
   "python.testing.unittestArgs": [
     "-v",
     "-s",
-    "./performance_data",
+    "./app_decomposer",
     "-p",
     "test_*.py"
   ],
