@@ -217,7 +217,7 @@ if __name__ == '__main__':
     acc = "SBB" # currently support onyly SBB with the lfs target
 
     phase0=dict(read_volume=100000000, read_io_pattern="stride", read_io_size=10000, write_volume=0, write_io_pattern="uncl", write_io_size=0, nodes=1)
-    phase0=dict(read_volume=100000000, read_io_pattern="stride", read_io_size=10000, write_volume=500000000, write_io_pattern="rand", write_io_size=10000, nodes=1)
+    phase0=dict(read_volume=5e9, read_io_pattern="stride", read_io_size=10000, write_volume=5e9, write_io_pattern="rand", write_io_size=10000, nodes=1)
 
     fa = FakeappWorkload(phase0, lfs, False, True)
     fa.get_data()
