@@ -817,8 +817,6 @@ class TestJobDecomposerFeatures(unittest.TestCase):
         # representation["events"], representation["read_volumes"], representation["read_bw"], representation["write_volumes"], representation["write_bw"]
 
 
-
-
     @patch.object(ComplexDecomposer, 'get_job_node_count')
     @patch.object(Configuration, 'get_kc_token')
     @patch.object(ComplexDecomposer, 'get_job_timeseries')
