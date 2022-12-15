@@ -1,0 +1,4 @@
+job_id,read_volume,write_volume,read_io_pattern,write_io_pattern,read_io_size,write_io_size,nodes,ioi_bw
+6873,1642,16,seq, uncl,328.4,50,1,164.2
+6873,9623833592,0,rand,uncl,1048005,0,1,1924766718.4
+6873,0,9623833592,uncl,stride,0,1048005,1,1924766718.4
