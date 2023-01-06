@@ -49,9 +49,7 @@ class PhaseData:
 
         for _ in range(self.sample):
             # TODO : should be able to control volume of workload to adjust accuracy.
-            workload = Workload(volume=phase_volume, mode=phase["mode"],
-                                io_pattern=phase["IOpattern"], io_size=phase["IOsize"],
-                                nodes=phase["nodes"], target_tier=target,
+            workload = Workload(phase=phase, target_tier=target,
                                 accelerator=accelerator, ioi=self.ioi)
             (latency, bw) = workload.get_data()
             latencies += latency
@@ -159,7 +157,7 @@ class DataTable:
         return self.perf_data
 
 if __name__ == '__main__':
-    target = dict(lfs="/fsiof/mimounis/tmp", nfs="/scratch/mimounis/tmp")
+    target = dict(lfs="/fsiof/phamtt/tmp", nfs="/scratch/phamtt/tmp")
     acc = "SBB" # currently support onyly SBB with the lfs target
     filename = "/home_nfs/mimounis/iosea-wp3-recommandation-system/performance_model/dataset/performance_model_dataset.csv"
     # filename = "/home_nfs/mimounis/iosea-wp3-recommandation-system/performance_model/dataset/performance_model_dataset_small_partial.csv"
@@ -167,8 +165,6 @@ if __name__ == '__main__':
     pm = DataTable(filename, target, acc)
     df = pm.get_perfomance_table()
     print(df)
-    filename_pm = "/home_nfs/mimounis/iosea-wp3-recommandation-system/performance_model/dataset/performance_model_dataset_completed_2.csv"
-    export_to_csv(df, filename_pm)
 
 """
     phase0=dict(volume=100000000, mode="write", IOpattern="stride", IOsize=10000, nodes=1)

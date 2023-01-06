@@ -20,17 +20,19 @@ class TestFakeappWorkload(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures, if any."""
+        self.phase = dict(read_volume=1e8, read_io_pattern="stride", read_io_size=1e4, 
+                          write_volume=1e8, write_io_pattern="uncl", write_io_size=1e4, 
+                          nodes=1)
+        self.target_tier="/fsiof/phamtt/tmp"
 
     def tearDown(self):
         """Tear down test fixtures, if any."""
 
     def test_update_sbatch_template(self):
         """Test something."""
-        workload = FakeappWorkload(volume=1e6, mode="read",
-                                   io_pattern="rand",
-                                   io_size=4e3,
-                                   nodes=1,
-                                   target_tier="/fsiof/mimounis/tmp",
+        
+        workload = FakeappWorkload(self.phase,
+                                   self.target_tier, 
                                    accelerator=False,
                                    ioi=False)
         workload.write_sbatch_file()
@@ -39,11 +41,8 @@ class TestFakeappWorkload(unittest.TestCase):
 
     def test_cmdline_sbatch_no_clean(self):
         """Test something."""
-        workload = FakeappWorkload(volume=0.5e9, mode="read",
-                                   io_pattern="rand",
-                                   io_size=4e3,
-                                   nodes=1,
-                                   target_tier="/fsiof/mimounis/tmp",
+        workload = FakeappWorkload(self.phase,
+                                   self.target_tier, 
                                    accelerator=False,
                                    ioi=False)
         workload.write_sbatch_file()
@@ -53,11 +52,8 @@ class TestFakeappWorkload(unittest.TestCase):
 
     def test_cmdline_sbatch_with_clean(self):
         """Test something."""
-        workload = FakeappWorkload(volume=0.5e9, mode="read",
-                                   io_pattern="rand",
-                                   io_size=4e3,
-                                   nodes=1,
-                                   target_tier="/fsiof/mimounis/tmp",
+        workload = FakeappWorkload(self.phase,
+                                   self.target_tier, 
                                    accelerator=False,
                                    ioi=False)
         workload.write_sbatch_file()
@@ -67,11 +63,8 @@ class TestFakeappWorkload(unittest.TestCase):
 
     def test_cmdline_sbatch_with_SBB(self):
         """Test something."""
-        workload = FakeappWorkload(volume=0.5e9, mode="read",
-                                   io_pattern="rand",
-                                   io_size=4e3,
-                                   nodes=1,
-                                   target_tier="/fsiof/mimounis/tmp",
+        workload = FakeappWorkload(self.phase,
+                                   self.target_tier, 
                                    accelerator=True,
                                    ioi=False)
         workload.write_sbatch_file()
@@ -80,12 +73,9 @@ class TestFakeappWorkload(unittest.TestCase):
         self.assertFalse(os.path.isfile(workload.sbatch_file))
 
     def test_get_data(self):
-        """Launch a basic ."""
-        workload = FakeappWorkload(volume=0.5e9, mode="read",
-                                   io_pattern="rand",
-                                   io_size=4e3,
-                                   nodes=1,
-                                   target_tier="/fsiof/mimounis/tmp",
+        """Test something."""
+        workload = FakeappWorkload(self.phase,
+                                   self.target_tier, 
                                    accelerator=True,
                                    ioi=False)
 
@@ -100,13 +90,13 @@ class TestBwRepeatability(unittest.TestCase):
         """Set up test fixtures, if any."""
         self.dataset_file = os.path.join(dirname(dirname(os.path.abspath(__file__))),
                                          "performance_data", "dataset",
-                                         "performance_model_dataset.csv")
+                                         "performance_model_dataset_RW.csv")
         self.dataset_stats = os.path.join(dirname(dirname(os.path.abspath(__file__))),
                                          "performance_data", "dataset",
-                                         "performance_model_dataset_stats_lfs_sbb_1G.csv")
+                                         "performance_model_dataset_stats_lfs_sbb_rw.csv")
         self.dataset = pd.read_csv(self.dataset_file)
         self.phases = self.dataset.to_dict('records')
-        self.target = dict(lfs="/fsiof/mimounis/tmp")
+        self.target = dict(lfs="/fsiof/phamtt/tmp")
         self.ioi = False
 
     def tearDown(self):
@@ -129,13 +119,13 @@ class TestBwRepeatability(unittest.TestCase):
             latencies = 0
             volumes = 0
 
-            phase_volume = max(1e9, 100*phase["IOsize"]) if lite and phase["volume"] > 0 else phase["volume"]
-            workload = Workload(volume=phase_volume, mode=phase["mode"],
-                                io_pattern=phase["IOpattern"], io_size=phase["IOsize"],
-                                nodes=phase["nodes"], target_tier=self.target["lfs"],
+            io_phase=dict(read_volume=phase["read_volume"], read_io_pattern=phase["read_io_pattern"], read_io_size=phase["read_io_size"], 
+                          write_volume=phase["write_volume"], write_io_pattern=phase["write_io_pattern"], write_io_size=phase["write_io_size"], 
+                          nodes=phase["nodes"])
+            workload = Workload(io_phase, target_tier=self.target["lfs"],
                                 accelerator=True, ioi=self.ioi)
             phase_stat = phase
-            phase_stat["wl_volume"] = convert_size(phase_volume)
+            phase_stat["wl_volume"] = convert_size(phase["read_volume"]+phase["write_volume"])
 
             for _ in range(10):
                 elapsed_time, bw = workload.get_data()

@@ -17,37 +17,26 @@ dir_path = os.path.dirname(path)
 
 class FakeappWorkload:
     """Class to create and manage an IO Workload using fakeapp binary. """
-    def __init__(self, volume=1e9, mode="read", io_pattern="rand", io_size=4e3, nodes=1,
-                 target_tier="lfs", accelerator=False, ioi=False):
+    def __init__(self, phase, target_tier="lfs", accelerator=False, ioi=False):
         """
         Generate an sbatch file using the features extracted for each phase
         by AppDecomposer
         Args:
-            volume (int): volume of io that will be generated
-            mode (string): read/write
-            io_pattern (string): Seq/Stride/Random
-            io_size (string): size of IO
-            nodes (int): number of nodes, default = 1
+            phase (dict): IO features extracted by appdecomposer
             target (string): storage backend file (nfs or lfs)
             accelerator (bool): IO accelerator to be used (sbb), default=False
             ioi (bool): enable/disable the instrumentation using IOI, default = False
-
-        Returns:
-            elapsed_time (float): elapsed time
-            bandwidth (float): IO bandwidth
         """
-        self.volume = volume
-        self.mode = mode
-        self.io_pattern = io_pattern
-        self.io_size = io_size
-        self.nodes = nodes
+        self.phase = phase
         self.target_tier = target_tier
         self.accelerator = accelerator
         self.ioi = ioi
-        self.ios = int(self.volume / self.io_size) if self.io_size else 0
+        self.phase["read_ops"] = int(self.phase["read_volume"] / self.phase["read_io_size"]) if self.phase["read_io_size"] else 0
+        self.phase["write_ops"] = int(self.phase["write_volume"] / self.phase["write_io_size"]) if self.phase["write_io_size"] else 0
         # init logging
-        logger.info(f"Volume: {convert_size(self.volume)} | Mode: {self.mode} | IO pattern: {self.io_pattern} | IO size: {convert_size(self.io_size)} | Nodes: {self.nodes} | Storage tier: {self.target_tier}")
-        logger.info(f"#IO: {self.ios} | IOI enabled: {self.ioi} | SBB Accelerated: {self.accelerator}")
+        logger.info(f'Volume read: {convert_size(self.phase["read_volume"])} | IO pattern: {self.phase["read_io_pattern"]} | IO size: {self.phase["read_io_size"]} | #IO: {self.phase["read_ops"]}')
+        logger.info(f'Volume write: {convert_size(self.phase["write_volume"])} | IO pattern: {self.phase["write_io_pattern"]} | IO size: {self.phase["write_io_size"]} | #IO: {self.phase["write_ops"]}')
+        logger.info(f'Nodes: {self.phase["nodes"]} | Storage tier: {self.target_tier} | SBB Accelerated: {self.accelerator} | IOI enabled: {self.ioi}')
 
 
     @staticmethod
@@ -128,28 +117,29 @@ class FakeappWorkload:
         self.working_dir = os.path.join(self.current_dir, "tmp")
         self.sbatch_template = os.path.join(self.current_dir, "defaults", "fakeapp.sbatch")
 
-        lead = 3 if self.io_pattern == "stride" else 1
-        # this scatter value is smaller than the random value
-        # use 1GB in scatter
-        scatter = 1e9 if self.io_pattern == "rand" else 0
+        #compute lead and scatter for stride a and random pattern
+        lead_r = 3 if self.phase["read_io_pattern"] == "stride" else 1
+        lead_w = 3 if self.phase["write_io_pattern"] == "stride" else 1
+        scatter_r = 1e9 if self.phase["read_io_pattern"] == "rand" else 0
+        scatter_w = 1e9 if self.phase["write_io_pattern"] == "rand" else 0
 
         # read the content of the template file
         with open(self.sbatch_template, "r") as temp_file:
             template_file = temp_file.read()
 
-        for entry, value in {"$VOLUME": str(self.volume),
-                             "$OPS": str(self.ios),
-                             "$LEAD": str(lead),
-                             "$SIZE": str(self.io_size),
-                             "$SCATTER": str(scatter),
-                             "$NODES": str(self.nodes),
+        for entry, value in {"$OPS_R": str(self.phase["read_ops"]),
+                             "$OPS_W": str(self.phase["write_ops"]),
+                             "$LEAD_R": str(lead_r),
+                             "$LEAD_W": str(lead_w),
+                             "$SIZE_R": str(self.phase["read_io_size"]),
+                             "$SIZE_W": str(self.phase["write_io_size"]),
+                             "$SCATTER_R": str(scatter_r),
+                             "$SCATTER_W": str(scatter_w),
+                             "$NODES": str(self.phase["nodes"]),
                              "$TARGET": self.target_tier}.items():
             template_file = template_file.replace(entry, value)
 
-        if self.mode == "read":
-            template_file = template_file.replace("$MODE", "-R")
-        else:
-            template_file = template_file.replace("$MODE", "")
+        #set up accelerator
         if self.accelerator:
             template_file = template_file.replace("$ACC", "SBB")
 
@@ -211,24 +201,24 @@ class FakeappWorkload:
     def get_data(self):
         bandwidth = 0
         elapsed_time = 0
-        if self.volume > 0:
+        if self.phase["read_volume"] + self.phase["write_volume"] > 0:
             self.write_sbatch_file()
-            elapsed_time = self.run_sbatch_file(clean=False)
+            elapsed_time = self.run_sbatch_file(self.ioi, clean=False)
             if elapsed_time > 0:
-                bandwidth = self.volume / elapsed_time
+                bandwidth = self.phase["read_volume"] + self.phase["write_volume"] / elapsed_time
 
         logger.info(f"Workload duration: {elapsed_time} | bandwidth: {convert_size(bandwidth)}/s")
         return elapsed_time, bandwidth
 
 
+if __name__ == '__main__':
+    lfs="/fsiof/phamtt/tmp"
+    nfs="/scratch/phamtt/tmp"
+    acc = "SBB" # currently support onyly SBB with the lfs target
 
+    phase0=dict(read_volume=100000000, read_io_pattern="stride", read_io_size=10000, write_volume=0, write_io_pattern="uncl", write_io_size=0, nodes=1)
+    phase0=dict(read_volume=5e9, read_io_pattern="stride", read_io_size=10000, write_volume=5e9, write_io_pattern="rand", write_io_size=10000, nodes=1)
 
-
-
-
-
-
-
-
-
+    fa = FakeappWorkload(phase0, lfs, False, True)
+    fa.get_data()
 
