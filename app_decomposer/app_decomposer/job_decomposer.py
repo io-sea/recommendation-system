@@ -534,6 +534,7 @@ class ComplexDecomposer:
         write_pattern = []
         write_operations = []
 
+        output = {}
         phase_duration = 0
         excess_phase_durations = 0
 
@@ -544,7 +545,17 @@ class ComplexDecomposer:
                 norm_end_points = [len(self.norm_signal)]
             else:
                 # pure compute phase
-                return [0, len(self.norm_signal)-1], [0, 0], [0, 0], [0, 0], [0, 0]
+                output["node_count"] = self.node_count
+                output["events"] = [0, len(self.norm_signal)-1]
+                output["read_volumes"] = [0, 0]
+                output["read_bw"] = [0, 0]
+                output["write_volumes"] = [0, 0]
+                output["write_bw"] = [0, 0]
+                output["read_pattern"] = ["Uncl", "Uncl"]
+                output["write_pattern"] = ["Uncl", "Uncl"]
+                output["read_operations"] = [0, 0]
+                output["write_operations"] = [0, 0]
+                return output
 
         # adding 0 as default start point if not already existing
         if norm_start_points[0] > 0:
@@ -645,7 +656,6 @@ class ComplexDecomposer:
 
 
         # formatting output dict
-        output = {}
         output["node_count"] = self.node_count
         output["events"] = compute
         output["read_volumes"] = read_volumes or [0]
@@ -697,22 +707,30 @@ class ComplexDecomposer:
         phases_features = []
         for i_phase, _ in enumerate(representation["events"]):
             features = {}
-            # register job_id if known
+            # register job_id if known as well as nodes count
             features["job_id"] = job_id if job_id else "unknown"
-            # take the dominant operation for mixed phases (simple model)
-            mode = "read" if representation["read_volumes"][i_phase] >= representation["write_volumes"][i_phase] else "write"
-            features["volume"] = representation[f"{mode}_volumes"][i_phase]
-            features["mode"] = mode
-            features["IOpattern"] = representation[f"{mode}_pattern"][i_phase].lower()
-            # replace "str" pattern by "stride" for compatibility with the model
-            features["IOpattern"] = "stride" if features["IOpattern"]=="str" else features["IOpattern"]
-            features["IOsize"] = representation[f"{mode}_volumes"][i_phase] / representation[f"{mode}_operations"][i_phase] if representation[f"{mode}_operations"][i_phase] else 0
             features["nodes"] = representation["node_count"]
-            # express measured ioi bandwidth in bytes per second
-            features["ioi_bw"] = representation[f"{mode}_bw"][i_phase]/IOI_SAMPLING_PERIOD
-            # exclude phases having 0 volume (artefact of the decomposition)
-            # TODO: should not, just put bw = 0, otherwise reconstruction will be impossible
-            #if features["volume"] > 0:
+            # job_id | read_volume | write_volume | read_io_pattern | write_io_pattern | read_io_size | write_io_size | nodes | ioi_bw
+            features["read_volume"] = representation["read_volumes"][i_phase]
+            features["write_volume"] = representation["write_volumes"][i_phase]
+            features["read_io_pattern"] = representation["read_pattern"][i_phase].lower()
+            features["write_io_pattern"] = representation["write_pattern"][i_phase].lower()
+
+            features["read_io_size"] = representation["read_volumes"][i_phase] / representation["read_operations"][i_phase] if representation["read_operations"][i_phase] else 0
+
+            features["write_io_size"] = representation["write_volumes"][i_phase] / representation["write_operations"][i_phase] if representation["write_operations"][i_phase] else 0
+
+            # NOTE: this is an approximation were read_extent and write_extent are lost
+            # phase duration is common to read and write ops within the same phase
+            # volume_phase = volume_read + volume_write = read_bw*phase_duration + write_bw*phase_duration
+
+            read_latency = representation["read_volumes"][i_phase]/representation["read_bw"][i_phase] if representation["read_bw"][i_phase] else 0
+            write_latency =  representation["write_volumes"][i_phase]/representation["write_bw"][i_phase] if representation["write_bw"][i_phase] else 0
+            sum_of_latencies = read_latency + write_latency
+            sum_of_volumes = representation["read_volumes"][i_phase] + representation["write_volumes"][i_phase]
+            # features["ioi_bw"] = (sum_of_volumes / sum_of_latencies) / IOI_SAMPLING_PERIOD if sum_of_latencies else 0
+            features["ioi_bw"] = (representation["read_bw"][i_phase] +  representation["write_bw"][i_phase]) / IOI_SAMPLING_PERIOD
+
             phases_features.append(features)
 
         if update_csv:
@@ -727,8 +745,6 @@ class ComplexDecomposer:
         if dataset:
             pd.DataFrame(phases_features).to_csv(dataset, index=False)
             logger.info(f"Dumping phases features in: {dataset}")
-
-
 
         return phases_features
 

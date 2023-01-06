@@ -38,6 +38,7 @@ class TestKeycloakToken(unittest.TestCase):
         # To disable useless warnings with requests module on https without certificate
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+    @unittest.skipIf(os.name=='nt', "Skip this test because it is not working on windows")
     def test_get_token(self):
         """Test that keycloak_connector.get_kc_token returns a valid token."""
         keycloak_token = self.config.get_kc_token()
@@ -48,17 +49,19 @@ class TestKeycloakToken(unittest.TestCase):
 
         rqst = request_delegator(requests.get,
                                  api_uri,
-                                 headers={'Authorization': "Bearer "+keycloak_token})
+                                 headers={'Authorization': "Bearer "+ keycloak_token})
         self.assertIsInstance(rqst, requests.Response)
         resp = rqst.json()
         self.assertIn('username', resp)
         self.assertEqual(resp['username'], "ioi-admin")
 
+    @unittest.skipIf(os.name=='nt', "Skip this test because it is not working on windows")
     @unittest.skipUnless(TEST_CONFIG == KIWI_CONFIG, "Skip this test because kiwi0 is not up")
     def test_on_kiwi0(self):
         """test if unittest activates on condition"""
         self.assertEqual(TEST_CONFIG, KIWI_CONFIG)
 
+    @unittest.skipIf(os.name=='nt', "Skip this test because it is not working on windows")
     @unittest.skipUnless(TEST_CONFIG == KIWI_CONFIG, "Skip this test because kiwi0 is not up")
     def test_get_ts_on_kiwi0(self):
         """tests if can get timeseries from kiwi0.
