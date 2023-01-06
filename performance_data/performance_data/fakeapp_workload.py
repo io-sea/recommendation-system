@@ -201,11 +201,12 @@ class FakeappWorkload:
     def get_data(self):
         bandwidth = 0
         elapsed_time = 0
-        if self.phase["read_volume"] + self.phase["write_volume"] > 0:
+        total_volume = self.phase["read_volume"] + self.phase["write_volume"]
+        if  total_volume > 0:
             self.write_sbatch_file()
             elapsed_time = self.run_sbatch_file(self.ioi, clean=False)
             if elapsed_time > 0:
-                bandwidth = self.phase["read_volume"] + self.phase["write_volume"] / elapsed_time
+                bandwidth = total_volume / elapsed_time
 
         logger.info(f"Workload duration: {elapsed_time} | bandwidth: {convert_size(bandwidth)}/s")
         return elapsed_time, bandwidth

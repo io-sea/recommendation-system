@@ -16,6 +16,8 @@ jobmodel
 .VSCodeCounter/
 bbo/
 
+# Temp MS Office files
+~$*
 # Distribution / packaging
 .Python
 build/
