@@ -7,7 +7,7 @@ import sys
 
 from cluster_simulator.cluster import Cluster, Tier, EphemeralTier, bandwidth_share_model, compute_share_model
 from cluster_simulator.utils import convert_size, get_tier, BandwidthResource
-from cluster_simulator.phase import DelayPhase, ComputePhase, IOPhase
+from cluster_simulator.phase import DelayPhase, ComputePhase, IOPhase, MixIOPhase
 from cluster_simulator.analytics import display_run
 
 
@@ -445,6 +445,39 @@ class TestDataMovement(unittest.TestCase):
         self.env.run()
         self.assertEqual(self.hdd_tier.capacity.level, 20e9)
         self.assertEqual(self.ssd_tier.capacity.level, 20e9)
+
+class TestMixedPhase(unittest.TestCase):
+    """Test phases that do mixed (readwrite) IOs."""
+    def setUp(self):
+        self.env = simpy.Environment()
+        self.data = simpy.Store(self.env)
+        nvram_bandwidth = {'read':  {'seq': 780, 'rand': 760},
+                           'write': {'seq': 515, 'rand': 505}}
+        ssd_bandwidth = {'read':  {'seq': 210, 'rand': 190},
+                         'write': {'seq': 100, 'rand': 100}}
+
+        self.ssd_tier = Tier(self.env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
+        self.nvram_tier = Tier(self.env, 'NVRAM', bandwidth=nvram_bandwidth, capacity=80e9)
+        # registering cluster
+        self.cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
+
+    def test_init_mixed_io_phase(self):
+        """Tests that MixedPhase is initialized correctly."""
+        mixed_io_phase = MixIOPhase(data=self.data)
+        print(mixed_io_phase)
+
+    def test_update_tier_mix_io_phase(self):
+        """Tests that update_tier method updates the tier correctly."""
+        mixed_io_phase = MixIOPhase(read_volume=0, data=self.data)
+        mixed_io_phase.update_tier(self.ssd_tier, 10e9)
+        self.assertEqual(self.ssd_tier.capacity.level, 10e9)
+
+    def test_update_tier_mix_io_phase_read(self):
+        """Tests that update_tier method updates the tier correctly."""
+        mixed_io_phase = MixIOPhase(read_volume=10e9, write_volume=0, data=self.data)
+        mixed_io_phase.update_tier(self.ssd_tier, 5e9)
+        self.assertEqual(self.ssd_tier.capacity.level, 15e9)
+
 
 
 class TestPhaseEphemeralTier(unittest.TestCase):

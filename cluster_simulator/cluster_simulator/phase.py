@@ -157,9 +157,8 @@ class IOPhase:
         appname: a user specified application name the phase belongs to.
         bw : in MB/s the observed throughput for this IO to reproduce the observed results.
     """
-    #
+    # list of IOPhase instances that are in running state so it is possible to update IOs following a change in bandwidth consumption
     current_ios = []
-
     def __init__(self, cores=1, operation='read', volume=1e9, pattern=1,
                  data=None, appname=None, bw=None):
         """Inits an instance of I/O phase."""
@@ -174,6 +173,7 @@ class IOPhase:
         self.data = data or None
         self.appname = appname or ''
 
+        # Bytes to MB conversion
         # case where bandwidth is given for a reproducing a simulation
         self.bw = bw*1e6 if bw else bw
         # logger.info(self.__str__())
@@ -550,6 +550,7 @@ class IOPhase:
         return True
 
     def run(self, env, cluster, placement, use_bb=False, delay=0):
+        """Allows to run an I/O operation."""
         self.env = env
         if delay:
             yield self.env.timeout(delay)
@@ -580,3 +581,92 @@ class IOPhase:
         else:
             ret = yield self.env.process(self.run_step(self.env, cluster, tier))
         return ret
+
+
+class MixIOPhase():
+    """Class that allows to run a mix of I/O operations."""
+    def __init__(self, cores=1, read_volume=1e9, write_volume=1e9, read_pattern=1, write_pattern=1,
+                 data=None, appname=None, read_bw=None, write_bw=None):
+        """Initialize the MixIO class."""
+        self.cores = cores
+        self.operation = "readwrite"
+        self.read_volume = read_volume
+        self.write_volume = write_volume
+        self.read_pattern = read_pattern
+        self.write_pattern = write_pattern
+        self.read_bw = read_bw
+        self.data = data or None
+        self.appname = appname or ''
+
+        # initialize the read and write phases
+        self.read_io = IOPhase(cores=cores, operation='read', volume=read_volume, pattern=read_pattern, data=self.data, appname=self.appname, bw=read_bw)
+        self.write_io = IOPhase(cores=cores, operation='write', volume=write_volume, pattern=write_pattern, data=self.data, appname=self.appname, bw=write_bw)
+
+    def __str__(self):
+        """Print in a human readable way a description of the mixed I/O Phase.
+
+        Returns:
+            string: description of I/O properties.
+        """
+        read_io_pattern = f"{self.read_pattern*100}% sequential | {(1-self.read_pattern)*100} % random"
+        write_io_pattern = f"{self.write_pattern*100}% sequential | {(1-self.write_pattern)*100} % random"
+        description = "-------------------\n"
+        description += (f"{self.operation.capitalize()} I/O Phase of read volume {convert_size(self.read_volume)} with read pattern: {read_io_pattern} and write volume {convert_size(self.write_volume)} write pattern: {write_io_pattern}\n")
+        return description
+
+    def register_step(self, t_start, step_duration, available_bandwidth, cluster, tier,
+                      initial_levels=None, source_tier=None, eviction=None):
+        """Registering a processing step in the data store with some logging.
+
+        Args:
+            t_start (float): timestamp of the start of the step.
+            step_duration (float): duration of the step.
+            available_bandwidth (float): available bandwidth in the step.
+            cluster (Cluster): the cluster on which the phase will run.
+            tier (Tier): the tier on which the step will run.
+            initial_levels (dict): initial levels of all tiers at the start of the step.
+            source_tier (Tier, optional): the tier from which the step will run.
+            eviction (int, optional): volume of data which was evicted from ephemeral tier.
+        """
+
+        self.read_io.register_step(t_start, step_duration, available_bandwidth, cluster, tier,
+                                   initial_levels=initial_levels, source_tier=source_tier, eviction=eviction)
+        self.write_io.register_step(t_start, step_duration, available_bandwidth, cluster, tier,
+                                   initial_levels=initial_levels, source_tier=source_tier, eviction=eviction)
+
+    def update_tier(self, tier, volume):
+        """Update tier level with the algebric value of volume.
+
+        Args:
+            tier (Tier): tier for which the level will be updated.
+            volume (float): volume amount (positive or negative) to adjust tier level.
+        """
+        self.read_io.update_tier(tier, volume)
+        self.write_io.update_tier(tier, volume)
+
+    def update_tier_on_move(self, source_tier, target_tier, volume, erase):
+        """Update tier level following a volume move.
+
+        Args:
+            source_tier (Tier): tier from which the data will be moved.
+            target_tier (Tier): tier for which the level will be updated.
+            volume (float): volume value (positive or negative) to adjust tier level.
+            erase (bool): whether or not erase the amount of volume from source_tier.
+        """
+        self.read_io.update_tier_on_move(source_tier, target_tier, volume, erase)
+        self.write_io.update_tier_on_move(source_tier, target_tier, volume, erase)
+
+    def process_volume(self, step_duration, volume, available_bandwidth, cluster, tier,
+                       initial_levels=None):
+        """This method processes a small amount of I/O volume between two predictable events on a specific tier. If an event occurs in the meantime, I/O will be interrupted and bandwidth updated according.
+
+        Args:
+            step_duration (float): the expected duration between two predictable events.
+            volume (float): volume in bytes of the data to process.
+            cluster (Cluster): cluster facility where the I/O operation should take place.
+            available_bandwidth (float): available bandwidth in the step.
+            tier (Tier): storage tier concerned by the I/O operation. It could be reading from this tier or writing to it.
+        """
+
+
+

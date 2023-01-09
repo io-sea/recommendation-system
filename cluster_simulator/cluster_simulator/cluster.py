@@ -128,6 +128,7 @@ class Tier:
     TODO: extend this to a NN as function approximator to allow:
         averaging over variables
         interpolation when data entry is absent, i.e. b['seq'] gives a value
+    # TODO: add initial volume value
     """
 
     def __init__(self, env, name, bandwidth, capacity=100e9):
