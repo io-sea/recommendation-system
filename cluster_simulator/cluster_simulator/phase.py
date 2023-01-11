@@ -590,7 +590,9 @@ class MixIOPhase():
         """Initialize the MixIO class."""
         self.cores = cores
         self.operation = "readwrite"
+        assert read_volume > 0, "read volume should be > 0 to initialize a MixIOPhase"
         self.read_volume = read_volume
+        assert write_volume > 0, "write volume should be > 0 to initialize a MixIOPhase"
         self.write_volume = write_volume
         self.read_pattern = read_pattern
         self.write_pattern = write_pattern
@@ -601,6 +603,13 @@ class MixIOPhase():
         # initialize the read and write phases
         self.read_io = IOPhase(cores=cores, operation='read', volume=read_volume, pattern=read_pattern, data=self.data, appname=self.appname, bw=read_bw)
         self.write_io = IOPhase(cores=cores, operation='write', volume=write_volume, pattern=write_pattern, data=self.data, appname=self.appname, bw=write_bw)
+
+
+
+    @property
+    def volume(self):
+        """Return the total volume of the mixed I/O operation."""
+        return self.read_volume + self.write_volume
 
     def __str__(self):
         """Print in a human readable way a description of the mixed I/O Phase.
@@ -677,27 +686,31 @@ class MixIOPhase():
         # get the tier where the I/O will be performed, if use_sbb=True, get the BB
         tier = get_tier(cluster, placement, use_bb=use_bb)
         # ret = yield self.env.process(self.run_step(self.env, cluster, tier))
-
+        # initializing events
+        # read_event = Event()
+        # write_event = Event()
         if isinstance(tier, EphemeralTier):
-            if self.read_volume > 0:
-                # do prefetch
-                io_read_prefetch = self.env.process(self.read_io.move_step(self.env, cluster,
-                                                                           tier.persistent_tier,
-                                                                           tier, erase=False))
-                ret1 = yield io_read_prefetch
-                io_read_event = self.env.process(self.read_io.run_step(self.env, cluster, tier))
-                if ret1:
-                    ret = yield io_read_event
+            #if self.read_volume > 0:
+            # do prefetch
+            io_read_prefetch = self.env.process(self.read_io.move_step(self.env, cluster,
+                                                                        tier.persistent_tier,
+                                                                        tier, erase=False))
+            ret1 = yield io_read_prefetch
+            io_read_event = self.env.process(self.read_io.run_step(self.env, cluster, tier))
+            # TODO: should prefetech starts in the same time as the read?
+            if ret1:
+                ret = yield io_read_event
 
-            elif self.write_volume > 0:
-                io_write_event = self.env.process(self.write_io.run_step(self.env, cluster, tier))
-                # destage
-                destage_event = self.env.process(self.write_io.move_step(self.env, cluster, tier,
-                                                                tier.persistent_tier, erase=False))
-                # do not wait for the destage to complete
-                # TODO, logic will fail if destaging is faster than the IO
-                response = yield io_write_event | destage_event
-                ret = all([value for key, value in response.items()])
+            #if self.write_volume > 0:
+            io_write_event = self.env.process(self.write_io.run_step(self.env, cluster, tier))
+            # destage
+            destage_event = self.env.process(self.write_io.move_step(self.env, cluster, tier,
+                                                            tier.persistent_tier, erase=False))
+            # do not wait for the destage to complete
+            # TODO, logic will fail if destaging is faster than the IO
+            #response = yield io_write_event | destage_event
+            response = yield simpy.events.AllOf(self.env, (io_read_prefetch, io_read_event)) | simpy.events.AnyOf(self.env, (io_write_event, destage_event))
+            ret = all(value for key, value in response.items())
         else:
             # persistent tier
             read_io_event = self.env.process(self.read_io.run_step(self.env, cluster, tier))
