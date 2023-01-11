@@ -656,17 +656,55 @@ class MixIOPhase():
         self.read_io.update_tier_on_move(source_tier, target_tier, volume, erase)
         self.write_io.update_tier_on_move(source_tier, target_tier, volume, erase)
 
-    def process_volume(self, step_duration, volume, available_bandwidth, cluster, tier,
-                       initial_levels=None):
-        """This method processes a small amount of I/O volume between two predictable events on a specific tier. If an event occurs in the meantime, I/O will be interrupted and bandwidth updated according.
+    # def process_volume(self, step_duration, volume, available_bandwidth, cluster, tier,
+    #                    initial_levels=None):
+    #     """This method processes a small amount of I/O volume between two predictable events on a specific tier. If an event occurs in the meantime, I/O will be interrupted and bandwidth updated according.
 
-        Args:
-            step_duration (float): the expected duration between two predictable events.
-            volume (float): volume in bytes of the data to process.
-            cluster (Cluster): cluster facility where the I/O operation should take place.
-            available_bandwidth (float): available bandwidth in the step.
-            tier (Tier): storage tier concerned by the I/O operation. It could be reading from this tier or writing to it.
-        """
+    #     Args:
+    #         step_duration (float): the expected duration between two predictable events.
+    #         volume (float): volume in bytes of the data to process.
+    #         cluster (Cluster): cluster facility where the I/O operation should take place.
+    #         available_bandwidth (float): available bandwidth in the step.
+    #         tier (Tier): storage tier concerned by the I/O operation. It could be reading from this tier or writing to it.
+    #     """
+    #     read_volume = self.read_io.process_volume(step_duration, volume, available_bandwidth, cluster, tier)
+
+    def run(self, env, cluster, placement, use_bb=False, delay=0):
+        """Run an RW I/O operation."""
+        self.env = env
+        if delay:
+            yield self.env.timeout(delay)
+        # get the tier where the I/O will be performed, if use_sbb=True, get the BB
+        tier = get_tier(cluster, placement, use_bb=use_bb)
+        # ret = yield self.env.process(self.run_step(self.env, cluster, tier))
+
+        if isinstance(tier, EphemeralTier):
+            if self.read_volume > 0:
+                # do prefetch
+                io_read_prefetch = self.env.process(self.read_io.move_step(self.env, cluster,
+                                                                           tier.persistent_tier,
+                                                                           tier, erase=False))
+                ret1 = yield io_read_prefetch
+                io_read_event = self.env.process(self.read_io.run_step(self.env, cluster, tier))
+                if ret1:
+                    ret = yield io_read_event
+
+            elif self.write_volume > 0:
+                io_write_event = self.env.process(self.write_io.run_step(self.env, cluster, tier))
+                # destage
+                destage_event = self.env.process(self.write_io.move_step(self.env, cluster, tier,
+                                                                tier.persistent_tier, erase=False))
+                # do not wait for the destage to complete
+                # TODO, logic will fail if destaging is faster than the IO
+                response = yield io_write_event | destage_event
+                ret = all([value for key, value in response.items()])
+        else:
+            # persistent tier
+            read_io_event = self.env.process(self.read_io.run_step(self.env, cluster, tier))
+            write_io_event = self.env.process(self.write_io.run_step(self.env, cluster, tier))
+
+            ret = yield read_io_event & write_io_event
+        return ret
 
 
 
