@@ -355,8 +355,10 @@ class IOPhase:
             self.register_step(t_start, step_duration, available_bandwidth, cluster,
                                target_tier, initial_levels, source_tier)
             if isinstance(source_tier, EphemeralTier):
+            #if isinstance(target_tier, EphemeralTier):
                 initial_levels = cluster.get_levels()
                 eviction = source_tier.evict()
+                #eviction = target_tier.evict()
                 if eviction:
                     # register eviction step
                     self.register_step(t_start, step_duration, available_bandwidth, cluster,
@@ -440,7 +442,7 @@ class IOPhase:
             volume (float): _description_
 
         Returns:
-            tuple: _description_
+            tuple (float, float): step duration and available bandwidth
         """
 
         read_from_source_bandwidth = cluster.get_max_bandwidth(source_tier, operation='read')/source_tier.bandwidth.count
@@ -590,9 +592,9 @@ class MixIOPhase():
         """Initialize the MixIO class."""
         self.cores = cores
         self.operation = "readwrite"
-        assert read_volume > 0, "read volume should be > 0 to initialize a MixIOPhase"
+        # assert read_volume > 0, "read volume should be > 0 to initialize a MixIOPhase"
         self.read_volume = read_volume
-        assert write_volume > 0, "write volume should be > 0 to initialize a MixIOPhase"
+        # assert write_volume > 0, "write volume should be > 0 to initialize a MixIOPhase"
         self.write_volume = write_volume
         self.read_pattern = read_pattern
         self.write_pattern = write_pattern
@@ -698,8 +700,9 @@ class MixIOPhase():
             ret1 = yield io_read_prefetch
             io_read_event = self.env.process(self.read_io.run_step(self.env, cluster, tier))
             # TODO: should prefetech starts in the same time as the read?
+            # Default is sequencial
             if ret1:
-                ret = yield io_read_event
+                yield io_read_event
 
             #if self.write_volume > 0:
             io_write_event = self.env.process(self.write_io.run_step(self.env, cluster, tier))
@@ -707,7 +710,7 @@ class MixIOPhase():
             destage_event = self.env.process(self.write_io.move_step(self.env, cluster, tier,
                                                             tier.persistent_tier, erase=False))
             # do not wait for the destage to complete
-            # TODO, logic will fail if destaging is faster than the IO
+            # TODO: logic will fail if destaging is faster than the IO
             #response = yield io_write_event | destage_event
             response = yield simpy.events.AllOf(self.env, (io_read_prefetch, io_read_event)) | simpy.events.AnyOf(self.env, (io_write_event, destage_event))
             ret = all(value for key, value in response.items())
