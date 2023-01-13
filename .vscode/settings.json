@@ -2,7 +2,7 @@
   "python.testing.unittestArgs": [
     "-v",
     "-s",
-    "./app_decomposer",
+    "./cluster_simulator",
     "-p",
     "test_*.py"
   ],

@@ -10,6 +10,8 @@ from cluster_simulator.application import Application
 from cluster_simulator.analytics import display_run
 from cluster_simulator.analytics import get_execution_signal, get_execution_signal_2
 
+GRAPHICS = False
+
 class TestAppInit(unittest.TestCase):
     def setUp(self):
         self.env = simpy.Environment()
@@ -162,14 +164,15 @@ class TestExecutionSignal2(unittest.TestCase):
         # self.assertListEqual(output["read_bw"], [0, 210, 0, 0])
         # self.assertListEqual(output["write_bw"], [0, 0, 0, 100])
         # np.testing.assert_array_almost_equal(np.array(read_bw), np.array([0, 210, 0, 0, 0]))
-        fig1 = plt.figure("Throughput data")
-        plt.plot(output[app.name]['time'], output[app.name]['read_bw'], marker='o',
-                    label="read signal from ExecSim")
-        plt.plot(output[app.name]['time'], output[app.name]['write_bw'], marker='o',
-                    label="write signal from ExecSim")
-        plt.grid(True)
-        plt.legend()
-        plt.show()
+        if GRAPHICS:
+            fig1 = plt.figure("Throughput data")
+            plt.plot(output[app.name]['time'], output[app.name]['read_bw'], marker='o',
+                        label="read signal from ExecSim")
+            plt.plot(output[app.name]['time'], output[app.name]['write_bw'], marker='o',
+                        label="write signal from ExecSim")
+            plt.grid(True)
+            plt.legend()
+            plt.show()
 
     def test_app_execution_real_app_nvram(self):
         """Test the output formatting of data once app is executed."""
@@ -203,14 +206,15 @@ class TestExecutionSignal2(unittest.TestCase):
         # self.assertListEqual(output["read_bw"], [0, 210, 0, 0])
         # self.assertListEqual(output["write_bw"], [0, 0, 0, 100])
         # np.testing.assert_array_almost_equal(np.array(read_bw), np.array([0, 210, 0, 0, 0]))
-        fig1 = plt.figure("Throughput data")
-        plt.plot(output[app.name]['time'], output[app.name]['read_bw'], marker='o',
-                    label="read signal from ExecSim")
-        plt.plot(output[app.name]['time'], output[app.name]['write_bw'], marker='o',
-                    label="write signal from ExecSim")
-        plt.grid(True)
-        plt.legend()
-        plt.show()
+        if GRAPHICS:
+            fig1 = plt.figure("Throughput data")
+            plt.plot(output[app.name]['time'], output[app.name]['read_bw'], marker='o',
+                        label="read signal from ExecSim")
+            plt.plot(output[app.name]['time'], output[app.name]['write_bw'], marker='o',
+                        label="write signal from ExecSim")
+            plt.grid(True)
+            plt.legend()
+            plt.show()
 
 class TestExecutionSignal(unittest.TestCase):
     """Testing signal extracted from get_execution_signal routine."""
@@ -260,9 +264,10 @@ class TestExecutionSignal(unittest.TestCase):
         time = output[app.name]["time"]
         read_bw = output[app.name]["read_bw"]
         write_bw = output[app.name]["write_bw"]
+        print(output)
         self.assertListEqual(time, [0, 10, 20, 70])
-        self.assertListEqual(output["read_bw"], [0, 210, 0, 0])
-        self.assertListEqual(output["write_bw"], [0, 0, 0, 100])
+        self.assertListEqual(read_bw, [0, 210, 0, 0])
+        self.assertListEqual(write_bw, [0, 0, 0, 100])
         # np.testing.assert_array_almost_equal(np.array(read_bw), np.array([0, 210, 0, 0, 0]))
 
 
@@ -292,8 +297,8 @@ class TestExecutionSignal(unittest.TestCase):
         read_bw = output[app.name]["read_bw"]
         write_bw = output[app.name]["write_bw"]
         self.assertListEqual(time, [0, 5, 15, 40])
-        self.assertListEqual(output["read_bw"], [0, 420, 0, 0])
-        self.assertListEqual(output["write_bw"], [0, 0, 0, 200])
+        self.assertListEqual(read_bw, [0, 420, 0, 0])
+        self.assertListEqual(write_bw, [0, 0, 0, 200])
 
     def test_app_execution_real_app_read_write(self):
         """Test the output formatting of data once app is executed."""

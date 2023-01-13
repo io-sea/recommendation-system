@@ -7,8 +7,8 @@ import sys
 
 from cluster_simulator.cluster import Cluster, Tier, EphemeralTier, bandwidth_share_model, compute_share_model
 from cluster_simulator.utils import convert_size, get_tier, BandwidthResource
-from cluster_simulator.phase import DelayPhase, ComputePhase, IOPhase
-from cluster_simulator.analytics import display_run
+from cluster_simulator.phase import DelayPhase, ComputePhase, IOPhase, MixIOPhase
+from cluster_simulator.analytics import display_run, get_execution_signal_2, display_run_with_signal
 
 
 class TestPhase(unittest.TestCase):
@@ -446,6 +446,59 @@ class TestDataMovement(unittest.TestCase):
         self.assertEqual(self.hdd_tier.capacity.level, 20e9)
         self.assertEqual(self.ssd_tier.capacity.level, 20e9)
 
+class TestMixedPhase(unittest.TestCase):
+    """Test phases that do mixed (readwrite) IOs."""
+    def setUp(self):
+        self.env = simpy.Environment()
+        self.data = simpy.Store(self.env)
+        nvram_bandwidth = {'read':  {'seq': 780, 'rand': 760},
+                           'write': {'seq': 515, 'rand': 505}}
+        ssd_bandwidth = {'read':  {'seq': 210, 'rand': 190},
+                         'write': {'seq': 100, 'rand': 100}}
+
+        self.ssd_tier = Tier(self.env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
+        self.nvram_tier = Tier(self.env, 'NVRAM', bandwidth=nvram_bandwidth, capacity=80e9)
+        # registering cluster
+        self.cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
+
+    def test_init_mixed_io_phase(self):
+        """Tests that MixedPhase is initialized correctly."""
+        mixed_io_phase = MixIOPhase(data=self.data)
+        print(mixed_io_phase)
+
+    def test_update_tier_mix_io_phase(self):
+        """Tests that update_tier method updates the tier correctly."""
+        mixed_io_phase = MixIOPhase(read_volume=0, data=self.data)
+        mixed_io_phase.update_tier(self.ssd_tier, 10e9)
+        self.assertEqual(self.ssd_tier.capacity.level, 10e9)
+
+    def test_update_tier_mix_io_phase_read(self):
+        """Tests that update_tier method updates the tier correctly."""
+        mixed_io_phase = MixIOPhase(read_volume=10e9, write_volume=0, data=self.data)
+        mixed_io_phase.update_tier(self.ssd_tier, 5e9)
+        self.assertEqual(self.ssd_tier.capacity.level, 15e9)
+
+    def test_run_mixed_phase_persistent(self):
+        """Test running simple readwrite phase on persistent tier."""
+        # define an MixIO phase
+        mixed_io_phase = MixIOPhase(read_volume=1e9, write_volume=10e9, data=self.data)
+        # define burst buffer with its backend PFS
+        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
+        # run the phase on the tier with placement = bb
+        self.env.process(mixed_io_phase.run(self.env, cluster, placement=0, use_bb=False))
+        self.env.run()
+        self.assertEqual(self.ssd_tier.capacity.level, 11e9)
+
+    def test_run_mixed_phase_persistent_2(self):
+        """Test running simple readwrite phase on persistent different tier."""
+        # define an MixIO phase
+        mixed_io_phase = MixIOPhase(read_volume=1e9, write_volume=10e9, data=self.data)
+        # define burst buffer with its backend PFS
+        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
+        # run the phase on the tier with placement = bb
+        self.env.process(mixed_io_phase.run(self.env, cluster, placement=1, use_bb=False))
+        self.env.run()
+        self.assertEqual(self.nvram_tier.capacity.level, 11e9)
 
 class TestPhaseEphemeralTier(unittest.TestCase):
     """Test phases that happens on tier of type Ephemeral."""
@@ -515,6 +568,109 @@ class TestPhaseEphemeralTier(unittest.TestCase):
         self.env.run()
         self.assertEqual(bb.capacity.level, write_io.volume)
         self.assertEqual(bb.persistent_tier.capacity.level, write_io.volume)
+
+    def test_mix_phase_no_bb(self):
+        """Test running complete write phase on ephemeral tier and checks destaging buffered data on persistent tier."""
+        # define an IO phase
+        mix_io = MixIOPhase(read_volume=1e9, write_volume=2e9, data=self.data)
+        # define burst buffer with its backend PFS to check if it is used
+        bb = EphemeralTier(self.env, name="BB", persistent_tier=self.hdd_tier,
+                           bandwidth=self.nvram_bandwidth, capacity=10e9)
+        cluster = Cluster(self.env, tiers=[self.hdd_tier, self.ssd_tier],
+                          ephemeral_tier=bb)
+        # run the phase on the tier with placement = bb
+        self.env.process(mix_io.run(self.env, cluster, placement=0, use_bb=False))  # nvram 200-100
+        self.env.run()
+        # bb should be empty as use_bb is False
+        self.assertEqual(bb.capacity.level, 0)
+        # persistent tier
+        self.assertEqual(bb.persistent_tier.capacity.level, mix_io.volume)
+
+
+    def test_mix_phase_with_bb_read_only(self):
+        """Test running complete read mixed phase on ephemeral tier and checks destaging buffered data on persistent tier."""
+        # define an IO phase
+        mix_io = MixIOPhase(read_volume=1e9, write_volume=0, data=self.data)
+        # define burst buffer with its backend PFS
+        bb = EphemeralTier(self.env, name="BB", persistent_tier=self.hdd_tier,
+                           bandwidth=self.nvram_bandwidth, capacity=10e9)
+        cluster = Cluster(self.env, tiers=[self.hdd_tier, self.ssd_tier],
+                          ephemeral_tier=bb)
+        # run the phase on the tier with placement = bb -> hdd_tier
+        self.env.process(mix_io.run(self.env, cluster, placement=0, use_bb=True))  # nvram 200-100
+        self.env.run()
+        self.assertEqual(bb.capacity.level, 1e9)
+        self.assertEqual(bb.persistent_tier.capacity.level, 1e9)
+
+    def test_mix_phase_with_bb_write_only(self):
+            """Test running complete write phase on ephemeral tier and checks destaging buffered data on persistent tier."""
+            # define an IO phase
+            mix_io = MixIOPhase(read_volume=0, write_volume=2e9, data=self.data)
+            # define burst buffer with its backend PFS
+            bb = EphemeralTier(self.env, name="BB", persistent_tier=self.hdd_tier,
+                            bandwidth=self.nvram_bandwidth, capacity=10e9)
+            cluster = Cluster(self.env, tiers=[self.hdd_tier, self.ssd_tier],
+                            ephemeral_tier=bb)
+            # run the phase on the tier with placement = bb -> hdd_tier
+            self.env.process(mix_io.run(self.env, cluster, placement=0, use_bb=True))  # nvram 200-100
+            self.env.run()
+            self.assertEqual(bb.capacity.level, 2e9)
+            self.assertEqual(bb.persistent_tier.capacity.level, 2e9)
+
+
+    def test_mix_phase_with_bb_read_write(self):
+        """Test running complete readwrite phase on ephemeral tier and checks destaging buffered data on persistent tier."""
+        # define an IO phase
+        mix_io = MixIOPhase(read_volume=1e9, write_volume=2e9, data=self.data)
+        # define burst buffer with its backend PFS
+        bb = EphemeralTier(self.env, name="BB", persistent_tier=self.hdd_tier,
+                           bandwidth=self.nvram_bandwidth, capacity=10e9)
+        cluster = Cluster(self.env, tiers=[self.hdd_tier, self.ssd_tier],
+                          ephemeral_tier=bb)
+        # run the phase on the tier with placement = bb -> hdd_tier
+        self.env.process(mix_io.run(self.env, cluster, placement=0, use_bb=True))  # nvram 200-100
+        self.env.run()
+        self.assertEqual(bb.capacity.level, 3e9)
+        self.assertEqual(bb.persistent_tier.capacity.level, 3e9)
+
+
+    def test_mix_phase_with_bb_readwrite_concurrency(self):
+        """Test two writing phases, one has burst buffer usage and the other not. The two phases are happening concurrently."""
+        # define two Mixed IO phases
+        mix_io_1 = MixIOPhase(read_volume=1e9, write_volume=2e9, data=self.data, appname="Buffered")
+        mix_io_2 = MixIOPhase(read_volume=1.2e9, write_volume=5e9, data=self.data,
+                              appname="Concurrent")
+        # define burst buffer with its backend PFS
+        bb = EphemeralTier(self.env, name="BB", persistent_tier=self.hdd_tier,
+                           bandwidth=self.nvram_bandwidth, capacity=10e9)
+        cluster = Cluster(self.env, tiers=[self.hdd_tier, self.ssd_tier],
+                          ephemeral_tier=bb)
+        # run the phase on the tier with placement = bb
+        self.env.process(mix_io_1.run(self.env, cluster, placement=0, use_bb=True))
+        self.env.process(mix_io_2.run(self.env, cluster, placement=0, use_bb=False))
+        self.env.run()
+        # fig = display_run(self.data, cluster, width=800, height=900)
+        # fig.show()
+        self.assertEqual(bb.capacity.level, 3e9)
+        # only max of reads volumes is added to the total volume
+        # reading process ensures simply that there is enough data to read
+        self.assertEqual(bb.persistent_tier.capacity.level, 8.2e9)
+
+    def test_mix_phase_use_bb_contention(self):
+        """Test two reading/writing phases, one has burst buffer usage and the other not. The two phases are happening concurrently. The one writing in BB will overlfow data"""
+        # define two Mixed IO phases
+        mix_io = MixIOPhase(read_volume=1e9, write_volume=11e9, data=self.data, appname="Buffered")
+        mix_io_c = MixIOPhase(read_volume=1.2e9, write_volume=5e9, data=self.data,
+                              appname="Concurrent")
+        # define burst buffer with its backend PFS
+        bb = EphemeralTier(self.env, name="BB", persistent_tier=self.hdd_tier,
+                           bandwidth=self.nvram_bandwidth, capacity=10e9)
+        cluster = Cluster(self.env, tiers=[self.hdd_tier, self.ssd_tier],
+                          ephemeral_tier=bb)
+        # run the phase on the tier with placement = bb
+        self.env.process(mix_io.run(self.env, cluster, placement=0, use_bb=True))  # nvram 400
+        self.env.process(mix_io_c.run(self.env, cluster, placement=0, use_bb=False))  # hdd 40
+        self.env.run()
 
     def test_phase_use_bb_false(self):
         """Test running simple write phase on ephemeral tier with False option and checks if it runs without buffering."""
