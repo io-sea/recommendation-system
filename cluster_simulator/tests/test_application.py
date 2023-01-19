@@ -106,6 +106,75 @@ class TestAppInit(unittest.TestCase):
         data.put(sample_item)
         self.assertAlmostEqual(app.get_fitness(), 2)
 
+    def test_app_operation_read_write_bw(self):
+        """test if get_operation_bandwidth read_bw argument overrides the default read_bw"""
+        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
+        # record data
+        data = simpy.Store(self.env)
+        # Simple app: read 1GB -> compute 10s -> write 5GB
+        compute = [0, 10]
+        read = [1e9, 0]
+        read_bw = [10, 12]
+        write = [0, 5e9]
+        write_bw = [4, 6]
+        tiers = [0, 1]
+        app = Application(self.env,
+                          compute=compute,
+                          read=read,
+                          write=write,
+                          read_bw=read_bw,
+                          write_bw=write_bw,
+                          data=data)
+        self.assertEqual(app.get_operation_bw("read", 0), 10)
+        self.assertEqual(app.get_operation_bw("read", 1), 12)
+        self.assertEqual(app.get_operation_bw("write", 0), 4)
+        self.assertEqual(app.get_operation_bw("write", 1), 6)
+
+    def test_app_operation_bw(self):
+        """test if get_operation_bandwidth read_bw argument overrides the default read_bw"""
+        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
+        # record data
+        data = simpy.Store(self.env)
+        # Simple app: read 1GB -> compute 10s -> write 5GB
+        compute = [0, 10]
+        read = [1e9, 0]
+        bw = [10, 12]
+        write = [0, 5e9]
+
+        tiers = [0, 1]
+        app = Application(self.env,
+                          compute=compute,
+                          read=read,
+                          write=write,
+                          bw=bw,
+                          data=data)
+        self.assertEqual(app.get_operation_bw("read", 0), 10)
+        self.assertEqual(app.get_operation_bw("read", 1), 12)
+        self.assertEqual(app.get_operation_bw("write", 0), 10)
+        self.assertEqual(app.get_operation_bw("write", 1), 12)
+
+    def test_app_operation_bw_None(self):
+        """test if app uses cluster tiers bw values when bw argument is None."""
+        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
+        # record data
+        data = simpy.Store(self.env)
+        # Simple app: read 1GB -> compute 10s -> write 5GB
+        compute = [0, 10]
+        read = [1e9, 0]
+        bw = None
+        write = [0, 5e9]
+
+        tiers = [0, 1]
+        app = Application(self.env,
+                          compute=compute,
+                          read=read,
+                          write=write,
+                          data=data)
+        self.env.process(app.run(cluster, placement=tiers))
+        self.env.run()
+        output = get_execution_signal_2(data)
+        key = next(iter(output))
+        self.assertEqual(output[key]['read_bw'][0], 210.)
 
 class TestExecutionSignal2(unittest.TestCase):
     """Testing signal extracted from get_execution_signal routine."""
