@@ -109,8 +109,8 @@ class Cluster:
         Args:
             tier (Tier or index): the tier from which the bandwidth will be estimated.
             cores (int, optional): _description_. Defaults to 1.
-            operation (str, optional): _description_. Defaults to 'read'.
-            pattern (int, optional): _description_. Defaults to 1.
+            operation (str, optional): 'read' or 'write'. Defaults to 'read'.
+            pattern (int, optional): 1 for seq and 0 for random. Defaults to 1.
 
         Returns:
             float: a bandwidth value in MB/s for the specified arguments.
@@ -125,10 +125,10 @@ class Tier:
     """Model a tier storage service with a focus on a limited bandwidth resource as well as a limited capacity. In this model we expect a bandwidth value at its asymptotic state, so blocksize is still not a parameter. Only the asymptotic part of the throughput curve is considered. Other considered variables are read/write variables and sequential/random variables.
     Output is a scalar value in MB/s.
     Typically we access the bandwidth value as in dictionary: b['read']['seq'] = 200MB/s.
-    TODO: extend this to a NN as function approximator to allow:
+    # TODO: extend this to a NN as function approximator to allow:
         averaging over variables
         interpolation when data entry is absent, i.e. b['seq'] gives a value
-    # TODO: add initial volume value
+
     """
 
     def __init__(self, env, name, bandwidth, capacity=100e9):
@@ -138,8 +138,11 @@ class Tier:
             env (simpy.Environment): the simpy environment where all simulations happens.s
             name (string): a name to make analytics readable and to assign a unique ID to a tier.
             bandwidth (simpy.Resource): bandwidth as limited number of slots that can be consumed.  Default capacity is up to 10 concurrent I/O sharing the maximum value of the bandwidth.
-            capacity (simpy.Container, optional): storage capacity of the tier. Defaults to 100e9.
+            capacity (simpy.Container, optional): storage capacity of the tier. Defaults to 100e9 (100GB).
             max_bandwidth (dict): which contains operation and pattern dependant max bandwidths.
+            Example:
+                ssd_bandwidth = {'read':  {'seq': 210, 'rand': 190},
+                         'write': {'seq': 100, 'rand': 100}}
         """
         self.env = env
         self.name = name

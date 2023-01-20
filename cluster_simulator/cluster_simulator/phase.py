@@ -400,7 +400,8 @@ class IOPhase:
         if self.bw:
             available_bandwidth = self.bw
         else:
-            max_bandwidth = cluster.get_max_bandwidth(tier, operation=self.operation, pattern=self.pattern)
+            max_bandwidth = cluster.get_max_bandwidth(tier, operation=self.operation,
+                                                      pattern=self.pattern)
             self.bandwidth_concurrency = tier.bandwidth.count
             available_bandwidth = max_bandwidth/self.bandwidth_concurrency
 
@@ -598,13 +599,14 @@ class MixIOPhase():
         self.write_volume = write_volume
         self.read_pattern = read_pattern
         self.write_pattern = write_pattern
-        self.read_bw = read_bw
+        self.read_bw = read_bw or None
+        self.write_bw = write_bw or None
         self.data = data or None
         self.appname = appname or ''
 
         # initialize the read and write phases
-        self.read_io = IOPhase(cores=cores, operation='read', volume=read_volume, pattern=read_pattern, data=self.data, appname=self.appname, bw=read_bw)
-        self.write_io = IOPhase(cores=cores, operation='write', volume=write_volume, pattern=write_pattern, data=self.data, appname=self.appname, bw=write_bw)
+        self.read_io = IOPhase(cores=cores, operation='read', volume=read_volume, pattern=self.read_pattern, data=self.data, appname=self.appname, bw=read_bw)
+        self.write_io = IOPhase(cores=cores, operation='write', volume=write_volume, pattern=self.write_pattern, data=self.data, appname=self.appname, bw=write_bw)
 
 
 
@@ -680,6 +682,28 @@ class MixIOPhase():
     #     """
     #     read_volume = self.read_io.process_volume(step_duration, volume, available_bandwidth, cluster, tier)
 
+    # def evaluate_tier_bandwidth(self, cluster, tier):
+    #     """Method to evaluate the bandwidth value for a given storage tier, and I/O operation including readwrite, and a given I/O pattern.
+
+    #     Args:
+    #         cluster (Cluster): cluster object for which the bw will be evaluated.
+    #         tier (Tier): the tier of the cluster storage system where the I/O will be executed.
+    #     """
+    #     assert isinstance(tier, Tier)
+    #     # # assign bandwidth resource if not already done
+    #     # self.env = env
+    #     # if not tier.bandwidth:
+    #     #     tier.bandwidth = BandwidthResource(IOPhase.current_ios, self.env, 10)
+    #     if self.read_bw and self.write_bw:
+    #         available_bandwidth = self.read_bw, self.write_bw
+    #     else:
+    #         read_max_bandwidth = cluster.get_max_bandwidth(tier, operation="read", pattern=self.read_pattern)
+    #         write_max_bandwidth = cluster.get_max_bandwidth(tier, operation="write", pattern=self.write_pattern)
+    #         self.bandwidth_concurrency = tier.bandwidth.count
+    #         available_bandwidth = read_max_bandwidth/self.bandwidth_concurrency, write_max_bandwidth/self.bandwidth_concurrency
+
+    #     return available_bandwidth
+
     def run(self, env, cluster, placement, use_bb=False, delay=0):
         """Run an RW I/O operation."""
         self.env = env
@@ -712,14 +736,14 @@ class MixIOPhase():
             # do not wait for the destage to complete
             # TODO: logic will fail if destaging is faster than the IO
             #response = yield io_write_event | destage_event
-            response = yield simpy.events.AllOf(self.env, (io_read_prefetch, io_read_event)) | simpy.events.AnyOf(self.env, (io_write_event, destage_event))
+            response = yield AllOf(self.env, (io_read_prefetch, io_read_event)) | AnyOf(self.env, (io_write_event, destage_event))
             ret = all(value for key, value in response.items())
         else:
             # persistent tier
             read_io_event = self.env.process(self.read_io.run_step(self.env, cluster, tier))
             write_io_event = self.env.process(self.write_io.run_step(self.env, cluster, tier))
 
-            ret = yield read_io_event & write_io_event
+            ret = yield AllOf(self.env, (read_io_event, write_io_event))
         return ret
 
 

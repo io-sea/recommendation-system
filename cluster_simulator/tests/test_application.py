@@ -8,7 +8,7 @@ from cluster_simulator.cluster import Cluster, Tier, EphemeralTier, bandwidth_sh
 from cluster_simulator.phase import DelayPhase, ComputePhase, IOPhase
 from cluster_simulator.application import Application
 from cluster_simulator.analytics import display_run
-from cluster_simulator.analytics import get_execution_signal, get_execution_signal_2
+from cluster_simulator.analytics import get_execution_signal, get_execution_signal_2, get_execution_signal_3
 
 GRAPHICS = False
 
@@ -379,18 +379,20 @@ class TestExecutionSignal(unittest.TestCase):
         compute = [0, 10]
         read = [2.1e9, 0]
         write = [2e9, 0]
-        tiers = [0, 1]
+        tiers = [0, 0]
         app = Application(self.env,
+                          #name="test",
                           compute=compute,
                           read=read,
                           write=write,
                           data=data)
         # only on SSD
-        # nvram_bandwidth = {'read':  {'seq': 800, 'rand': 760},
-        #                    'write': {'seq': 500, 'rand': 505}}
+        # ssd_bandwidth = {'read':  {'seq': 210, 'rand': 190},
+        #                  'write': {'seq': 100, 'rand': 100}}
         self.env.process(app.run(cluster, placement=[0, 0]))
         self.env.run()
-        output = get_execution_signal(data)
+        output = get_execution_signal_3(data)
+
         time = output[app.name]["time"]
         read_bw = output[app.name]["read_bw"]
         write_bw = output[app.name]["write_bw"]
@@ -400,6 +402,16 @@ class TestExecutionSignal(unittest.TestCase):
         # self.assertListEqual(time, [0, 10, 20, 70])
         # self.assertListEqual(output["read_bw"], [0, 210, 0, 0, 0])
         # self.assertListEqual(output["write_bw"], [0, 0, 0, 0, 100])
+
+        if True:
+            plt.figure("Throughput data")
+            plt.plot(output[app.name]['time'], output[app.name]['read_bw'], marker='o',
+                        label="read signal from ExecSim")
+            plt.plot(output[app.name]['time'], output[app.name]['write_bw'], marker='o',
+                        label="write signal from ExecSim")
+            plt.grid(True)
+            plt.legend()
+            plt.show()
 
 
 
