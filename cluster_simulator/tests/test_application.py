@@ -8,7 +8,7 @@ from cluster_simulator.cluster import Cluster, Tier, EphemeralTier, bandwidth_sh
 from cluster_simulator.phase import DelayPhase, ComputePhase, IOPhase
 from cluster_simulator.application import Application
 from cluster_simulator.analytics import display_run
-from cluster_simulator.analytics import get_execution_signal, get_execution_signal_2, get_execution_signal_3
+from cluster_simulator.analytics import get_execution_signal, get_execution_signal_2, get_execution_signal_3, plot_simple_signal
 
 GRAPHICS = False
 
@@ -393,25 +393,18 @@ class TestExecutionSignal(unittest.TestCase):
         self.env.run()
         output = get_execution_signal_3(data)
 
-        time = output[app.name]["time"]
+        app_time = output[app.name]["time"]
         read_bw = output[app.name]["read_bw"]
         write_bw = output[app.name]["write_bw"]
-        print(time)
+        print(app_time)
         print(read_bw)
         print(write_bw)
-        # self.assertListEqual(time, [0, 10, 20, 70])
+        # self.assertListEqual(app_time, [0, 10, 20, 70])
         # self.assertListEqual(output["read_bw"], [0, 210, 0, 0, 0])
         # self.assertListEqual(output["write_bw"], [0, 0, 0, 0, 100])
 
-        if True:
-            plt.figure("Throughput data")
-            plt.plot(output[app.name]['time'], output[app.name]['read_bw'], marker='o',
-                        label="read signal from ExecSim")
-            plt.plot(output[app.name]['time'], output[app.name]['write_bw'], marker='o',
-                        label="write signal from ExecSim")
-            plt.grid(True)
-            plt.legend()
-            plt.show()
+        if GRAPHICS:
+            plot_simple_signal(app_time, read_bw, write_bw)
 
 
 
