@@ -155,7 +155,7 @@ class Application:
                                   read_pattern=read_pattern,
                                   write_pattern=write_pattern,
                                   data=self.data, appname=self.name,
-                                  read_bw=None, write_bw=None)
+                                  read_bw=read_bw, write_bw=write_bw)
         self.store.put(mix_io_phase)
         self.cores_request.append(mix_io_phase.cores)
 
@@ -254,6 +254,7 @@ class Application:
         phase = 0
         requesting_cores = self.request_cores(cluster)
         while self.store.items:
+            # get a phase from the store
             item = yield self.store.get()
             if isinstance(item, DelayPhase) and phase == 0:
                 self.status[phase] = yield self.env.process(item.run(self.env, cluster))
@@ -270,15 +271,18 @@ class Application:
                 else:
                     self.status[phase] = False
             else:
+                # io phase or mix io phase
                 data_placement = cluster.tiers[int(placement[item_number])]
                 bb = use_bb[item_number] if use_bb else False
                 if phase == 0:
                     yield AllOf(self.env, requesting_cores)
-                    ret = yield self.env.process(item.run(self.env, cluster, placement=data_placement, use_bb=bb))
+                    ret = yield self.env.process(item.run(self.env, cluster,
+                                                          placement=data_placement, use_bb=bb))
                     self.status[phase] = ret
                     logger.debug(f"the issued status of the IO phase : {self.status[phase]}")
                 elif phase > 0 and self.status[phase-1] == True:
-                    self.status[phase] = yield self.env.process(item.run(self.env, cluster, placement=data_placement, use_bb=bb))
+                    self.status[phase] = yield self.env.process(item.run(self.env, cluster,
+                                                                         placement=data_placement, use_bb=bb))
                 else:
                     self.status[phase] = False
                 phase += 1

@@ -717,7 +717,7 @@ class MixIOPhase():
         # write_event = Event()
         if isinstance(tier, EphemeralTier):
             #if self.read_volume > 0:
-            # do prefetch
+            # do prefetch for ephemeral tier
             io_read_prefetch = self.env.process(self.read_io.move_step(self.env, cluster,
                                                                         tier.persistent_tier,
                                                                         tier, erase=False))
@@ -726,7 +726,7 @@ class MixIOPhase():
             # TODO: should prefetech starts in the same time as the read?
             # Default is sequencial
             if ret1:
-                yield io_read_event
+                ret2 = yield io_read_event
 
             #if self.write_volume > 0:
             io_write_event = self.env.process(self.write_io.run_step(self.env, cluster, tier))
@@ -735,15 +735,16 @@ class MixIOPhase():
                                                             tier.persistent_tier, erase=False))
             # do not wait for the destage to complete
             # TODO: logic will fail if destaging is faster than the IO
-            #response = yield io_write_event | destage_event
-            response = yield AllOf(self.env, (io_read_prefetch, io_read_event)) | AnyOf(self.env, (io_write_event, destage_event))
+            response = yield AllOf(self.env, (io_read_prefetch, io_read_event)) & AnyOf(self.env, (io_write_event, destage_event))
             ret = all(value for key, value in response.items())
         else:
             # persistent tier
             read_io_event = self.env.process(self.read_io.run_step(self.env, cluster, tier))
             write_io_event = self.env.process(self.write_io.run_step(self.env, cluster, tier))
 
-            ret = yield AllOf(self.env, (read_io_event, write_io_event))
+            response = yield AllOf(self.env, (read_io_event, write_io_event))
+            ret = all([value for key, value in response.items()])
+
         return ret
 
 

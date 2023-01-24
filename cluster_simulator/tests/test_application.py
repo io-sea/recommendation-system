@@ -365,13 +365,13 @@ class TestExecutionSignal(unittest.TestCase):
         time = output[app.name]["time"]
         read_bw = output[app.name]["read_bw"]
         write_bw = output[app.name]["write_bw"]
+
         self.assertListEqual(time, [0, 5, 15, 40])
         self.assertListEqual(read_bw, [0, 420, 0, 0])
         self.assertListEqual(write_bw, [0, 0, 0, 200])
 
-    def test_app_execution_real_app_read_write(self):
-        """Test the output formatting of data once app is executed."""
-        """Test the output formatting of data once data is injected."""
+    def test_app_execution_real_app_read_write_cluster_bw(self):
+        """Test the throughput values of an app having R/W phase."""
         cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
         # record data
         data = simpy.Store(self.env)
@@ -379,9 +379,8 @@ class TestExecutionSignal(unittest.TestCase):
         compute = [0, 10]
         read = [2.1e9, 0]
         write = [2e9, 0]
-        tiers = [0, 0]
+        tiers = [0, 1]
         app = Application(self.env,
-                          #name="test",
                           compute=compute,
                           read=read,
                           write=write,
@@ -396,17 +395,88 @@ class TestExecutionSignal(unittest.TestCase):
         app_time = output[app.name]["time"]
         read_bw = output[app.name]["read_bw"]
         write_bw = output[app.name]["write_bw"]
-        print(app_time)
-        print(read_bw)
-        print(write_bw)
-        # self.assertListEqual(app_time, [0, 10, 20, 70])
-        # self.assertListEqual(output["read_bw"], [0, 210, 0, 0, 0])
-        # self.assertListEqual(output["write_bw"], [0, 0, 0, 0, 100])
+        #print(app_time)
+        #print(np.trapz(read_bw))
+        #print((read_bw))
+        #print((write_bw))
+        # print(np.unique(read_bw))
+        # print(np.unique(write_bw))
+        self.assertSetEqual(set(np.unique(read_bw)), {105, 0})
+        self.assertSetEqual(set(np.unique(write_bw)), {0,50, 100})
 
         if GRAPHICS:
             plot_simple_signal(app_time, read_bw, write_bw)
 
+    def test_app_execution_real_app_read_write_bw(self):
+        """Test the throughput values of an app having R/W phase with extern and imposed bw for both r/w modes."""
+        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
+        # record data
+        data = simpy.Store(self.env)
+        # Simple app: read 1GB -> compute 10s -> write 5GB
+        compute = [0, 10]
+        read = [2.1e9, 0]
+        write = [2e9, 0]
+        bw = [200, 200]
+        tiers = [0, 0]
+        app = Application(self.env,
+                          #name="test",
+                          compute=compute,
+                          read=read,
+                          write=write,
+                          bw=bw,
+                          data=data)
+        # only on SSD
+        # ssd_bandwidth = {'read':  {'seq': 210, 'rand': 190},
+        #                  'write': {'seq': 100, 'rand': 100}}
+        self.env.process(app.run(cluster, placement=[0, 0]))
+        self.env.run()
+        output = get_execution_signal_3(data)
 
+        app_time = output[app.name]["time"]
+        read_bw = output[app.name]["read_bw"]
+        write_bw = output[app.name]["write_bw"]
+        # print(app_time)
+        # print(read_bw)
+        # print(write_bw)
+        self.assertSetEqual(set(np.unique(read_bw)), {200, 0})
+        self.assertSetEqual(set(np.unique(write_bw)), {200, 0})
+
+        if GRAPHICS:
+            plot_simple_signal(app_time, read_bw, write_bw)
+
+    def test_app_execution_real_app_read_bw_write_bw(self):
+        """Test the throughput values of an app having R/W phase with bw specific to each operation."""
+        cluster = Cluster(self.env, tiers=[self.ssd_tier, self.nvram_tier])
+        # record data
+        data = simpy.Store(self.env)
+        # Simple app: read 1GB -> compute 10s -> write 5GB
+        compute = [0, 10]
+        read = [2.1e9, 0]
+        write = [2e9, 0]
+        app = Application(self.env,
+                          #name="test",
+                          compute=compute,
+                          read=read,
+                          write=write,
+                          data=data,
+                          read_bw=[70, 0],
+                          write_bw=[20, 0])
+        # only on SSD
+        # ssd_bandwidth = {'read':  {'seq': 210, 'rand': 190},
+        #                  'write': {'seq': 100, 'rand': 100}}
+        self.env.process(app.run(cluster, placement=[0, 0]))
+        self.env.run()
+        output = get_execution_signal_3(data)
+
+        app_time = output[app.name]["time"]
+        read_bw = output[app.name]["read_bw"]
+        write_bw = output[app.name]["write_bw"]
+
+        self.assertSetEqual(set(np.unique(read_bw)), {70, 0})
+        self.assertSetEqual(set(np.unique(write_bw)), {20, 0})
+
+        if GRAPHICS:
+            plot_simple_signal(app_time, read_bw, write_bw)
 
 class TestBasicApps(unittest.TestCase):
     def setUp(self):

@@ -526,7 +526,7 @@ def interpolate_signal_from_simulation(x, start_points, end_points, bw_values):
         for i, (start, end) in enumerate(zip(start_points, end_points)):
             # print(f"scanning interval: {i}")
             # if interval has been seen before and point falls inside
-            if last_start == start and last_end == end and start <= point <= end:
+            if last_start == start and last_end == end and start <= point < end:
                 if bw_values[i] > max_bw:
                     max_bw = bw_values[i]
                     result.insert(ix, bw_values[i])
@@ -536,7 +536,7 @@ def interpolate_signal_from_simulation(x, start_points, end_points, bw_values):
                 max_bw = 0
                 last_start = start
                 last_end = end
-                if start <= point <= end and bw_values[i] > 0:
+                if start <= point < end and bw_values[i] > 0:
                     max_bw = bw_values[i]
                     result.insert(ix, bw_values[i])
                     #print(f"Point {point}: {start}->{end}: interval number: {i} | value: {bw_values[i]}")
