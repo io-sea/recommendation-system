@@ -142,7 +142,7 @@ def plot_detected_phases(jobid, merge=False, show_phases=False, ts=None, width=1
     write_bkps, write_labels = write_dec.decompose()
     rec_wsignal = write_dec.reconstruct(write_bkps)
     compute, volume, bandwidth = get_signal_representation(timestamps, read_signal, read_labels)
-    w_compute, w_volume, w_bandwidth = get_signal_representation(timestamps, read_signal, read_labels)
+    w_compute, w_volume, w_bandwidth = get_signal_representation(timestamps, write_signal, write_labels)
 
     max_bw = max(max(volume), max(w_volume))
 

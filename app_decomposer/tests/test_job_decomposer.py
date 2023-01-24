@@ -9,6 +9,7 @@ import os
 from os.path import dirname, abspath
 import pandas as pd
 import random
+import matplotlib.pyplot as plt
 
 from app_decomposer.job_decomposer import JobDecomposer, ComplexDecomposer, get_events_indexes, get_signal_representation, get_phase_volume, phases_to_representation, complex_to_representation, get_events_indexes, get_events_indexes_no_merge, get_phase_volume, is_interval_in
 
@@ -16,6 +17,20 @@ from app_decomposer.config_parser import Configuration
 from app_decomposer.signal_decomposer import KmeansSignalDecomposer, get_lowest_cluster
 
 from app_decomposer import API_DICT_TS
+
+
+def plot_job_signal(jobid=None):
+    x, read_signal, write_signal = get_job_timeseries_from_file(job_id=jobid)
+    # plt.rcParams["figure.figsize"] = (20, 5)
+    # plt.rcParams['figure.facecolor'] = 'gray'
+    x  = (x - x[0])/5
+    plt.plot(x, read_signal, label="read signal")
+    plt.plot(x, write_signal, label="write signal")
+    plt.grid(True)
+    plt.legend()
+    plt.title(f"timeserie for jobid = {jobid}")
+    plt.show()
+
 
 def list_jobs(dataset_path):
     """list all present jobs in the dataset folder and return list of files, ids and dataset names.
@@ -1274,6 +1289,64 @@ class TestComplexDecomposer(unittest.TestCase):
         # init the job decomposer
         cd = ComplexDecomposer()
         output = cd.get_job_representation(merge_clusters=True)
+        self.assertListEqual(output["events"], [0, 1])
+        self.assertListEqual(output["read_volumes"], [3, 1])
+        self.assertListEqual(output["read_bw"], [1, 1])
+        self.assertListEqual(output["write_volumes"], [0, 5])
+        self.assertListEqual(output["write_bw"], [0, 5./3.])
+
+    @patch.object(ComplexDecomposer, 'get_job_node_count')
+    @patch.object(Configuration, 'get_kc_token')
+    @patch.object(ComplexDecomposer, 'get_job_timeseries')
+    def test_complex_decomposer_compute_1pt_joint_2(self, mock_get_timeseries, mock_get_kc_token, mock_get_job_node_count):
+        """Test combining phases from read and write signals to get a representation."""
+        # TODO : still needs examining this output when write_signal = np.array([0, 0, 0, 1, 1, 1])
+        timestamps = np.arange(6)
+        read_signal = np.array([1, 1, 1, 1, 0, 0])
+        write_signal = np.array([0, 0, 0, 1, 1, 1])
+        timeseries = {}
+        timeseries["volume"] = {}
+        timeseries["volume"]["timestamp"] = timestamps
+        timeseries["volume"]["bytesRead"] = read_signal
+        timeseries["volume"]["bytesWritten"] = write_signal
+        mock_get_timeseries.return_value = timeseries
+        mock_get_kc_token.return_value = 'token'
+        mock_get_job_node_count.return_value = 1
+        # init the job decomposer
+        cd = ComplexDecomposer()
+        output = cd.get_job_representation(merge_clusters=True)
+        print(output)
+        # self.assertListEqual(output["events"], [0, 1, 3])
+        # self.assertListEqual(output["read_volumes"], [3, 1, 0])
+        # self.assertListEqual(output["read_bw"], [1.0, 1.0, 0])
+        # self.assertListEqual(output["write_volumes"], [0, 1, 2])
+        # self.assertListEqual(output["write_bw"], [0, 1, 1])
 
 
-
+class TestComplexDecomposerMixedSignal(unittest.TestCase):
+    """Test the job crosswalked signals."""
+    @patch.object(ComplexDecomposer, 'get_job_node_count')
+    @patch.object(Configuration, 'get_kc_token')
+    @patch.object(ComplexDecomposer, 'get_job_timeseries')
+    def test_complex_decomposer_compute_cross_walk_job_3916(self, mock_get_timeseries,
+                                                            mock_get_kc_token, mock_get_job_node_count):
+        jobid=3916
+        timestamps, read_signal, write_signal = get_job_timeseries_from_file(job_id=jobid)
+        timeseries = {}
+        timeseries["volume"] = {}
+        timeseries["volume"]["timestamp"] = timestamps
+        timeseries["volume"]["bytesRead"] = read_signal
+        timeseries["volume"]["bytesWritten"] = write_signal
+        mock_get_timeseries.return_value = timeseries
+        mock_get_kc_token.return_value = 'token'
+        mock_get_job_node_count.return_value = 1
+        # init the job decomposer
+        cd = ComplexDecomposer()
+        output = cd.get_job_representation(merge_clusters=True)
+        print(output)
+        plot_job_signal(jobid=jobid)
+        # self.assertListEqual(output["events"], [0])
+        # self.assertListEqual(output["read_volumes"], [0])
+        # self.assertListEqual(output["read_bw"], [0])
+        # self.assertListEqual(output["write_volumes"], [0])
+        # self.assertListEqual(output["write_bw"], [0])

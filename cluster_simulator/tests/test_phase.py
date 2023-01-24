@@ -564,7 +564,7 @@ class TestPhaseEphemeralTier(unittest.TestCase):
         cluster = Cluster(self.env, tiers=[self.hdd_tier, self.ssd_tier],
                           ephemeral_tier=bb)
         # run the phase on the tier with placement = bb
-        self.env.process(write_io.run(self.env, cluster, placement=0, use_bb=True))  # nvram 200-100
+        ret = self.env.process(write_io.run(self.env, cluster, placement=0, use_bb=True))  # nvram 200-100
         self.env.run()
         self.assertEqual(bb.capacity.level, write_io.volume)
         self.assertEqual(bb.persistent_tier.capacity.level, write_io.volume)
@@ -579,7 +579,7 @@ class TestPhaseEphemeralTier(unittest.TestCase):
         cluster = Cluster(self.env, tiers=[self.hdd_tier, self.ssd_tier],
                           ephemeral_tier=bb)
         # run the phase on the tier with placement = bb
-        self.env.process(mix_io.run(self.env, cluster, placement=0, use_bb=False))  # nvram 200-100
+        ret = self.env.process(mix_io.run(self.env, cluster, placement=0, use_bb=False))  # nvram 200-100
         self.env.run()
         # bb should be empty as use_bb is False
         self.assertEqual(bb.capacity.level, 0)

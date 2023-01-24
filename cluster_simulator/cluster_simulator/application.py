@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 import math
 from cluster_simulator.cluster import Cluster, Tier, bandwidth_share_model, compute_share_model, get_tier
-from cluster_simulator.phase import DelayPhase, ComputePhase, IOPhase
+from cluster_simulator.phase import DelayPhase, ComputePhase, IOPhase, MixIOPhase
 import copy
 from cluster_simulator.utils import name_app, convert_size
 from simpy.events import AnyOf, AllOf, Event
@@ -46,7 +46,8 @@ class Application:
     """
 
     def __init__(self, env, name=None, compute=None, read=None,
-                 write=None, bw=None, data=None, delay=0):
+                 write=None, bw=None, read_bw=None, write_bw=None,
+                 data=None, delay=0):
         """Initialize the application and schedule the sequence of phases.
 
         Args:
@@ -65,7 +66,12 @@ class Application:
             data:
                 (optional) a simpy.Store object that stores the phases schedule of the application and make it available outside of the application.
             bw :
-                (list, optional) in MB/s the observed throughput for this IO to reproduce the observed results.
+                (list, optional) in MB/s the observed throughput for this IO to reproduce the observed results. Used only when read and write phases are separated. Contains only one list of (consecutive) bw values.
+
+            read_bw : (list, optional) in MB/s the observed throughput for this read IO to reproduce the observed results. Used only when read and write phases are separated. Contains only one list of (consecutive) bw values.
+
+            write_bw: (list, optional) in MB/s the observed throughput for this written IO to       reproduce the observed results. Used only when read and write phases are separated. Contains only one list of (consecutive) bw values.
+
             delay:
                 time in seconds to wait in order to start the application.
         """
@@ -80,6 +86,8 @@ class Application:
         assert all([len(lst) == len(self.compute) for lst in [self.read, self.write]])
         self.data = data or None
         self.bw = bw or None
+        self.read_bw = read_bw or None
+        self.write_bw = write_bw or None
         self.status = None
         # schedule all events
         self.cores_request = []
@@ -109,7 +117,7 @@ class Application:
         self.store.put(compute_phase)
         self.cores_request.append(compute_phase.cores)
 
-    def put_io(self, operation, volume, pattern=1, bw=None):
+    def put_io(self, operation, volume, pattern=1, bw=None, read_bw=None, write_bw=None):
         """Add an I/O phase in read or write mode with a specific volume and pattern. It subclasses IOPhase and the object is queued to store attribute.
 
         Args:
@@ -127,6 +135,59 @@ class Application:
         self.store.put(io_phase)
         self.cores_request.append(io_phase.cores)
 
+    def put_mix_io(self, read_volume, write_volume, read_pattern=1, write_pattern=1,
+                   read_bw=None, write_bw=None):
+        """Add an a read/write (mix) I/O phase write and read specific volume and pattern. It subclasses MixIOPhase and the object is queued to store attribute.
+
+        Args:
+            operation (string):
+                type of I/O operation, "read" or "write". Cannot schedule a mix of both.
+            volume (float): volume in bytes of data to be processed by the I/O.
+            pattern (float):
+                encodes sequential pattern for a value of 1, and a random pattern for value of 0. Accepts intermediate values like 0.2, i.e. a mix of 20% sequential and 80% random. Default value is set to 1.
+            bw (float):
+                if note None initiates an IOPhase with bw argument to comply to mandatory observed bandwidth.
+        """
+
+        mix_io_phase = MixIOPhase(cores=1,
+                                  read_volume=read_volume,
+                                  write_volume=write_volume,
+                                  read_pattern=read_pattern,
+                                  write_pattern=write_pattern,
+                                  data=self.data, appname=self.name,
+                                  read_bw=read_bw, write_bw=write_bw)
+        self.store.put(mix_io_phase)
+        self.cores_request.append(mix_io_phase.cores)
+
+    def get_operation_bw(self, operation, phase_number):
+        """Adapts the requested bandwidth from attributes assignments.
+        If bw is specified, if it general for read and write operation if others are None.
+        If read_bw and/or write_bw are not None, it overrides bw value.
+        If both are None, use the cluster/tier available bandwidth, and this is the default for simulation.
+
+        Args:
+            operation (string): "read" for read operation and "write" for write operation.
+            phase_number (int): phase number as indicated in bandwidth list indexes.
+
+        Returns bw (float): relevant bandwidth value for this phase. If None, take the cluster allowed value.
+        """
+        #operation_bw = self.read_bw if operation == "read" else self.write_bw if operation == "write" else None
+
+        operation_bw = None
+        if operation == "read":
+            operation_bw = self.read_bw
+        elif operation == "write":
+            operation_bw = self.write_bw
+
+        if self.bw is None and operation_bw is None:
+            phase_bw = None
+        elif self.bw is None:
+            phase_bw = operation_bw[phase_number]
+        elif self.read_bw is None:
+            phase_bw = self.bw[phase_number]
+
+        return phase_bw
+
     def schedule(self):
         """Read the compute/read/write inputs from application attributes and schedule them in a sequential order.
 
@@ -139,18 +200,29 @@ class Application:
             self.status.append(False)
         for i, _ in enumerate(self.compute):
             # iterating over timestamps
-            if self.read[i] > 0:
+            if self.read[i] > 0 and self.write[i] == 0:
                 # register read phases
-                phase_bw = self.bw[i] if self.bw else None
+                # get phase from bw if not None, else take it from read_bw
+                phase_bw = self.get_operation_bw(operation="read", phase_number=i)
                 self.put_io(operation="read", volume=self.read[i], bw=phase_bw)
                 self.status.append(False)
-            if self.write[i] > 0:
+            if self.write[i] > 0 and self.read[i] == 0:
                 # register write phases
-                phase_bw = self.bw[i] if self.bw else None
+                # get phase from bw if not None, else take it from write_bw
+                phase_bw = self.get_operation_bw(operation="write", phase_number=i)
                 self.put_io(operation="write", volume=self.write[i], bw=phase_bw)
                 self.status.append(False)
+            if self.read[i] > 0 and self.write[i] > 0 :
+                # register mix read/write phases
+                phase_read_bw = self.get_operation_bw(operation="read", phase_number=i)
+                phase_write_bw = self.get_operation_bw(operation="write", phase_number=i)
+                self.put_mix_io(read_volume=self.read[i],
+                                write_volume=self.write[i],
+                                read_bw=phase_read_bw,
+                                write_bw=phase_write_bw)
+                self.status.append(False)
             if i < len(self.compute) - 1:
-                # register compute phase with duration  = diff between two events
+                # register compute phase with duration equal to difference between two events
                 duration = self.compute[i+1] - self.compute[i]
                 self.put_compute(duration, cores=1)
                 self.status.append(False)
@@ -182,6 +254,7 @@ class Application:
         phase = 0
         requesting_cores = self.request_cores(cluster)
         while self.store.items:
+            # get a phase from the store
             item = yield self.store.get()
             if isinstance(item, DelayPhase) and phase == 0:
                 self.status[phase] = yield self.env.process(item.run(self.env, cluster))
@@ -198,15 +271,18 @@ class Application:
                 else:
                     self.status[phase] = False
             else:
+                # io phase or mix io phase
                 data_placement = cluster.tiers[int(placement[item_number])]
                 bb = use_bb[item_number] if use_bb else False
                 if phase == 0:
                     yield AllOf(self.env, requesting_cores)
-                    ret = yield self.env.process(item.run(self.env, cluster, placement=data_placement, use_bb=bb))
+                    ret = yield self.env.process(item.run(self.env, cluster,
+                                                          placement=data_placement, use_bb=bb))
                     self.status[phase] = ret
                     logger.debug(f"the issued status of the IO phase : {self.status[phase]}")
                 elif phase > 0 and self.status[phase-1] == True:
-                    self.status[phase] = yield self.env.process(item.run(self.env, cluster, placement=data_placement, use_bb=bb))
+                    self.status[phase] = yield self.env.process(item.run(self.env, cluster,
+                                                                         placement=data_placement, use_bb=bb))
                 else:
                     self.status[phase] = False
                 phase += 1
