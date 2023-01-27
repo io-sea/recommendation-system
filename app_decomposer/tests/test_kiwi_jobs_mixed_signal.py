@@ -26,6 +26,7 @@ from app_decomposer.signal_decomposer import KmeansSignalDecomposer, get_lowest_
 
 from cluster_simulator.analytics import get_execution_signal, get_execution_signal_2, display_original_sim_signals, get_execution_signal_3, plot_simple_signal
 
+from app_decomposer.utils import convert_size
 from app_decomposer import API_DICT_TS
 
 SHOW_FIGURE = False
@@ -246,9 +247,10 @@ class TestJobDecomposerFeatures(unittest.TestCase):
         representation = cd.get_job_representation(merge_clusters=True)
         compute, reads, read_bw, writes, write_bw = representation["events"], representation["read_volumes"], representation["read_bw"], representation["write_volumes"], representation["write_bw"]
         # This is the app encoding representation for Execution Simulator
-        print(f"compute={compute}, reads={reads}, read_bw={read_bw}")
-        print(f"compute={compute}, writes={writes}, write_bw={write_bw}")
+        print(f"compute={compute}, reads={list(map(convert_size, reads))}, read_bw={list(map(convert_size, read_bw))}")
+        print(f"compute={compute}, writes={list(map(convert_size, writes))}, write_bw={list(map(convert_size, write_bw))}")
 
+        print(representation)
 
         # Original signal
         timestamps = (cd.timestamps.flatten() - cd.timestamps.flatten()[0])/5
@@ -298,5 +300,75 @@ class TestJobDecomposerFeatures(unittest.TestCase):
         plt.title(f"Simulated timeseries for jobid = {jobid}")
         plt.show()
 
+
+    @patch.object(ComplexDecomposer, 'get_job_node_count')
+    @patch.object(Configuration, 'get_kc_token')
+    @patch.object(ComplexDecomposer, 'get_job_timeseries')
+    def test_job_phases_read_write_mixed_2(self, mock_get_timeseries, mock_get_kc_token, mock_get_node_count):
+        """Test if JobDecomposer initializes well from dumped files containing job timeseries."""
+        # mock the method to return some dataset file content
+        jobid = 3917
+        timeseries = get_job_timeseries_from_file(job_id=jobid)
+        mock_get_timeseries.return_value = timeseries
+        mock_get_kc_token.return_value = 'token'
+        mock_get_node_count.return_value = 1
+        # init the job decomposer
+        cd = ComplexDecomposer()
+
+        representation = cd.get_job_representation(merge_clusters=True)
+        compute, reads, read_bw, writes, write_bw = representation["events"], representation["read_volumes"], representation["read_bw"], representation["write_volumes"], representation["write_bw"]
+        # This is the app encoding representation for Execution Simulator
+        print(f"compute={compute}, reads={reads}, read_bw={read_bw}")
+        print(f"compute={compute}, writes={writes}, write_bw={write_bw}")
+
+        print(representation)
+
+        # Original signal
+        timestamps = (cd.timestamps.flatten() - cd.timestamps.flatten()[0])/5
+        read_signal =  cd.read_signal.flatten()/1e6
+        write_signal = cd.write_signal.flatten()/1e6
+
+
+        plt.plot(timestamps, read_signal, label="read signal")
+        plt.plot(timestamps, write_signal, label="write signal")
+        plt.grid(True)
+        plt.legend()
+        plt.title(f"original timeseries for jobid = {jobid}")
+        plt.show()
+
+        # Simulated signal
+
+        read_bw_scaled = list(map(lambda x: x/1e6, read_bw))
+        write_bw_scaled = list(map(lambda x: x/1e6, write_bw))
+
+
+        data = simpy.Store(self.env)
+        cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=2,
+                          tiers=[self.ssd_tier, self.nvram_tier])
+        app = Application(self.env, name=f"job#{jobid}",
+                          compute=compute,
+                           read=reads,
+                           write=writes,
+                           data=data,
+                           read_bw=read_bw_scaled,
+                           write_bw=write_bw_scaled)
+        self.env.process(app.run(cluster, placement=[0]*(10*len(compute))))
+        self.env.run()
+        # Extract app execution signals
+        output = get_execution_signal_3(data)
+        time = output[app.name]["time"]
+        sim_read_bw = output[app.name]["read_bw"]
+        sim_write_bw = output[app.name]["write_bw"]
+        min_length = min(len(timestamps), len(sim_read_bw), len(sim_write_bw))
+        timestamps = timestamps[:min_length]
+        sim_read_bw = sim_read_bw[:min_length]
+        sim_write_bw = sim_write_bw[:min_length]
+
+        plt.plot(timestamps, sim_read_bw, label="read signal")
+        plt.plot(timestamps, sim_write_bw, label="write signal")
+        plt.grid(True)
+        plt.legend()
+        plt.title(f"Simulated timeseries for jobid = {jobid}")
+        plt.show()
 
 
