@@ -526,11 +526,13 @@ class ComplexDecomposer:
         compute = []
         read_bw = []
         read_volumes = []
+        #read_durations = []
         read_pattern = []
         read_operations = []
 
         write_bw = []
         write_volumes = []
+        #write_durations = []
         write_pattern = []
         write_operations = []
 
@@ -549,8 +551,10 @@ class ComplexDecomposer:
                 output["events"] = [0, len(self.norm_signal)-1]
                 output["read_volumes"] = [0, 0]
                 output["read_bw"] = [0, 0]
+                #output["read_durations"] = [0, 0]
                 output["write_volumes"] = [0, 0]
                 output["write_bw"] = [0, 0]
+                #output["write_durations"] = [0, 0]
                 output["read_pattern"] = ["Uncl", "Uncl"]
                 output["write_pattern"] = ["Uncl", "Uncl"]
                 output["read_operations"] = [0, 0]
@@ -604,6 +608,7 @@ class ComplexDecomposer:
 
                 assert ending_point >= starting_point
             read_volumes.append(read_volume)
+            #read_durations.append(read_extent)
             bw = read_volume/(read_extent) if read_extent else 0
             read_bw.append(bw)
             # Getting biggest access read
@@ -640,6 +645,7 @@ class ComplexDecomposer:
 
 
             write_volumes.append(write_volume)
+            #write_durations.append(write_extent)
             bw = write_volume/(write_extent) if write_extent else 0
             write_bw.append(bw)
 
@@ -659,8 +665,10 @@ class ComplexDecomposer:
         output["node_count"] = self.node_count
         output["events"] = compute
         output["read_volumes"] = read_volumes or [0]
+        #output["read_durations"] = read_durations or [0]
         output["read_bw"] = read_bw or [0]
         output["write_volumes"] = write_volumes or [0]
+        #output["write_durations"] = write_durations or [0]
         output["write_bw"] = write_bw or [0]
         output["read_pattern"] = read_pattern or ["Uncl"]
         output["write_pattern"] = write_pattern or ["Uncl"]
@@ -712,7 +720,9 @@ class ComplexDecomposer:
             features["nodes"] = representation["node_count"]
             # job_id | read_volume | write_volume | read_io_pattern | write_io_pattern | read_io_size | write_io_size | nodes | ioi_bw
             features["read_volume"] = representation["read_volumes"][i_phase]
+            #features["read_duration"] = representation["read_durations"][i_phase]
             features["write_volume"] = representation["write_volumes"][i_phase]
+            #features["write_duration"] = representation["write_durations"][i_phase]
             features["read_io_pattern"] = representation["read_pattern"][i_phase].lower()
             features["write_io_pattern"] = representation["write_pattern"][i_phase].lower()
 
@@ -724,12 +734,14 @@ class ComplexDecomposer:
             # phase duration is common to read and write ops within the same phase
             # volume_phase = volume_read + volume_write = read_bw*phase_duration + write_bw*phase_duration
 
-            read_latency = representation["read_volumes"][i_phase]/representation["read_bw"][i_phase] if representation["read_bw"][i_phase] else 0
-            write_latency =  representation["write_volumes"][i_phase]/representation["write_bw"][i_phase] if representation["write_bw"][i_phase] else 0
-            sum_of_latencies = read_latency + write_latency
-            sum_of_volumes = representation["read_volumes"][i_phase] + representation["write_volumes"][i_phase]
+            # read_latency = representation["read_volumes"][i_phase]/representation["read_bw"][i_phase] if representation["read_bw"][i_phase] else 0
+            # write_latency =  representation["write_volumes"][i_phase]/representation["write_bw"][i_phase] if representation["write_bw"][i_phase] else 0
+            # sum_of_latencies = read_latency + write_latency
+            # sum_of_volumes = representation["read_volumes"][i_phase] + representation["write_volumes"][i_phase]
             # features["ioi_bw"] = (sum_of_volumes / sum_of_latencies) / IOI_SAMPLING_PERIOD if sum_of_latencies else 0
             features["ioi_bw"] = (representation["read_bw"][i_phase] +  representation["write_bw"][i_phase]) / IOI_SAMPLING_PERIOD
+            #features["read_ioi_bw"] = representation["read_bw"][i_phase] / IOI_SAMPLING_PERIOD
+            #features["write_ioi_bw"] = representation["write_bw"][i_phase] / IOI_SAMPLING_PERIOD
 
             phases_features.append(features)
 
