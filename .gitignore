@@ -11,6 +11,7 @@ __pycache__/
 # Special folders and vscode
 job_decomposer/
 performance_data/performance_data/tmp/
+dataset_generation/cmdb_database/
 jobmodel
 .vscode/
 .VSCodeCounter/

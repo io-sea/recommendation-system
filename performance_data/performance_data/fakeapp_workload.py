@@ -34,8 +34,8 @@ class FakeappWorkload:
         self.phase["read_ops"] = int(self.phase["read_volume"] / self.phase["read_io_size"]) if self.phase["read_io_size"] else 0
         self.phase["write_ops"] = int(self.phase["write_volume"] / self.phase["write_io_size"]) if self.phase["write_io_size"] else 0
         # init logging
-        logger.info(f'Volume read: {convert_size(self.phase["read_volume"])} | IO pattern: {self.phase["read_io_pattern"]} | IO size: {self.phase["read_io_size"]} | #IO: {self.phase["read_ops"]}')
-        logger.info(f'Volume write: {convert_size(self.phase["write_volume"])} | IO pattern: {self.phase["write_io_pattern"]} | IO size: {self.phase["write_io_size"]} | #IO: {self.phase["write_ops"]}')
+        logger.info(f'Volume read: {convert_size(self.phase["read_volume"])} | IO pattern: {self.phase["read_io_pattern"]} | IO size: {self.phase["read_io_size"]} | IO nbr: {self.phase["read_ops"]}')
+        logger.info(f'Volume write: {convert_size(self.phase["write_volume"])} | IO pattern: {self.phase["write_io_pattern"]} | IO size: {self.phase["write_io_size"]} | IO nbr: {self.phase["write_ops"]}')
         logger.info(f'Nodes: {self.phase["nodes"]} | Storage tier: {self.target_tier} | SBB Accelerated: {self.accelerator} | IOI enabled: {self.ioi}')
 
 
@@ -199,6 +199,14 @@ class FakeappWorkload:
         return real_time
 
     def get_data(self):
+        """
+        Calculate elapsed time and bandwidth for a workload.
+
+        This method calculates the elapsed time and bandwidth for a workload by adding the read and write volume and then dividing the total volume by the elapsed time. The write_sbatch_file method is called to write a batch file, which is then run using the run_sbatch_file method. The elapsed time is obtained from the run_sbatch_file method and used to calculate the bandwidth. The method logs the calculated values and returns them.
+
+        Returns:
+        Tuple[float, float]: A tuple of the elapsed time and bandwidth for the workload.
+        """
         bandwidth = 0
         elapsed_time = 0
         total_volume = self.phase["read_volume"] + self.phase["write_volume"]
@@ -213,13 +221,14 @@ class FakeappWorkload:
 
 
 if __name__ == '__main__':
-    lfs="/fsiof/phamtt/tmp"
-    nfs="/scratch/phamtt/tmp"
+    lfs="/fsiof/mimounis/tmp"
+    nfs="/scratch/mimounis/tmp"
     acc = "SBB" # currently support onyly SBB with the lfs target
 
     phase0=dict(read_volume=100000000, read_io_pattern="stride", read_io_size=10000, write_volume=0, write_io_pattern="uncl", write_io_size=0, nodes=1)
-    phase0=dict(read_volume=5e9, read_io_pattern="stride", read_io_size=10000, write_volume=5e9, write_io_pattern="rand", write_io_size=10000, nodes=1)
+    phase0=dict(read_volume=5e7, read_io_pattern="stride", read_io_size=10000,
+                write_volume=5e7, write_io_pattern="rand", write_io_size=10000, nodes=1)
 
-    fa = FakeappWorkload(phase0, lfs, False, True)
+    fa = FakeappWorkload(phase0, target_tier=lfs, accelerator=True, ioi=False)
     fa.get_data()
 

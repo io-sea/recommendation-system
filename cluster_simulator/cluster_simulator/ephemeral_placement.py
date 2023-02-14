@@ -74,9 +74,6 @@ class ClusterBlackBox:
         self.parameter_space = np.array([np.arange(0, self.n_tiers, 1), np.arange(0, 2, 1)]*sum(self.ios))
 
 
-
-
-
     def get_io_nbr(self):
         """Get the total number of I/O operations for all applications
         Example:
@@ -177,7 +174,8 @@ class ClusterBlackBox:
         self.df = pd.DataFrame(self.experiment_data, columns=columns)
         if save:
             pathfile = os.path.join(os.getcwd(), "notebooks", filename)
-            self.df.to_pickle(pathfile)
+            #self.df.to_pickle(pathfile)
+            self.df.to_csv(pathfile)
             print(f"dataframe saved to {pathfile}")
         else:
             return self.df

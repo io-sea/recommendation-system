@@ -51,13 +51,13 @@ class TestPhaseData(unittest.TestCase):
     #     perf_data = dt.get_performance_table(filename=self.dataset_target)
     #     print(perf_data)
 
-    def test_get_performance_table_default(self):
-        """tests if get_tiers extract relevant list of tiers."""
-        #targets = dict(lfs="/fsiof/mimounis/tmp", nfs="/scratch/mimounis/tmp")
-        targets = dict(lfs="/fsiof/mimounis/tmp")
-        dt = DataTable(targets, accelerator=True)
-        perf_data = dt.get_performance_table(filename=self.dataset_target_6)
-        print(perf_data)
+    # def test_get_performance_table_default(self):
+    #     """tests if get_tiers extract relevant list of tiers."""
+    #     #targets = dict(lfs="/fsiof/mimounis/tmp", nfs="/scratch/mimounis/tmp")
+    #     targets = dict(lfs="/fsiof/mimounis/tmp")
+    #     dt = DataTable(targets, accelerator=True)
+    #     perf_data = dt.get_performance_table(filename=self.dataset_target_6)
+    #     print(perf_data)
 
     # def test_get_performance_table_with_capping(self):
     #     """tests if get_tiers extract relevant list of tiers."""

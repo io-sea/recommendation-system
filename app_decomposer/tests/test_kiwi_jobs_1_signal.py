@@ -101,6 +101,14 @@ def plot_job_signal(jobid=None):
     plt.title(f"timeserie for jobid = {jobid}")
     plt.show()
 
+def plot_signal(x, read_signal, write_signal):
+    plt.plot(x, read_signal, label="read signal")
+    plt.plot(x, write_signal, label="write signal")
+    plt.grid(True)
+    plt.legend()
+    plt.title(f"timeseries for job signals")
+    return plt
+
 class QualifyComplexDecomposerOnSyntheticSignals(unittest.TestCase):
     """Examine and qualify JobDecomposer on 1D signals."""
     def setUp(self):

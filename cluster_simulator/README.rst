@@ -49,7 +49,7 @@ Simple sequential application
     :caption: preparing the cluster compute and storage tiers facilities
 
     ssd_bandwidth =   {'read':  {'seq': 210, 'rand': 190}, # throughput for read ops in MB/s
-                       'write': {'seq': 100, 'rand': 100}} # for read/write random/sequential I/O
+                       'write': {'seq': 100, 'rand': 100}} # for read/write sequential/random I/O
 
     # register the tier with a name and a capacity
     ssd_tier = Tier(env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
@@ -57,7 +57,7 @@ Simple sequential application
                      'write': {'seq': 40, 'rand': 40}}
 
     # register the tier with a name and a capacity
-    hdd_tier = Tier(self.env, 'HDD', bandwidth=hdd_bandwidth, capacity=1e12)
+    hdd_tier = Tier(env, 'HDD', bandwidth=hdd_bandwidth, capacity=1e12)
 
     # register the cluster by completing the compute characteristics
     cluster = Cluster(env, compute_nodes=3,     # number of physical nodes
