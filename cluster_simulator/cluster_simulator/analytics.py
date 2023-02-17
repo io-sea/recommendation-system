@@ -208,22 +208,26 @@ def display_run(data, cluster, width=800, height=600, nbr_points=None):
         text_mvt = []
 
         for phase in app_elements:
-            if phase['type'] not in ['movement']:
+            if phase['type'] not in ['movement', 'eviction']:
                 t_starts.append(phase["t_start"])
                 t_ends.append(phase["t_end"])
 
-                if phase['type'] in ['compute']:
+                if phase['type'] == 'compute':
                     # remove intermediate 0 padding if not final
                     app_bw_read.append(0)
                     app_bw_write.append(0)
 
-                if phase["type"] in ["read"]:
+                elif phase["type"] == "read":
                     app_bw_read.append(phase["bandwidth"])
                     app_bw_write.append(0)
 
-                if phase["type"] in ["write"]:
+                elif phase["type"]  == "write":
                     app_bw_read.append(0)
                     app_bw_write.append(phase["bandwidth"])
+
+                else:
+                    app_bw_read.append(0)
+                    app_bw_write.append(0)
 
 
                 placement = "|on:"+phase["data_placement"]["placement"] if phase["data_placement"] else ''
@@ -548,6 +552,8 @@ def interpolate_signal_from_simulation(x, start_points, end_points, bw_values):
         result_write = fill_list(x, t_starts, t_ends, write_bw)
 
     """
+
+    assert len(start_points) == len(end_points) == len(bw_values), f"start_points: {len(start_points)}, end_points: {len(end_points)} and bw_values: {len(bw_values)} must have same length"
 
     last_start = 0
     last_end = 0

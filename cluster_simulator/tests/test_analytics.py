@@ -9,7 +9,7 @@ from cluster_simulator.utils import convex_hull
 from cluster_simulator.cluster import Cluster, Tier, EphemeralTier, bandwidth_share_model, compute_share_model, get_tier, convert_size
 from cluster_simulator.phase import DelayPhase, ComputePhase, IOPhase
 from cluster_simulator.application import Application
-from cluster_simulator.analytics import display_run
+from cluster_simulator.analytics import display_run, interpolate_signal_from_simulation
 from cluster_simulator.ephemeral_placement import ClusterBlackBox
 from cluster_simulator.analytics import *
 import time
@@ -17,11 +17,28 @@ import numpy as np
 import pandas as pd
 import os
 
-# logger.remove()
-# logger.level('DEBUG')
+logger.remove()
+logger.level('DEBUG')
+
+class TestAnalyticsSignals(unittest.TestCase):
+    def test_signal_interpolation(self):
+        t_starts = [0, 0, 20]
+        t_ends = [20, 20, 30]
+
+        read_bw = [105, 0, 0]
+        write_bw = [0, 50, 100]
+
+        x = np.arange(np.min(t_starts), np.max(t_ends), 1)
+
+        result_read = interpolate_signal_from_simulation(x, t_starts, t_ends, read_bw)
+        result_write = interpolate_signal_from_simulation(x, t_starts, t_ends, write_bw)
+
+        print(f"result_read = {result_read}")
+        print(f"result_write = {result_write}")
 
 
-class TestPhase(unittest.TestCase):
+
+class TestAnalytics(unittest.TestCase):
     def setUp(self):
         # sim env an data
         self.env = simpy.Environment()
@@ -118,3 +135,7 @@ class TestPhase(unittest.TestCase):
 
         fig = display_run(self.data, self.cluster, width=800, height=900)
         fig.show()
+
+
+if __name__ == '__main__':
+    unittest.main(verbosity=2)
