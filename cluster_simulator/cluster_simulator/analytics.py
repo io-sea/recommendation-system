@@ -8,7 +8,6 @@ import plotly.colors as colors
 import numpy as np
 from itertools import groupby
 from operator import itemgetter
-from loguru import logger
 import itertools
 from collections import deque
 import matplotlib.pyplot as plt
@@ -68,7 +67,7 @@ def display_apps(data, width=800, height=600):
             text.append(phase["type"].upper() + placement + "|volume="+convert_size(phase["volume"]))
             text.append(phase["type"].upper() + placement + "|volume="+convert_size(phase["volume"]))
 
-        fig.append_trace(go.Scatter(x=np.array(x_app), y=np.array(y_app),
+        fig.add_trace(go.Scatter(x=np.array(x_app), y=np.array(y_app),
                                     text=text,
                                     textposition="top center",
                                     name=app, line_shape='hv', showlegend=False), row=i+1, col=1)
@@ -127,7 +126,7 @@ def display_cluster(data, cluster, width=800, height=600):
 
     # trace CPU usage
     points, values = accumulate_intervals(x_phase, y_phase)
-    fig.append_trace(go.Scatter(x=np.array(points), y=np.array(values),
+    fig.add_trace(go.Scatter(x=np.array(points), y=np.array(values),
                                 line_shape='hv', showlegend=False), row=1, col=1)
     fig['layout']['yaxis']['title'] = 'CPU usage'
 
@@ -137,28 +136,28 @@ def display_cluster(data, cluster, width=800, height=600):
         tier_capacity = [cluster.tiers[j].capacity.capacity for j, ctier in enumerate(cluster.tiers) if ctier.name == tier][0]
         print(np.array(x_tiers))
         print(np.array(storage[tier])/tier_capacity)
-        fig.append_trace(go.Scatter(x=np.array(x_tiers),
+        fig.add_trace(go.Scatter(x=np.array(x_tiers),
                                     y=100*np.array(storage[tier])/tier_capacity,
                                     text=text,
                                     textposition="top center",
                                     name=tier, line_shape='linear', showlegend=False), row=i+1, col=1)
         fig['layout']['yaxis' + str(i+1)]['title'] = tier + ' usage in %'
 
-        # fig.append_trace(go.Scatter(x=np.array([x_tiers[0], x_tiers[-1]]),
+        # fig.add_trace(go.Scatter(x=np.array([x_tiers[0], x_tiers[-1]]),
         #                             y=np.array([cluster_tier.capacity.capacity]*2),
         #                             text=["Maximum Tier Capacity=" + str(cluster_tier.capacity.capacity)]*2, line_shape='hv', showlegend=False, line=dict(color='red', width=3, dash='dot')), row=i+1, col=1)
 
     # for tier in storage.keys():
     #     i += 1
     #     for index, abscissa in enumerate(x_phase):
-    #         fig.append_trace(go.Scatter(x=np.array(x_phase[index]),
+    #         fig.add_trace(go.Scatter(x=np.array(x_phase[index]),
     #                                     y=np.array(storage[tier][index]),
     #                                     line_shape='linear', showlegend=False),
     #                                     row=1+i, col=1)
 
-    # fig.append_trace(go.Scatter(x=np.array(points), y=np.array([cluster.compute_cores]),
+    # fig.add_trace(go.Scatter(x=np.array(points), y=np.array([cluster.compute_cores]),
     #                              line_shape='hv', showlegend=False), row=1, col=1)
-    fig.append_trace(go.Scatter(x=np.array([points[0], points[-1]]), y=np.array([cluster.compute_cores.capacity]*2), text=["Maximum available cores in cluster=" +
+    fig.add_trace(go.Scatter(x=np.array([points[0], points[-1]]), y=np.array([cluster.compute_cores.capacity]*2), text=["Maximum available cores in cluster=" +
                                                                                                                            str(cluster.compute_cores.capacity)]*2, line_shape='hv', showlegend=False, line=dict(color='red', width=3, dash='dot')), row=1, col=1)
 
     # fig.update_xaxes(title_text="time in s")
@@ -168,7 +167,7 @@ def display_cluster(data, cluster, width=800, height=600):
     return fig
 
 
-def display_run(data, cluster, width=800, height=600):
+def display_run(data, cluster, width=800, height=600, nbr_points=None):
     # | Monitoring| app: P6 | type: movement | cpu_usage: 1 | t_start: 281.0 | t_end: 287.5 | bandwidth_concurrency: 1 | bandwidth: 40.0 MB/s | phase_duration: 6.5 | volume: 260.0 MB | tiers: ['HDD'] | data_placement: {'placement': 'HDD', 'source': 'BB'} | init_level: {'HDD': 11740000000.0, 'BB': 8490000000.0} | tier_level: {'HDD': 12000000000.0, 'BB': 8490000000.0} | BB_level: 8490000000.0
     # | Monitoring| app: N6 | type: eviction | cpu_usage: 1 | t_start: 93.5 | t_end: 93.5 | bandwidth_concurrency: 3 | bandwidth: inf MB/s | phase_duration: 0 | volume: 740.0 MB | tiers: ['HDD'] | data_placement: {'placement': 'BB'} | init_level: {'HDD': 2740000000.0, 'BB': 10000000000.0} | tier_level: {'HDD': 2740000000.0, 'BB': 9260000000.0} | BB_level: 9260000000.0
 
@@ -177,7 +176,7 @@ def display_run(data, cluster, width=800, height=600):
     # sort by app key
     items = sorted(data.items, key=itemgetter('app'))
     # list of apps
-    list_apps = [app for app, _ in groupby(items,  key=itemgetter('app'))]
+    list_apps = ["app#"+app for app, _ in groupby(items,  key=itemgetter('app'))]
     # list Burst Buffers
     bb_tier = [cluster.ephemeral_tier.name + " ("+convert_size(cluster.ephemeral_tier.capacity.capacity)+")"] if cluster.ephemeral_tier else []
 
@@ -194,8 +193,14 @@ def display_run(data, cluster, width=800, height=600):
         # app_color = DEFAULT_COLORS[i]
         offset = 0
 
-        x_app = []
-        y_app = []
+        app_time = []
+        phase_bw_read = []
+        phase_bw_write = []
+        app_bw_read = []
+        app_bw_write = []
+        t_starts = []
+        t_ends = []
+
         text = []
 
         x_mvt = []
@@ -204,11 +209,24 @@ def display_run(data, cluster, width=800, height=600):
 
         for phase in app_elements:
             if phase['type'] not in ['movement']:
-                x_app.append(phase["t_start"])
-                x_app.append(phase["t_end"])
-                y_app.append(phase["bandwidth"])
-                y_app.append(phase["bandwidth"])
-                placement = "|to/from:"+phase["data_placement"]["placement"] if phase["data_placement"] else ''
+                t_starts.append(phase["t_start"])
+                t_ends.append(phase["t_end"])
+
+                if phase['type'] in ['compute']:
+                    # remove intermediate 0 padding if not final
+                    app_bw_read.append(0)
+                    app_bw_write.append(0)
+
+                if phase["type"] in ["read"]:
+                    app_bw_read.append(phase["bandwidth"])
+                    app_bw_write.append(0)
+
+                if phase["type"] in ["write"]:
+                    app_bw_read.append(0)
+                    app_bw_write.append(phase["bandwidth"])
+
+
+                placement = "|on:"+phase["data_placement"]["placement"] if phase["data_placement"] else ''
 
                 text.append(phase["type"].upper() + placement + "|volume="+convert_size(phase["volume"]))
                 text.append(phase["type"].upper() + placement + "|volume="+convert_size(phase["volume"]))
@@ -226,14 +244,28 @@ def display_run(data, cluster, width=800, height=600):
                 text_mvt.append(phase["type"].upper() + placement + source + "|volume="+convert_size(phase["volume"]))
                 text_mvt.append(phase["type"].upper() + placement + "|volume="+convert_size(phase["volume"]))
 
-            # plot the app phases
-        fig.append_trace(go.Scatter(x=np.array(x_app), y=np.array(y_app),
+        # do the interpolation
+        if not nbr_points:
+            N = 1 + int(max(t_ends) - min(t_starts))
+        else:
+            N = nbr_points
+        app_time = np.linspace(min(t_starts), max(t_ends), N).tolist()
+        app_bw_read = interpolate_signal_from_simulation(app_time, t_starts, t_ends, app_bw_read)
+        app_bw_write = interpolate_signal_from_simulation(app_time, t_starts, t_ends, app_bw_write)
+        # plot the app phases
+        fig.add_trace(go.Scatter(x=np.array(app_time), y=np.array(app_bw_read),
                                     text=text,
                                     textposition="top center",
-                                    name="app#"+app, line_shape='linear'),
+                                    name="app#"+app+"#read", line_shape='linear'),
                                     #line=dict(color=jet_colors[i][1])),
                                     row=i, col=1)
-        fig.append_trace(go.Scatter(x=np.array(x_mvt), y=np.array(y_mvt),
+        fig.add_trace(go.Scatter(x=np.array(app_time), y=np.array(app_bw_write),
+                                    text=text,
+                                    textposition="top center",
+                                    name="app#"+app+"#write", line_shape='linear'),
+                                    #line=dict(color=jet_colors[i][1])),
+                                    row=i, col=1)
+        fig.add_trace(go.Scatter(x=np.array(x_mvt), y=np.array(y_mvt),
                                     text=text_mvt,
                                     textposition="top center",
                                     name=app + " mvt", #line_shape='linear',
@@ -296,12 +328,12 @@ def display_run(data, cluster, width=800, height=600):
     for bb in buffer_storage.keys():
         bb_capacity = cluster.ephemeral_tier.capacity.capacity
         # for segment, level in zip(x_phase, buffer_storage[bb]):
-        #     fig.append_trace(go.Scatter(x=np.array(segment),
+        #     fig.add_trace(go.Scatter(x=np.array(segment),
         #                                 y=level,
         #                                 text=text,
         #                                 textposition="top center",
         #                                 name=bb, line_shape='linear', showlegend=False), row=i, col=1)
-        fig.append_trace(go.Scatter(x=np.array(list(bb_levels.keys())),
+        fig.add_trace(go.Scatter(x=np.array(list(bb_levels.keys())),
                                     y=100*bb_capacity*np.array(list(bb_levels.values()))/bb_capacity/100,
                                     text=text,
                                     textposition="top center",
@@ -309,12 +341,12 @@ def display_run(data, cluster, width=800, height=600):
 
         if bb in eviction_levels:
             for segment, level in zip(x_evict, eviction_levels[bb]):
-                # fig.append_trace(go.Scatter(x=np.array(segment),
+                # fig.add_trace(go.Scatter(x=np.array(segment),
                 #                             y=level,
                 #                             text=text,
                 #                             textposition="top center",
                 #                             name=bb, line=dict(color='red', width=3, dash='dot'), showlegend=False), row=i, col=1)
-                fig.append_trace(go.Scatter(x=np.array(segment), y=np.array(level),
+                fig.add_trace(go.Scatter(x=np.array(segment), y=np.array(level),
                                             text=text_evict,
                                             textposition="top center",
                                             name=" Eviction",
@@ -339,12 +371,12 @@ def display_run(data, cluster, width=800, height=600):
                 #                    arrowwidth=1,
                 #                    arrowcolor='black', row=i, col=1)
 
-        # fig.append_trace(go.Scatter(x=np.array(list(bb_levels.keys())),
+        # fig.add_trace(go.Scatter(x=np.array(list(bb_levels.keys())),
         #                             y=100*bb_capacity*np.array(list(bb_levels.values()))/bb_capacity/100,
         #                             text=text,
         #                             textposition="top center",
         #                             name=bb, line_shape='linear', showlegend=False), row=i, col=1)
-        # fig.append_trace(go.Scatter(x=np.array(x_tiers),
+        # fig.add_trace(go.Scatter(x=np.array(x_tiers),
         #                             y=100*np.array(buffer_storage[bb])/bb_capacity,
         #                             text=text,
         #                             textposition="top center",
@@ -355,12 +387,12 @@ def display_run(data, cluster, width=800, height=600):
     for tier in storage.keys():
         # retrieve capacities
         tier_capacity = [cluster.tiers[j].capacity.capacity for j, ctier in enumerate(cluster.tiers) if ctier.name == tier][0]
-        fig.append_trace(go.Scatter(x=np.array(list(storage_levels[tier].keys())),
+        fig.add_trace(go.Scatter(x=np.array(list(storage_levels[tier].keys())),
                                     y=100*tier_capacity*np.array(list(storage_levels[tier].values()))/tier_capacity/100,
                                     text=text,
                                     textposition="top center",
                                     name=tier, line_shape='linear', showlegend=False), row=i, col=1)
-        # fig.append_trace(go.Scatter(x=np.array(x_tiers),
+        # fig.add_trace(go.Scatter(x=np.array(x_tiers),
         #                             y=100*np.array(storage[tier])/tier_capacity,
         #                             text=text,
         #                             textposition="top center",
@@ -371,10 +403,10 @@ def display_run(data, cluster, width=800, height=600):
 
     # CPU tracing
     points, values = accumulate_intervals(x_phase, y_phase)
-    fig.append_trace(go.Scatter(x=np.array(points), y=np.array(values),
+    fig.add_trace(go.Scatter(x=np.array(points), y=np.array(values),
                                 line_shape='hv', showlegend=False), row=i, col=1)
 
-    fig.append_trace(go.Scatter(x=np.array([points[0], points[-1]]), y=np.array([cluster.compute_cores.capacity]*2), text=["Maximum available cores in cluster=" + str(cluster.compute_cores.capacity)]*2, line_shape='hv', showlegend=False,
+    fig.add_trace(go.Scatter(x=np.array([points[0], points[-1]]), y=np.array([cluster.compute_cores.capacity]*2), text=["Maximum available cores in cluster=" + str(cluster.compute_cores.capacity)]*2, line_shape='hv', showlegend=False,
                                 line=dict(color='red', width=3, dash='dot')), row=i, col=1)
     fig['layout']['yaxis'+str(i)]['title'] = 'CPU usage'
     i += 1
@@ -658,18 +690,18 @@ def display_run_with_signal(data, cluster, app_signal, width=1200, height=600):
 
                 # plot the app phases
         print(f"x_app = {x_app}")
-        fig.append_trace(go.Scatter(x=np.array(x_app), y=np.array(y_app),
+        fig.add_trace(go.Scatter(x=np.array(x_app), y=np.array(y_app),
                                     text=text,
                                     textposition="top center", mode='lines+markers',
                                     name="App Modeled by Execution Sim "+app, line_shape='linear'), row=i, col=1)
         # plot original signals
-        fig.append_trace(go.Scatter(x=timestamps, y=read_signal/5/1e6, line_dash='dash',
+        fig.add_trace(go.Scatter(x=timestamps, y=read_signal/5/1e6, line_dash='dash',
                                     name="read signal from original data", line_shape='linear',
                                     mode='lines+markers'), row=i, col=1)
-        fig.append_trace(go.Scatter(x=timestamps, y=write_signal, line_dash='dash',
+        fig.add_trace(go.Scatter(x=timestamps, y=write_signal, line_dash='dash',
                                     name="write signal from original data", line_shape='linear',
                                     mode='lines+markers'), row=i, col=1)
-        fig.append_trace(go.Scatter(x=np.array(x_mvt), y=np.array(y_mvt),
+        fig.add_trace(go.Scatter(x=np.array(x_mvt), y=np.array(y_mvt),
                                     text=text_mvt,
                                     textposition="top center",
                                     name=app + " mvt", line_shape='linear', line={'dash': 'dot'}), row=i, col=1)
@@ -730,12 +762,12 @@ def display_run_with_signal(data, cluster, app_signal, width=1200, height=600):
     for bb in buffer_storage.keys():
         bb_capacity = cluster.ephemeral_tier.capacity.capacity
         # for segment, level in zip(x_phase, buffer_storage[bb]):
-        #     fig.append_trace(go.Scatter(x=np.array(segment),
+        #     fig.add_trace(go.Scatter(x=np.array(segment),
         #                                 y=level,
         #                                 text=text,
         #                                 textposition="top center",
         #                                 name=bb, line_shape='linear', showlegend=False), row=i, col=1)
-        fig.append_trace(go.Scatter(x=np.array(list(bb_levels.keys())),
+        fig.add_trace(go.Scatter(x=np.array(list(bb_levels.keys())),
                                     y=100*bb_capacity*np.array(list(bb_levels.values()))/bb_capacity/100,
                                     text=text,
                                     textposition="top center",
@@ -743,12 +775,12 @@ def display_run_with_signal(data, cluster, app_signal, width=1200, height=600):
 
         if bb in eviction_levels:
             for segment, level in zip(x_evict, eviction_levels[bb]):
-                # fig.append_trace(go.Scatter(x=np.array(segment),
+                # fig.add_trace(go.Scatter(x=np.array(segment),
                 #                             y=level,
                 #                             text=text,
                 #                             textposition="top center",
                 #                             name=bb, line=dict(color='red', width=3, dash='dot'), showlegend=False), row=i, col=1)
-                fig.append_trace(go.Scatter(x=np.array(segment), y=np.array(level),
+                fig.add_trace(go.Scatter(x=np.array(segment), y=np.array(level),
                                             text=text_evict,
                                             textposition="top center",
                                             name=" Eviction",
@@ -773,12 +805,12 @@ def display_run_with_signal(data, cluster, app_signal, width=1200, height=600):
                 #                    arrowwidth=1,
                 #                    arrowcolor='black', row=i, col=1)
 
-        # fig.append_trace(go.Scatter(x=np.array(list(bb_levels.keys())),
+        # fig.add_trace(go.Scatter(x=np.array(list(bb_levels.keys())),
         #                             y=100*bb_capacity*np.array(list(bb_levels.values()))/bb_capacity/100,
         #                             text=text,
         #                             textposition="top center",
         #                             name=bb, line_shape='linear', showlegend=False), row=i, col=1)
-        # fig.append_trace(go.Scatter(x=np.array(x_tiers),
+        # fig.add_trace(go.Scatter(x=np.array(x_tiers),
         #                             y=100*np.array(buffer_storage[bb])/bb_capacity,
         #                             text=text,
         #                             textposition="top center",
@@ -789,12 +821,12 @@ def display_run_with_signal(data, cluster, app_signal, width=1200, height=600):
     for tier in storage.keys():
         # retrieve capacities
         tier_capacity = [cluster.tiers[j].capacity.capacity for j, ctier in enumerate(cluster.tiers) if ctier.name == tier][0]
-        fig.append_trace(go.Scatter(x=np.array(list(storage_levels[tier].keys())),
+        fig.add_trace(go.Scatter(x=np.array(list(storage_levels[tier].keys())),
                                     y=100*tier_capacity*np.array(list(storage_levels[tier].values()))/tier_capacity/100,
                                     text=text,
                                     textposition="top center",
                                     name=tier, line_shape='linear', showlegend=False), row=i, col=1)
-        # fig.append_trace(go.Scatter(x=np.array(x_tiers),
+        # fig.add_trace(go.Scatter(x=np.array(x_tiers),
         #                             y=100*np.array(storage[tier])/tier_capacity,
         #                             text=text,
         #                             textposition="top center",
@@ -805,10 +837,10 @@ def display_run_with_signal(data, cluster, app_signal, width=1200, height=600):
 
     # CPU tracing
     points, values = accumulate_intervals(x_phase, y_phase)
-    fig.append_trace(go.Scatter(x=np.array(points), y=np.array(values),
+    fig.add_trace(go.Scatter(x=np.array(points), y=np.array(values),
                                 line_shape='hv', showlegend=False), row=i, col=1)
 
-    fig.append_trace(go.Scatter(x=np.array([points[0], points[-1]]), y=np.array([cluster.compute_cores.capacity]*2), text=["Maximum available cores in cluster=" + str(cluster.compute_cores.capacity)]*2, line_shape='hv', showlegend=False,
+    fig.add_trace(go.Scatter(x=np.array([points[0], points[-1]]), y=np.array([cluster.compute_cores.capacity]*2), text=["Maximum available cores in cluster=" + str(cluster.compute_cores.capacity)]*2, line_shape='hv', showlegend=False,
                                 line=dict(color='red', width=3, dash='dot')), row=i, col=1)
     fig['layout']['yaxis'+str(i)]['title'] = 'CPU usage'
     i += 1
@@ -830,14 +862,14 @@ def display_original_sim_signals(simulated, originals, str_org="Original",
                         subplot_titles=["On read/write instant bandwidths",
                                         "On read/write cumulated volumes"])
     # plot original signals
-    fig.append_trace(go.Scatter(x=np.array(timestamps), y=np.array(original_read),
+    fig.add_trace(go.Scatter(x=np.array(timestamps), y=np.array(original_read),
                                 # text=text,
                                 # legendgroup="Timeseries",
                                 textposition="top center", mode='lines+markers',
                                 marker_size = 5,
                                 name=f"{str_org} I/O Read Volume Signal (IOI)", line_shape='linear',
                                 line_color = "blue"), row=1, col=1)
-    fig.append_trace(go.Scatter(x=np.array(timestamps), y=np.array(original_write),
+    fig.add_trace(go.Scatter(x=np.array(timestamps), y=np.array(original_write),
                                 # text=text,
                                 # legendgroup="Timeseries",
                                 textposition="top center", mode='lines+markers',
@@ -846,14 +878,14 @@ def display_original_sim_signals(simulated, originals, str_org="Original",
                                 line_color="green"), row=1, col=1)
 
     # plot simulated signals
-    fig.append_trace(go.Scatter(x=np.array(time), y=np.array(read_bw),
+    fig.add_trace(go.Scatter(x=np.array(time), y=np.array(read_bw),
                                 # text=text,
                                 # legendgroup="Timeseries",
                                 textposition="top center", mode='lines',
                                 name=f"{str_sim} I/O Read Volume Signal", line_shape='linear',
                                 line={'dash': 'dot'},
                                 line_color = "blue"), row=1, col=1)
-    fig.append_trace(go.Scatter(x=np.array(time), y=np.array(write_bw),
+    fig.add_trace(go.Scatter(x=np.array(time), y=np.array(write_bw),
                                 # text=text,
                                 # legendgroup="Timeseries",
                                 textposition="top center", mode='lines',
@@ -862,14 +894,14 @@ def display_original_sim_signals(simulated, originals, str_org="Original",
                                 line_color="green"), row=1, col=1)
 
     # plot cumulated original signals
-    fig.append_trace(go.Scatter(x=np.array(timestamps), y=np.cumsum(np.array(original_read)),
+    fig.add_trace(go.Scatter(x=np.array(timestamps), y=np.cumsum(np.array(original_read)),
                                 # text=text,
                                 # legendgroup="Cumulated Timeseries",
                                 textposition="top center", mode='lines+markers',
                                 marker_size = 5,
                                 name=f"Cumulated {str_org} I/O Read Volume Signal (IOI)", line_shape='linear',
                                 line_color = "blue"), row=2, col=1)
-    fig.append_trace(go.Scatter(x=np.array(timestamps), y=np.cumsum(np.array(original_write)),
+    fig.add_trace(go.Scatter(x=np.array(timestamps), y=np.cumsum(np.array(original_write)),
                                 # text=text,
                                 # legendgroup="Cumulated Timeseries",
                                 textposition="top center", mode='lines+markers',
@@ -878,14 +910,14 @@ def display_original_sim_signals(simulated, originals, str_org="Original",
                                 line_color="green"), row=2, col=1)
 
     # plot cumulated simulated signals
-    fig.append_trace(go.Scatter(x=np.array(time), y=np.cumsum(np.array(read_bw)),
+    fig.add_trace(go.Scatter(x=np.array(time), y=np.cumsum(np.array(read_bw)),
                                 # text=text,
                                 # legendgroup="Cumulated Timeseries",
                                 textposition="top center", mode='lines',
                                 name=f"{str_sim} I/O Read Cumulative Volume Signal", line_shape='linear',
                                 line={'dash': 'dot'},
                                 line_color = "blue"), row=2, col=1)
-    fig.append_trace(go.Scatter(x=np.array(time), y=np.cumsum(np.array(write_bw)),
+    fig.add_trace(go.Scatter(x=np.array(time), y=np.cumsum(np.array(write_bw)),
                                 # text=text,
                                 # legendgroup="Cumulated Timeseries",
                                 textposition="top center", mode='lines',
@@ -920,14 +952,14 @@ def compare_original_sim_signals(simulated, originals, str_org="Original",
                         subplot_titles=["On read/write instant bandwidths",
                                         "On read/write cumulated volumes"])
     # plot original signals
-    fig.append_trace(go.Scatter(x=np.array(timestamps), y=np.array(original_read),
+    fig.add_trace(go.Scatter(x=np.array(timestamps), y=np.array(original_read),
                                 # text=text,
                                 # legendgroup="Timeseries",
                                 textposition="top center", mode='lines+markers',
                                 marker_size = 5,
                                 name=f"{str_org} I/O Read Volume Signal (IOI)", line_shape='linear',
                                 line_color = "blue"), row=1, col=1)
-    fig.append_trace(go.Scatter(x=np.array(timestamps), y=np.array(original_write),
+    fig.add_trace(go.Scatter(x=np.array(timestamps), y=np.array(original_write),
                                 # text=text,
                                 # legendgroup="Timeseries",
                                 textposition="top center", mode='lines+markers',
@@ -936,14 +968,14 @@ def compare_original_sim_signals(simulated, originals, str_org="Original",
                                 line_color="green"), row=1, col=1)
 
     # plot simulated signals
-    fig.append_trace(go.Scatter(x=np.array(time), y=np.array(read_bw),
+    fig.add_trace(go.Scatter(x=np.array(time), y=np.array(read_bw),
                                 # text=text,
                                 # legendgroup="Timeseries",
                                 textposition="top center", mode='lines',
                                 name=f"{str_sim} I/O Read Volume Signal", line_shape='linear',
                                 line={'dash': 'dot'},
                                 line_color = "blue"), row=1, col=1)
-    fig.append_trace(go.Scatter(x=np.array(time), y=np.array(write_bw),
+    fig.add_trace(go.Scatter(x=np.array(time), y=np.array(write_bw),
                                 # text=text,
                                 # legendgroup="Timeseries",
                                 textposition="top center", mode='lines',
@@ -952,14 +984,14 @@ def compare_original_sim_signals(simulated, originals, str_org="Original",
                                 line_color="green"), row=1, col=1)
 
     # plot cumulated original signals
-    fig.append_trace(go.Scatter(x=np.array(timestamps), y=np.cumsum(np.array(original_read)),
+    fig.add_trace(go.Scatter(x=np.array(timestamps), y=np.cumsum(np.array(original_read)),
                                 # text=text,
                                 # legendgroup="Cumulated Timeseries",
                                 textposition="top center", mode='lines+markers',
                                 marker_size = 5,
                                 name=f"Cumulated {str_org} I/O Read Volume Signal (IOI)", line_shape='linear',
                                 line_color = "blue"), row=2, col=1)
-    fig.append_trace(go.Scatter(x=np.array(timestamps), y=np.cumsum(np.array(original_write)),
+    fig.add_trace(go.Scatter(x=np.array(timestamps), y=np.cumsum(np.array(original_write)),
                                 # text=text,
                                 # legendgroup="Cumulated Timeseries",
                                 textposition="top center", mode='lines+markers',
@@ -968,14 +1000,14 @@ def compare_original_sim_signals(simulated, originals, str_org="Original",
                                 line_color="green"), row=2, col=1)
 
     # plot cumulated simulated signals
-    fig.append_trace(go.Scatter(x=np.array(time), y=np.cumsum(np.array(read_bw)),
+    fig.add_trace(go.Scatter(x=np.array(time), y=np.cumsum(np.array(read_bw)),
                                 # text=text,
                                 # legendgroup="Cumulated Timeseries",
                                 textposition="top center", mode='lines',
                                 name=f"{str_sim} I/O Read Cumulative Volume Signal", line_shape='linear',
                                 line={'dash': 'dot'},
                                 line_color = "blue"), row=2, col=1)
-    fig.append_trace(go.Scatter(x=np.array(time), y=np.cumsum(np.array(write_bw)),
+    fig.add_trace(go.Scatter(x=np.array(time), y=np.cumsum(np.array(write_bw)),
                                 # text=text,
                                 # legendgroup="Cumulated Timeseries",
                                 textposition="top center", mode='lines',
