@@ -17,8 +17,8 @@ import numpy as np
 import pandas as pd
 import os
 
-logger.remove()
-logger.level('DEBUG')
+# logger.remove()
+# logger.level('DEBUG')
 
 class TestAnalyticsSignals(unittest.TestCase):
     def test_signal_interpolation(self):
@@ -87,7 +87,7 @@ class TestAnalytics(unittest.TestCase):
         fig = display_run(self.data, self.cluster, width=800, height=900)
         fig.show()
 
-    def test_rw_mix_with_many_apps(self):
+    def test_rw_mix_with_two_apps(self):
         """Tests the display analytics for an application mixing read and write phases"""
 
         # placement
@@ -95,17 +95,15 @@ class TestAnalytics(unittest.TestCase):
         use_bb = [False, False]
         # simulate the app execution
 
-        app1 = Application(self.env,
+        app1 = Application(self.env, name="app#1",
                            compute=[0, 10], read=[1e9, 0], write=[0, 5e9],
                            data=self.data)
-        app2 = Application(self.env,
+        app2 = Application(self.env, name="app#2",
                            compute=[0, 25],  read=[2e9, 0], write=[7e9, 0],
                            data=self.data)
 
         self.env.process(app1.run(self.cluster, placement=placement, use_bb=use_bb))
         self.env.process(app2.run(self.cluster, placement=placement, use_bb=use_bb))
-        self.env.run()
-        self.env.process(app1.run(self.cluster, placement=placement, use_bb=use_bb))
         self.env.run()
         print(f"application duration = {app1.get_fitness()}")
 
@@ -117,7 +115,6 @@ class TestAnalytics(unittest.TestCase):
 
         # placement
         placement = [0, 0]
-        use_bb = [True, True]
         # simulate the app execution
 
         app1 = Application(self.env,
@@ -127,8 +124,8 @@ class TestAnalytics(unittest.TestCase):
                            compute=[0, 25],  read=[2e9, 0], write=[7e9, 0],
                            data=self.data)
 
-        self.env.process(app1.run(self.cluster, placement=placement, use_bb=use_bb))
-        self.env.process(app2.run(self.cluster, placement=placement, use_bb=use_bb))
+        self.env.process(app1.run(self.cluster, placement=placement, use_bb=[False, True]))
+        self.env.process(app2.run(self.cluster, placement=placement, use_bb=[False, False]))
         self.env.run()
 
         print(f"application duration = {app1.get_fitness()}")
