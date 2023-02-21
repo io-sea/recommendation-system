@@ -2,10 +2,27 @@
   "python.testing.unittestArgs": [
     "-v",
     "-s",
-    "./performance_data",
+    "./cluster_simulator",
     "-p",
     "test_*.py"
   ],
   "python.testing.pytestEnabled": false,
-  "python.testing.unittestEnabled": true
+  "python.testing.unittestEnabled": true,
+  "launch": {
+    "configurations": [
+      /*{
+        "name": "Python: Current File (unittest)",
+        "type": "python",
+        "request": "test",
+        "console": "integratedTerminal",
+        "cwd": "${workspaceFolder}",
+        "python": {
+          "module": "unittest",
+          "path": "${workspaceFolder}/test",
+          "env": {"PYTHONPATH": "${workspaceFolder}"}
+        }
+      }*/
+    ],
+    "compounds": []
+  }
 }
