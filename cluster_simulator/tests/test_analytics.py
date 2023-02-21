@@ -33,8 +33,8 @@ class TestAnalyticsSignals(unittest.TestCase):
         result_read = interpolate_signal_from_simulation(x, t_starts, t_ends, read_bw)
         result_write = interpolate_signal_from_simulation(x, t_starts, t_ends, write_bw)
 
-        print(f"result_read = {result_read}")
-        print(f"result_write = {result_write}")
+        self.assertListEqual(result_read, [105, 105, 105, 105, 105, 105, 105, 105, 105, 105, 105, 105, 105, 105, 105, 105, 105, 105, 105, 105, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+        self.assertListEqual(result_write, [50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100])
 
 
 
