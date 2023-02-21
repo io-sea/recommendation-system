@@ -58,7 +58,7 @@ class TestAnalytics(unittest.TestCase):
         nvram_tier = Tier(self.env, 'NVRAM', bandwidth=nvram_bandwidth,
                                 capacity=10e9)
         # registering Ephemeral Tier
-        bb = EphemeralTier(self.env, name="BB", persistent_tier=hdd_tier,
+        bb = EphemeralTier(self.env, name="BB", persistent_tier=ssd_tier,
                                 bandwidth=nvram_bandwidth, capacity=10e9)
 
         # Define the cluster with 1 persistent and 1 ephemeral
@@ -66,7 +66,6 @@ class TestAnalytics(unittest.TestCase):
                           tiers=[hdd_tier, ssd_tier], ephemeral_tier=bb)
 
     def test_rw_mix(self):
-
         """Tests the display analytics for an application mixing read and write phases"""
         # Simple app: read 1GB -> compute 10s -> write 5GB
         read = [3e9, 2e9]
@@ -87,8 +86,32 @@ class TestAnalytics(unittest.TestCase):
         fig = display_run(self.data, self.cluster, width=800, height=900)
         fig.show()
 
+
+    def test_rw_mix_with_bb(self):
+
+        """Tests the display analytics for an application mixing read and write phases with burst buffering"""
+        # Simple app: read 1GB -> compute 10s -> write 5GB
+        read = [3e9, 2e9]
+        compute = [0,  30]
+        write = [0, 5e9]
+        # placement
+        placement = [1, 1]
+        use_bb = [True, True]
+        # simulate the app execution
+
+        app1 = Application(self.env, name="app1BB",
+                           compute=compute, read=read, write=write,
+                           data=self.data)
+        self.env.process(app1.run(self.cluster, placement=placement, use_bb=use_bb))
+        self.env.run()
+        print(f"application duration = {app1.get_fitness()}")
+
+        fig = display_run(self.data, self.cluster, width=800, height=900)
+        fig.show()
+
+
     def test_rw_mix_with_two_apps(self):
-        """Tests the display analytics for an application mixing read and write phases"""
+        """Tests the display analytics for two applications mixing read and write phases"""
 
         # placement
         placement = [0, 0]
@@ -111,7 +134,7 @@ class TestAnalytics(unittest.TestCase):
         fig.show()
 
     def test_rw_mix_with_many_apps_with_bb(self):
-        """Tests the display analytics for an application mixing read and write phases"""
+        """Tests the display analytics for two applications mixing read and write phases and using burst buffering."""
 
         # placement
         placement = [0, 0]
@@ -133,6 +156,50 @@ class TestAnalytics(unittest.TestCase):
         fig = display_run(self.data, self.cluster, width=800, height=900)
         fig.show()
 
+    def test_rw_mix_with_many_apps_with_bb_last(self):
+        """Tests the display analytics for two applications mixing read and write phases in first events and using burst buffering."""
+        # placement
+        placement = [1, 1]
+        # simulate the app execution
+
+        app1 = Application(self.env, name="app1BB",
+                           compute=[0, 10], read=[1e9, 0], write=[0, 5e9],
+                           data=self.data)
+        app2 = Application(self.env, name="app2BB",
+                           compute=[0, 25],  read=[0, 2e9], write=[7e9, 0],
+                           data=self.data)
+
+        self.env.process(app1.run(self.cluster, placement=placement, use_bb=[True, False]))
+        self.env.process(app2.run(self.cluster, placement=placement, use_bb=[True, False]))
+        self.env.run()
+
+        print(f"application duration = {app1.get_fitness()}")
+
+        fig = display_run(self.data, self.cluster, width=800, height=900)
+        fig.show()
+
+    def test_rw_mix_with_many_apps_with_bb_last(self):
+        """Tests the display analytics for two applications mixing read and write phases in last events and using burst buffering."""
+
+        # placement
+        placement = [1, 1]
+        # simulate the app execution
+
+        app1 = Application(self.env, name="app1BB",
+                           compute=[0, 10], read=[1e9, 0], write=[0, 5e9],
+                           data=self.data)
+        app2 = Application(self.env, name="app2BB",
+                           compute=[0, 25],  read=[0, 2e9], write=[7e9, 0],
+                           data=self.data)
+
+        self.env.process(app1.run(self.cluster, placement=placement, use_bb=[False, True]))
+        self.env.process(app2.run(self.cluster, placement=placement, use_bb=[False, True]))
+        self.env.run()
+
+        print(f"application duration = {app1.get_fitness()}")
+
+        fig = display_run(self.data, self.cluster, width=800, height=900)
+        fig.show()
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

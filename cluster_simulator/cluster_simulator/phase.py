@@ -556,11 +556,13 @@ class IOPhase:
         """Allows to run an I/O operation."""
         self.env = env
         if delay:
+            logger.info(f"(App {self.appname}) - Start delaying phase at {env.now}")
             yield self.env.timeout(delay)
+            logger.info(f"(App {self.appname}) - End delaying phase at {env.now}")
         # get the tier where the I/O will be performed, if use_sbb=True, get the BB
         tier = get_tier(cluster, placement, use_bb=use_bb)
         # ret = yield self.env.process(self.run_step(self.env, cluster, tier))
-
+        logger.info(f"(App {self.appname}) - Start I/O phase at {env.now}")
         if isinstance(tier, EphemeralTier):
             if self.operation == "read":
                 # do prefetch
@@ -583,6 +585,7 @@ class IOPhase:
                 ret = all([value for key, value in response.items()])
         else:
             ret = yield self.env.process(self.run_step(self.env, cluster, tier))
+        logger.info(f"(App {self.appname}) - End I/O phase at {env.now}")
         return ret
 
 
@@ -708,13 +711,16 @@ class MixIOPhase():
         """Run an RW I/O operation."""
         self.env = env
         if delay:
+            logger.info(f"(App {self.appname}) - Start delay phase at {env.now}")
             yield self.env.timeout(delay)
+            logger.info(f"(App {self.appname}) - End delay phase at {env.now}")
         # get the tier where the I/O will be performed, if use_sbb=True, get the BB
         tier = get_tier(cluster, placement, use_bb=use_bb)
         # ret = yield self.env.process(self.run_step(self.env, cluster, tier))
         # initializing events
         # read_event = Event()
         # write_event = Event()
+        logger.info(f"(App {self.appname}) - Start RW I/O phase at {env.now}")
         if isinstance(tier, EphemeralTier):
             #if self.read_volume > 0:
             # do prefetch for ephemeral tier
@@ -723,16 +729,17 @@ class MixIOPhase():
                                                                         tier, erase=False))
             ret1 = yield io_read_prefetch
             io_read_event = self.env.process(self.read_io.run_step(self.env, cluster, tier))
-            # TODO: should prefetech starts in the same time as the read?
-            # Default is sequencial
-            if ret1:
-                ret2 = yield io_read_event
-
             #if self.write_volume > 0:
             io_write_event = self.env.process(self.write_io.run_step(self.env, cluster, tier))
             # destage
             destage_event = self.env.process(self.write_io.move_step(self.env, cluster, tier,
                                                             tier.persistent_tier, erase=False))
+            # TODO: should prefetech starts in the same time as the read?
+            # Default is sequential, the write should begin simultaneously with read as well as destaging
+            if ret1:
+                ret2 = yield io_read_event & io_write_event & destage_event
+
+
             # do not wait for the destage to complete
             # TODO: logic will fail if destaging is faster than the IO
             response = yield AllOf(self.env, (io_read_prefetch, io_read_event)) & AnyOf(self.env, (io_write_event, destage_event))
@@ -744,7 +751,7 @@ class MixIOPhase():
 
             response = yield AllOf(self.env, (read_io_event, write_io_event))
             ret = all([value for key, value in response.items()])
-
+        logger.info(f"(App {self.appname}) - End RW I/O phase at {env.now}")
         return ret
 
 
