@@ -149,9 +149,8 @@ class FakeappWorkload:
         with open(self.sbatch_file, "w") as file_temp:
             file_temp.write(template_file)
 
-        logger.info(f"Sbatch file to be used: {self.sbatch_file}")
+        logger.info(f"Sbatch file written to: {self.sbatch_file}")
         logger.trace(f"Sbatch file content: {file_temp}")
-        #return self.sbatch_file
 
     def run_sbatch_file(self, ioi=False, wait=True, clean=False):
         """Generates the command line and run with the appropriate sbatch file.
@@ -167,8 +166,8 @@ class FakeappWorkload:
         ioi_flag = " --ioi=yes " if ioi else ""
 
         self.cmd_line = f"sbatch{wait_flag}{ioi_flag}{self.sbatch_file}"
-        logger.info(f"Command line to be used: {self.cmd_line}")
-        logger.info(f"Working directory: {self.working_dir}")
+        logger.info(f"Command line run the sbatch file: {self.cmd_line}")
+        logger.info(f"Working directory for the Slurm Job: {self.working_dir}")
 
         # Run the script using subprocess
         sub_ps = subprocess.run(self.cmd_line.split(), cwd=self.working_dir,
@@ -178,7 +177,7 @@ class FakeappWorkload:
         # Get and store the job_id from the stdout
         if sub_ps.returncode == 0:
             self.job_id = int(output_stdout.split()[-1])
-            logger.info(f"Slurm Job Id: {self.job_id}")
+            logger.info(f"Scheduled slurm job with id: {self.job_id}")
 
         else:
             logger.error(f"Could not run sbatch file: {self.sbatch_file}")
@@ -220,15 +219,15 @@ class FakeappWorkload:
         return elapsed_time, bandwidth
 
 
-if __name__ == '__main__':
-    lfs="/fsiof/mimounis/tmp"
-    nfs="/scratch/mimounis/tmp"
-    acc = "SBB" # currently support onyly SBB with the lfs target
+# if __name__ == '__main__':
+#     lfs="/fsiof/mimounis/tmp"
+#     nfs="/scratch/mimounis/tmp"
+#     acc = "SBB" # currently support onyly SBB with the lfs target
 
-    phase0=dict(read_volume=100000000, read_io_pattern="stride", read_io_size=10000, write_volume=0, write_io_pattern="uncl", write_io_size=0, nodes=1)
-    phase0=dict(read_volume=5e7, read_io_pattern="stride", read_io_size=10000,
-                write_volume=5e7, write_io_pattern="rand", write_io_size=10000, nodes=1)
+#     phase0=dict(read_volume=100000000, read_io_pattern="stride", read_io_size=10000, write_volume=0, write_io_pattern="uncl", write_io_size=0, nodes=1)
+#     phase0=dict(read_volume=5e7, read_io_pattern="stride", read_io_size=10000,
+#                 write_volume=5e7, write_io_pattern="rand", write_io_size=10000, nodes=1)
 
-    fa = FakeappWorkload(phase0, target_tier=lfs, accelerator=True, ioi=False)
-    fa.get_data()
+#     fa = FakeappWorkload(phase0, target_tier=lfs, accelerator=True, ioi=False)
+#     fa.get_data()
 
