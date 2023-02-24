@@ -11,11 +11,12 @@ import pandas as pd
 from loguru import logger
 from app_decomposer.utils import convert_size
 from app_decomposer import DATASET_SOURCE
+from typing import List
 
 from performance_data import DATASET_FILE
 from performance_data.fakeapp_workload import FakeappWorkload as Workload
 
-__CAPING_VOLUME__ = 5e9
+__CAPING_VOLUME__ = 10e6
 
 class PhaseData:
     def __init__(self, phases, target, ioi=False, sample=1, lite=False):
@@ -53,7 +54,7 @@ class PhaseData:
         if self.lite and (r_volume + w_volume) > __CAPING_VOLUME__:
             phase["read_volume"] = __CAPING_VOLUME__*r_volume/(r_volume + w_volume)
             phase["write_volume"] = __CAPING_VOLUME__*w_volume/(r_volume + w_volume)
-            logger.info(f"Phase volume exceeds cap: {convert_size(r_volume + w_volume)} >"
+            logger.info(f"Phase volume exceeds cap: {convert_size(r_volume + w_volume)} > "
                         f"{convert_size(__CAPING_VOLUME__)}| Capping to read_volume: "
                         f"{convert_size(phase['read_volume'])} | "
                         f"write_volume: {convert_size(phase['write_volume'])}")
@@ -70,37 +71,45 @@ class PhaseData:
         logger.info(f"Measured throughput on tier: {target} | use SBB: {accelerator} | result: {convert_size(avg_bw)}/s")
         return avg_bw
 
-    def get_phase_data(self, target_names=["nfs_bw", "lfs_bw", "sbb_bw"]):
-        """Compute the performance on each tier with the phase features extracted from AppDecomposer
-        Args:
-
-        Return:
-            per_df (pandas): performances in each tier
+    def get_phase_data(self, target_names: List[str] = ["nfs_bw", "lfs_bw", "sbb_bw"]) -> pd.DataFrame:
         """
-        #self.extract_phases()
-        if "nfs_bw" in target_names:
-            perf_nfs = []
-        if "lfs_bw" in target_names:
-            perf_lfs = []
-        if "sbb_bw" in target_names:
-            perf_sbb = []
-        for phase in self.phases:
-            #run the fakeapp to mesure the bandwidth on all tiers
-            if "nfs_bw" in target_names:
-                perf_nfs.append(self.run_phase_workload(phase, self.target["nfs"], False))
-            if "lfs_bw" in target_names:
-                perf_lfs.append(self.run_phase_workload(phase, self.target["lfs"], False))
-            if "sbb_bw" in target_names:
-                perf_sbb.append(self.run_phase_workload(phase, self.target["lfs"], True))
+        Computes the performance of each phase on the specified tiers and returns the results as a DataFrame.
 
-        #update phase performance on the dataframe
-        perf_df = pd.DataFrame()
-        if "nfs_bw" in target_names:
-            perf_df["nfs_bw"] = perf_nfs
-        if "lfs_bw" in target_names:
-            perf_df["lfs_bw"] = perf_lfs
-        if "sbb_bw" in target_names:
-            perf_df["sbb_bw"] = perf_sbb
+        Args:
+            target_names (List[str], optional): A list of tier names to compute performance for. Default is ["nfs_bw", "lfs_bw", "sbb_bw"].
+
+        Returns:
+            A pandas DataFrame containing the performance of each phase on the specified tiers.
+
+        Raises:
+            ValueError: If any of the specified tier names is invalid.
+
+        Example:
+            # Compute performance for the "nfs_bw" and "lfs_bw" tiers and return the results as a DataFrame.
+            phases_perf = PhaseData(phases, targets, ioi, sample=sample, lite=lite)
+            perf_df = phases_perf.get_phase_data(target_names=["nfs_bw", "lfs_bw"])
+        """
+        # Validate input tier names
+        valid_tiers = {"nfs_bw", "lfs_bw", "sbb_bw"}
+        if not set(target_names).issubset(valid_tiers):
+            invalid_tiers = set(target_names) - valid_tiers
+            raise ValueError(f"Invalid tier names: {invalid_tiers}")
+
+        # Compute performance on each phase for the specified tiers
+        perf = {}
+        for tier in target_names:
+            perf[tier] = []
+        for phase in self.phases:
+            if "nfs_bw" in target_names:
+                perf["nfs_bw"].append(self.run_phase_workload(phase, self.target["nfs"], False))
+            if "lfs_bw" in target_names:
+                perf["lfs_bw"].append(self.run_phase_workload(phase, self.target["lfs"], False))
+            if "sbb_bw" in target_names:
+                perf["sbb_bw"].append(self.run_phase_workload(phase, self.target["lfs"], True))
+
+        # Assemble performance data into a DataFrame
+        perf_df = pd.DataFrame(perf)
+
         return perf_df
 
 class DataTable:
@@ -128,64 +137,77 @@ class DataTable:
             tiers_names.append("sbb_bw")
         return tiers_names
 
-    def get_performance_table(self, filename=None):
-        # adjust target file for complete data
-        if filename is None:
-            filename = DATASET_FILE
+    def get_performance_table(self, output_filename=None):
+        """
+        Reads performance data from a CSV file, completes the data with performance information, and saves
+        the resulting table to a new CSV file.
 
-        #load performance data from file
-        self.perf_data = pd.read_csv(self.filename)#, index_col= 0)
+        If output_filename is not provided, the new file will be named after the original file with "_completed"
+        added before the file extension.
+
+        Args:
+            output_filename (str, optional): The name of the file to save the completed performance data to.
+
+        Returns:
+            A pandas DataFrame containing the completed performance data.
+
+        Raises:
+            FileNotFoundError: If the input file does not exist or cannot be read.
+            ValueError: If the input file is not in the expected format.
+
+        Example:
+            target = dict(lfs="/fsiof/mimounis/tmp", nfs="/scratch/mimounis/tmp")
+            acc = "SBB" # currently support onyly SBB with the lfs target
+            filename = "/home_nfs/mimounis/iosea-wp3-recommandation-system/performance_data/performance_data/dataset/test_dataset_job_3918.csv"
+            complete_filename = f"/home_nfs/mimounis/iosea-wp3-recommandation-system/performance_data"\
+                                f"/performance_data/dataset/complete_dataset_"\
+                                f"job_3918_{convert_size(__CAPING_VOLUME__)}.csv"
+            # targets,  accelerator=False, ioi=False, sample=1, filename=None, lite=False
+            pm = DataTable(target, accelerator=True, ioi=False, sample=1, filename=filename, lite=True)
+            print(pm)
+            df = pm.get_performance_table(filename=complete_filename)
+            print(df)
+        """
+        # adjust target file for complete data
+        if output_filename is None:
+            base_filename, ext_filename = os.path.splitext(self.filename)
+            output_filename = base_filename + "_completed" + ext_filename
+
+        # Load performance data from file
+        self.perf_data = pd.read_csv(self.filename)
+
+        # Extract tiers and log messages
         tiers_names = self.get_tiers_from_targets()
         logger.info(f"Phases are extracted from this table: {self.perf_data}")
-        logger.info(f"Following tiers will be feeded: {tiers_names}")
+        logger.info(f"Following tiers will be fed: {tiers_names}")
+
+        # Check if all required tiers are present in the input data
         if set(tiers_names).issubset(self.perf_data.columns):
-            #keep the part already has performance
+            # Split data into parts with and without performance information
             old_data = self.perf_data[~self.perf_data.isna().any(axis=1)]
-            #print(old_data)
-            #update the performance phases which has NAN value in the bandwidth
             new_data = self.perf_data[self.perf_data.isna().any(axis=1)]
+
+            # Update performance information for the missing parts
             new_data = new_data.drop(tiers_names, axis=1)
-            #print(new_data)
             phases = new_data.to_dict('records')
             phases_perf = PhaseData(phases, self.targets, self.ioi, sample=self.sample, lite=self.lite)
             perf_df = phases_perf.get_phase_data(tiers_names)
             perf_df.index = new_data.index
             new_data = new_data.join(perf_df)
-            #print(new_data)
-            self.perf_data = pd.concat([old_data, new_data], axis=0)
-            #self.perf_data.reset_index(drop=True)
 
+            # Combine old and new data
+            self.perf_data = pd.concat([old_data, new_data], axis=0)
         else:
-            # transform rows in the dataframe to a list of phase features
+            # Update performance information for all rows
             phases = self.perf_data.to_dict('records')
             phases_perf = PhaseData(phases, self.targets, self.ioi, sample=self.sample, lite=self.lite)
             perf_df = phases_perf.get_phase_data(tiers_names)
             self.perf_data = self.perf_data.join(perf_df)
 
-        logger.info(f"Complete phases table: {self.perf_data}")
-        self.perf_data.to_csv(filename, index=False)
-        logger.info(f"Complete table saved in: {filename}")
+        # Save completed performance data to file and log message
+        self.perf_data.to_csv(output_filename, index=False)
+        logger.info(f"Complete table saved to: {output_filename}")
+
         return self.perf_data
 
-if __name__ == '__main__':
-    target = dict(lfs="/fsiof/mimounis/tmp", nfs="/scratch/mimounis/tmp")
-    acc = "SBB" # currently support onyly SBB with the lfs target
-    filename = "/home_nfs/mimounis/iosea-wp3-recommandation-system/performance_data/performance_data/dataset/test_dataset_job_3918.csv"
-    complete_filename = f"/home_nfs/mimounis/iosea-wp3-recommandation-system/performance_data"\
-                        f"/performance_data/dataset/complete_dataset_"\
-                        f"job_3918_{convert_size(__CAPING_VOLUME__)}.csv"
-    # targets,  accelerator=False, ioi=False, sample=1, filename=None, lite=False
-    pm = DataTable(target, accelerator=True, ioi=False, sample=1, filename=filename, lite=True)
-    print(pm)
-    df = pm.get_performance_table(filename=complete_filename)
-    print(df)
 
-"""
-    phase0=dict(volume=100000000, mode="write", IOpattern="stride", IOsize=10000, nodes=1)
-    phase1=dict(volume=100000000, mode="write", IOpattern="rand", IOsize=10000, nodes=1)
-    phase2=dict(volume=100000000, mode="read", IOpattern="seq", IOsize=10000, nodes=1)
-    phases = [phase0, phase1, phase2]
-    perf_data = PhaseData(phases, target, acc)
-    df=perf_data.get_perfomrances(1)
-    print(df)
-"""

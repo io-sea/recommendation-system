@@ -1,3 +1,0 @@
-job_id,volume,mode,IOpattern,IOsize,nodes,ioi_bw
-5168,145733064,read,seq,1044400.0876494024,1,48395893.29230769
-5168,7200000,write,seq,102400.0,1,61440000.0
