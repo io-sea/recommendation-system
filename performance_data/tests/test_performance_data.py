@@ -6,9 +6,10 @@
 import os
 from os.path import dirname
 import unittest
+import random
 import pandas as pd
 from unittest.mock import MagicMock, patch
-from performance_data.data_table import PhaseData, DataTable
+from performance_data.data_table import PhaseData, DataTable, DataGenerator
 from performance_data import data_table
 
 class TestPhaseData(unittest.TestCase):
@@ -99,6 +100,30 @@ class TestDataTable(unittest.TestCase):
         self.assertListEqual(list(perf_data[["nfs_bw"]].to_numpy().flatten()), [42]*8)
 
 
+class TestDataGenerator(unittest.TestCase):
+    """A unit test class for the DataGenerator class."""
+
+    def setUp(self):
+        """Create an instance of the DataGenerator class for use in the tests."""
+        self.generator = DataGenerator(10, 10e6)
+
+    def test_generate_data(self):
+        """Test the generate_data method of the DataGenerator class.
+
+        Test that the method returns a list of dictionaries with the correct keys,
+        and that the values for each key are within the expected bounds.
+        """
+        data = self.generator.generate_data()
+        self.assertEqual(len(data), 10)
+        for entry in data:
+            self.assertIn(entry["read_io_pattern"], ["uncl", "seq", "rand", "stride"])
+            self.assertIn(entry["write_io_pattern"], ["uncl", "seq", "rand", "stride"])
+            self.assertIn(entry["read_io_size"], [4e3, 16e3, 128e3, 512e3, 2e6, 8e6])
+            self.assertIn(entry["write_io_size"], [4e3, 16e3, 128e3, 512e3, 2e6, 8e6])
+            self.assertGreaterEqual(entry["read_volume"], 0.0)
+            self.assertLess(entry["read_volume"], 10e6)
+            self.assertGreaterEqual(entry["write_volume"], 0.0)
+            self.assertLess(entry["write_volume"], 10e6)
 
 if __name__ == '__main__':
     unittest.main()

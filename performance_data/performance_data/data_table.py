@@ -12,7 +12,7 @@ from loguru import logger
 from app_decomposer.utils import convert_size
 from app_decomposer import DATASET_SOURCE
 from typing import List
-
+import random
 from performance_data import DATASET_FILE
 from performance_data.fakeapp_workload import FakeappWorkload as Workload
 
@@ -210,4 +210,49 @@ class DataTable:
 
         return self.perf_data
 
+
+
+
+class DataGenerator:
+    """A class for generating random data for use in storage system simulations.
+
+    Attributes:
+        num_entries (int): The number of data entries to generate.
+        volume (float): The total volume of data to generate, in bytes.
+        patterns (list): A list of possible I/O patterns.
+        io_sizes (list): A list of possible I/O sizes, in bytes.
+    """
+
+    def __init__(self, num_entries, volume=10e6):
+        """Initialize the data generator.
+
+        Args:
+            num_entries (int): The number of data entries to generate.
+            volume (float, optional): The total volume of data to generate, in bytes.
+                Defaults to 10e6.
+        """
+        self.num_entries = num_entries
+        self.patterns = ["uncl", "seq", "rand", "stride"]
+        self.volume = volume
+        self.io_sizes = [4e3, 16e3, 128e3, 512e3, 2e6, 8e6]
+
+    def generate_data(self):
+        """Generate a list of dictionaries representing storage system data.
+
+        Returns:
+            list: A list of dictionaries, each with keys "read_volume", "write_volume",
+                "read_io_pattern", "write_io_pattern", "read_io_size", and "write_io_size".
+        """
+        data = []
+        for i in range(self.num_entries):
+            entry = {}
+            read_volume = self.volume * random.random()
+            entry["read_volume"] = read_volume
+            entry["write_volume"] = self.volume - read_volume
+            entry["read_io_pattern"] = random.choice(self.patterns)
+            entry["write_io_pattern"] = random.choice(self.patterns)
+            entry["read_io_size"] = random.choice(self.io_sizes)
+            entry["write_io_size"] = random.choice(self.io_sizes)
+            data.append(entry)
+        return data
 
