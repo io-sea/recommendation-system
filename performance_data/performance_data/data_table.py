@@ -12,11 +12,10 @@ from loguru import logger
 from app_decomposer.utils import convert_size
 from app_decomposer import DATASET_SOURCE
 from typing import List
-
 from performance_data import DATASET_FILE
 from performance_data.fakeapp_workload import FakeappWorkload as Workload
 
-__CAPING_VOLUME__ = 10e6
+__CAPING_VOLUME__ = 1e9
 
 class PhaseData:
     def __init__(self, phases, target, ioi=False, sample=1, lite=False):
@@ -113,15 +112,29 @@ class PhaseData:
         return perf_df
 
 class DataTable:
+    """A class for reading, completing, and saving performance data for storage system simulations.
+
+    Attributes:
+        filename (str): The name of the file containing the performance data.
+        targets (dict): A dictionary with keys specifying the names of the storage backend files, and values
+            specifying their file paths.
+        accelerator (str): The name of an I/O accelerator to use, such as SBB or FIOL.
+        ioi (bool): A flag indicating whether to use IOI.
+        sample (int): The number of times to sample each phase for performance measurements.
+        lite (bool): A flag indicating whether to cap the volume of the phase for performance measurement at 1GB.
+        perf_data (pandas.DataFrame): A DataFrame containing the performance data.
+    """
     def __init__(self, targets,  accelerator=False, ioi=False, sample=1, filename=None, lite=False):
-        """Initializes the data model with the phase features extracted from AppDecomposer
+        """Initialize the data model with the phase features extracted from AppDecomposer.
+
         Args:
-            filename (string): file name of dataset in csv, default to DATASET_FILE
-            targets (dict): storage backend file (nfs or lustre) {"lfs":..., "nfs":,...}
-            ioi (bool): enable/disable IOI, default = False
-            accelerator (string): using IO acclerator such as SBB/FIOL
-            sample (int): number of sampling of the same phase
-            lite (bool): if True, caps the volume to 1GB, else use the phase volume for bw measurement.
+            filename (str, optional): The name of the file containing the data. Defaults to `DATASET_FILE`.
+            targets (dict): A dictionary with keys specifying the names of the storage backend files, and values
+                specifying their file paths.
+            accelerator (str, optional): The name of an I/O accelerator to use, such as SBB or FIOL. Defaults to `False`.
+            ioi (bool, optional): A flag indicating whether to use IOI. Defaults to `False`.
+            sample (int, optional): The number of times to sample each phase for performance measurements. Defaults to `1`.
+            lite (bool, optional): A flag indicating whether to cap the volume of the phase for performance measurement at 1GB. Defaults to `False`.
         """
         self.filename = filename or DATASET_SOURCE
         self.targets = targets
@@ -131,7 +144,11 @@ class DataTable:
         self.lite = lite
 
     def get_tiers_from_targets(self):
-        """Given target directory and accelerator attribute, determine the list of tiers that will be used as columns to fill the dataset."""
+        """Get a list of tiers to use as columns in the dataframe.
+
+        Returns:
+            list: A list of tier names, including the names of the storage backend files and the I/O accelerator.
+        """
         tiers_names = [tier + "_bw" for tier in list(self.targets.keys())]
         if self.accelerator:
             tiers_names.append("sbb_bw")
@@ -168,13 +185,21 @@ class DataTable:
             df = pm.get_performance_table(filename=complete_filename)
             print(df)
         """
+        if self.filename is None:
+            raise ValueError("No filename provided.")
+
         # adjust target file for complete data
         if output_filename is None:
             base_filename, ext_filename = os.path.splitext(self.filename)
             output_filename = base_filename + "_completed" + ext_filename
 
         # Load performance data from file
-        self.perf_data = pd.read_csv(self.filename)
+        try:
+        # Load performance data from file
+            self.perf_data = pd.read_csv(self.filename)
+        except FileNotFoundError as e:
+            logger.error(f"File not found: {self.filename}. {e}")
+            raise
 
         # Extract tiers and log messages
         tiers_names = self.get_tiers_from_targets()

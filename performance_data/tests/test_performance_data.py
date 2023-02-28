@@ -6,9 +6,11 @@
 import os
 from os.path import dirname
 import unittest
+import random
 import pandas as pd
 from unittest.mock import MagicMock, patch
 from performance_data.data_table import PhaseData, DataTable
+from performance_data.data_model import PhaseGenerator
 from performance_data import data_table
 
 class TestPhaseData(unittest.TestCase):
@@ -99,6 +101,3 @@ class TestDataTable(unittest.TestCase):
         self.assertListEqual(list(perf_data[["nfs_bw"]].to_numpy().flatten()), [42]*8)
 
 
-
-if __name__ == '__main__':
-    unittest.main()
