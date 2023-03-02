@@ -13,6 +13,7 @@ from performance_data import MODELS_DIRECTORY, DATASET_FILE, GENERATED_DATASET_F
 from performance_data.data_table import PhaseData, DataTable
 import pandas as pd
 import joblib
+from loguru import logger
 
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, r2_score
@@ -105,11 +106,14 @@ class AbstractModel(ABC):
         self.X, self.y = self._prepare_data()
         assert not self.y.empty, "No targets found in data."
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(self.X, self.y, test_size=0.2, random_state=0)
-
-        self.model_path = os.path.join(MODELS_DIRECTORY, f"{type(self).__name__}.joblib")
+        model_name = re.sub('(?<!^)(?=[A-Z])', '_', f"{type(self).__name__}.joblib").lower()
+        # f"{type(self).__name__}.joblib"
+        self.model_path = os.path.join(MODELS_DIRECTORY, model_name)
         if os.path.exists(self.model_path):
+            logger.info(f"Loading model from {self.model_path}")
             self.model = joblib.load(self.model_path)
         else:
+            logger.info("Creating a new model")
             self.model = self._create_model()
 
     def _prepare_input_data(self, data):
@@ -122,10 +126,12 @@ class AbstractModel(ABC):
         Returns:
             pandas.DataFrame: The prepared input data.
         """
+        logger.info("Preparing input data...")
         # extract targets
         target_columns = [col for col in data.columns if col.endswith('_bw')]
         if target_columns:
             data = data.drop(target_columns, axis=1)
+        logger.debug(f"Input data after dropping target columns: {data.columns.tolist()}")
         # calculate total volume
         total_volume = data['read_volume'] + data['write_volume']
         # divide read_volume and write_volume by total_volume
@@ -136,8 +142,10 @@ class AbstractModel(ABC):
         data["write_io_size"] = data["write_io_size"] / 8e6
         # remove unnecessary columns
         data = data.drop(columns=['read_volume', 'write_volume'], axis=1)
+        logger.debug(f"Input data after dropping unnecessary columns: {data.columns.tolist()}")
         # Apply preprocessing to X data
         categorical_cols = data.filter(regex='_io_pattern$').columns
+        logger.debug(f"Categorical columns: {categorical_cols.tolist()}")
         preprocessor = ColumnTransformer(
             transformers=[
                 #("num", StandardScaler(), numeric_cols),
@@ -149,6 +157,8 @@ class AbstractModel(ABC):
         # transform X data and extract y data
         X = preprocessor.fit_transform(data)
         df = pd.DataFrame(X, columns=list(preprocessor.get_feature_names_out()))
+        logger.debug(f"Preprocessed data: {df.head()}")
+
         return df
 
     def _prepare_data(self):
@@ -158,37 +168,15 @@ class AbstractModel(ABC):
         Returns:
             Tuple of (X, y) data.
         """
+        logger.info("Preparing data...")
         # extract targets
         target_columns = [col for col in self.data.columns if col.endswith('_bw')]
         y = self.data[target_columns]
+        logger.debug(f"Target columns: {target_columns}")
         # extract features
         X = self._prepare_input_data(self.data)
-        # total_volume = self.data['read_volume'] + self.data['write_volume']
-        # # divide read_volume and write_volume by total_volume
-        # self.data['read_ratio'] = self.data['read_volume'] / total_volume
-        # self.data['write_ratio'] = self.data['write_volume'] / total_volume
-        # # scale read_io_size and write_io_size by 8e6
-        # self.data["read_io_size"] = self.data["read_io_size"] / 8e6
-        # self.data["write_io_size"] = self.data["write_io_size"] / 8e6
-        # # remove unnecessary columns
-        # self.data = self.data.drop(columns=['read_volume', 'write_volume'] + target_columns, axis=1)
+        logger.debug(f"Features: {X.columns.tolist()}")
 
-        # # separate columns to apply different transformations
-        # #numeric_cols = ["total_volume", "read_io_size", "write_io_size"]
-        # categorical_cols = self.data.filter(regex='_io_pattern$').columns
-
-        # # Apply preprocessing to X data
-        # preprocessor = ColumnTransformer(
-        #     transformers=[
-        #         #("num", StandardScaler(), numeric_cols),
-        #         ("cat", OneHotEncoder(), categorical_cols),
-        #     ],
-        #     remainder="passthrough"
-        # )
-
-        # # transform X data and extract y data
-        # X = preprocessor.fit_transform(self.data)
-        # X = pd.DataFrame(X, columns=list(preprocessor.get_feature_names_out()))
         return X, y
 
     @abstractmethod
@@ -202,11 +190,13 @@ class AbstractModel(ABC):
         """
         Trains the regression model on the training data and saves it to disk if the score on the test set is better than a threshold.
         """
+        logger.info("Training model...")
         self.model.fit(self.X_train, self.y_train)
         score = self.model.score(self.X_test, self.y_test)
+        logger.info(f"Model score: {score}")
         if score > self.SCORE_THRESHOLD:
             joblib.dump(self.model, self.model_path)
-            print(f"Model saved with score: {score}")
+            logger.info(f"Model saved with score: {score}")
 
     def evaluate_model(self):
         """
@@ -216,7 +206,9 @@ class AbstractModel(ABC):
             The score of the model on the test data.
         """
         score = self.model.score(self.X_test, self.y_test)
+        logger.info(f"Model score on test data: {score}")
         return score
+
 
     def predict(self, new_data):
         """
@@ -230,6 +222,7 @@ class AbstractModel(ABC):
         """
         input_data = self._prepare_input_data(new_data)
         predictions = self.model.predict(input_data)
+        logger.info(f"Predictions made by the model: {predictions}")
         return predictions
 
 

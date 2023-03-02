@@ -93,14 +93,29 @@ class TestCompleteDataTable(unittest.TestCase):
         self.assertTrue(df.equals(complete_data))
 
 class TestAbstractModel(unittest.TestCase):
+    """
+    A test suite for the AbstractModel class and its methods.
+    """
+
     def setUp(self):
+        """
+        Sets up a DummyModel instance for testing.
+        """
         class DummyModel(AbstractModel):
             def _create_model(self):
                 return LinearRegression()
         self.model = DummyModel()
 
+    def test_model_path(self):
+        """
+        Tests that the model_path attribute is a string.
+        """
+        self.assertIsInstance(self.model.model_path, str)
+
     def test_prepare_data(self):
-        # ['nodes', 'read_volume', 'write_volume', 'read_io_pattern', 'write_io_pattern', 'read_io_size', 'write_io_size', 'total_volume', 'read_ratio', 'write_ratio']
+        """
+        Tests that the data, X, and y attributes are not None and are of the correct type.
+        """
         self.assertIsNotNone(self.model.data)
         self.assertIsInstance(self.model.data, pd.DataFrame)
         self.assertFalse(self.model.data.empty)
@@ -108,16 +123,31 @@ class TestAbstractModel(unittest.TestCase):
         self.assertIsInstance(self.model.y, pd.DataFrame)
 
     def test_model_is_trained(self):
+        """
+        Tests that the model attribute is not None after training the model.
+        """
         self.model.train_model()
         self.assertIsNotNone(self.model.model)
 
     def test_prepare_input_data(self):
+        """
+        Tests that the _prepare_input_data method returns a DataFrame with the correct columns.
+        """
         some_data = pd.DataFrame({'nodes':[1, 1, 1, 1], 'read_volume': [20e6, 30e6, 30e6, 30e6], 'write_volume': [10e6, 50e6, 30e6, 30e6], 'read_io_pattern': ['rand', 'uncl', 'stride', 'seq'], 'write_io_pattern': ['stride', 'seq', 'uncl', 'rand'], 'read_io_size': [512e3, 4e3, 8e6, 1e6], 'write_io_size': [512e3, 8e6, 4e3, 1e6]})
         some_input_data = self.model._prepare_input_data(some_data)
         self.assertIsInstance(some_input_data, pd.DataFrame)
         self.assertEqual(set(some_input_data.columns), set(self.model.X.columns))
 
+
     def test_train_evaluate_predict(self):
+        """
+        Test the training, evaluation, and prediction functionality of the model.
+
+        Trains the model, evaluates it on test data, and makes predictions on new data to ensure that the model is functioning as expected. The test passes if the model is successfully trained and evaluated, and the predicted output has the expected shape.
+
+        Returns:
+            None.
+        """
         self.model.train_model()
         score = self.model.evaluate_model()
 
@@ -129,6 +159,7 @@ class TestAbstractModel(unittest.TestCase):
         predictions = self.model.predict(new_data)
         self.assertIsInstance(new_data, pd.DataFrame)
         self.assertEqual(predictions.shape, (4, 3))
+
 
 
 if __name__ == '__main__':
