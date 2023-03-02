@@ -77,8 +77,6 @@ class PhaseGenerator:
         df.to_csv(filename, index=False)
 
 
-
-
 class AbstractModel(ABC):
     """
     An abstract class for training and evaluating a regression model on performance data.
@@ -114,6 +112,45 @@ class AbstractModel(ABC):
         else:
             self.model = self._create_model()
 
+    def _prepare_input_data(self, data):
+        """
+        Prepares input data for prediction.
+
+        Args:
+            data (dict): A dictionary of input data.
+
+        Returns:
+            pandas.DataFrame: The prepared input data.
+        """
+        # extract targets
+        target_columns = [col for col in data.columns if col.endswith('_bw')]
+        if target_columns:
+            data = data.drop(target_columns, axis=1)
+        # calculate total volume
+        total_volume = data['read_volume'] + data['write_volume']
+        # divide read_volume and write_volume by total_volume
+        data['read_ratio'] = data['read_volume'] / total_volume
+        data['write_ratio'] = data['write_volume'] / total_volume
+        # scale read_io_size and write_io_size by 8e6
+        data["read_io_size"] = data["read_io_size"] / 8e6
+        data["write_io_size"] = data["write_io_size"] / 8e6
+        # remove unnecessary columns
+        data = data.drop(columns=['read_volume', 'write_volume'], axis=1)
+        # Apply preprocessing to X data
+        categorical_cols = data.filter(regex='_io_pattern$').columns
+        preprocessor = ColumnTransformer(
+            transformers=[
+                #("num", StandardScaler(), numeric_cols),
+                ("cat", OneHotEncoder(), categorical_cols),
+            ],
+            remainder="passthrough"
+        )
+
+        # transform X data and extract y data
+        X = preprocessor.fit_transform(data)
+        df = pd.DataFrame(X, columns=list(preprocessor.get_feature_names_out()))
+        return df
+
     def _prepare_data(self):
         """
         Organizes X and y data by doing some small preprocessing on the loaded dataframe.
@@ -124,33 +161,34 @@ class AbstractModel(ABC):
         # extract targets
         target_columns = [col for col in self.data.columns if col.endswith('_bw')]
         y = self.data[target_columns]
-        # calculate total volume
-        total_volume = self.data['read_volume'] + self.data['write_volume']
-        # divide read_volume and write_volume by total_volume
-        self.data['read_ratio'] = self.data['read_volume'] / total_volume
-        self.data['write_ratio'] = self.data['write_volume'] / total_volume
-        # scale read_io_size and write_io_size by 8e6
-        self.data["read_io_size"] = self.data["read_io_size"] / 8e6
-        self.data["write_io_size"] = self.data["write_io_size"] / 8e6
-        # remove unnecessary columns
-        self.data = self.data.drop(columns=['read_volume', 'write_volume'] + target_columns, axis=1)
+        # extract features
+        X = self._prepare_input_data(self.data)
+        # total_volume = self.data['read_volume'] + self.data['write_volume']
+        # # divide read_volume and write_volume by total_volume
+        # self.data['read_ratio'] = self.data['read_volume'] / total_volume
+        # self.data['write_ratio'] = self.data['write_volume'] / total_volume
+        # # scale read_io_size and write_io_size by 8e6
+        # self.data["read_io_size"] = self.data["read_io_size"] / 8e6
+        # self.data["write_io_size"] = self.data["write_io_size"] / 8e6
+        # # remove unnecessary columns
+        # self.data = self.data.drop(columns=['read_volume', 'write_volume'] + target_columns, axis=1)
 
-        # separate columns to apply different transformations
-        #numeric_cols = ["total_volume", "read_io_size", "write_io_size"]
-        categorical_cols = self.data.filter(regex='_io_pattern$').columns
+        # # separate columns to apply different transformations
+        # #numeric_cols = ["total_volume", "read_io_size", "write_io_size"]
+        # categorical_cols = self.data.filter(regex='_io_pattern$').columns
 
-        # Apply preprocessing to X data
-        preprocessor = ColumnTransformer(
-            transformers=[
-                #("num", StandardScaler(), numeric_cols),
-                ("cat", OneHotEncoder(), categorical_cols),
-            ],
-            remainder="passthrough"
-        )
+        # # Apply preprocessing to X data
+        # preprocessor = ColumnTransformer(
+        #     transformers=[
+        #         #("num", StandardScaler(), numeric_cols),
+        #         ("cat", OneHotEncoder(), categorical_cols),
+        #     ],
+        #     remainder="passthrough"
+        # )
 
-        # transform X data and extract y data
-        X = preprocessor.fit_transform(self.data)
-        X = pd.DataFrame(X, columns=list(preprocessor.get_feature_names_out()))
+        # # transform X data and extract y data
+        # X = preprocessor.fit_transform(self.data)
+        # X = pd.DataFrame(X, columns=list(preprocessor.get_feature_names_out()))
         return X, y
 
     @abstractmethod
@@ -190,7 +228,8 @@ class AbstractModel(ABC):
         Returns:
             The predictions made by the model on the new data.
         """
-        predictions = self.model.predict(new_data)
+        input_data = self._prepare_input_data(new_data)
+        predictions = self.model.predict(input_data)
         return predictions
 
 

@@ -106,11 +106,16 @@ class TestAbstractModel(unittest.TestCase):
         self.assertFalse(self.model.data.empty)
         self.assertIsInstance(self.model.X, pd.DataFrame)
         self.assertIsInstance(self.model.y, pd.DataFrame)
-        print(self.model.X.columns)
 
     def test_model_is_trained(self):
         self.model.train_model()
         self.assertIsNotNone(self.model.model)
+
+    def test_prepare_input_data(self):
+        some_data = pd.DataFrame({'nodes':[1, 1, 1, 1], 'read_volume': [20e6, 30e6, 30e6, 30e6], 'write_volume': [10e6, 50e6, 30e6, 30e6], 'read_io_pattern': ['rand', 'uncl', 'stride', 'seq'], 'write_io_pattern': ['stride', 'seq', 'uncl', 'rand'], 'read_io_size': [512e3, 4e3, 8e6, 1e6], 'write_io_size': [512e3, 8e6, 4e3, 1e6]})
+        some_input_data = self.model._prepare_input_data(some_data)
+        self.assertIsInstance(some_input_data, pd.DataFrame)
+        self.assertEqual(set(some_input_data.columns), set(self.model.X.columns))
 
     def test_train_evaluate_predict(self):
         self.model.train_model()
@@ -119,24 +124,12 @@ class TestAbstractModel(unittest.TestCase):
         # Assert that the model has been trained and evaluated successfully
         self.assertIsNotNone(self.model.model)
         self.assertIsInstance(score, float)
+        new_data = pd.DataFrame({'nodes':[1, 1, 1, 1], 'read_volume': [20e6, 30e6, 30e6, 30e6], 'write_volume': [10e6, 50e6, 30e6, 30e6], 'read_io_pattern': ['rand', 'uncl', 'stride', 'seq'], 'write_io_pattern': ['stride', 'seq', 'uncl', 'rand'], 'read_io_size': [512e3, 4e3, 8e6, 1e6], 'write_io_size': [512e3, 8e6, 4e3, 1e6]})
         # new_data = pd.DataFrame({'total_volume': [20000], 'read_ratio': [0.5], 'write_ratio': [0.5], 'seq_read_io_pattern': [1], 'seq_write_io_pattern': [0], 'rand_read_io_pattern': [0], 'rand_write_io_pattern': [0]})
-        # predictions = model.predict(new_data)
+        predictions = self.model.predict(new_data)
+        self.assertIsInstance(new_data, pd.DataFrame)
+        self.assertEqual(predictions.shape, (4, 3))
 
-    def test_train_evaluate_predict(self):
-        # model = LinearRegressionModel()
-        # model.train_model()
-        # score = model.evaluate_model()
-
-        # # Assert that the model has been trained and evaluated successfully
-        # self.assertIsNotNone(model.model)
-        # self.assertGreater(score, 0.0)
-
-        # # Assert that the model can make predictions
-        # new_data = pd.DataFrame({'total_volume': [20000], 'read_ratio': [0.5], 'write_ratio': [0.5], 'seq_read_io_pattern': [1], 'seq_write_io_pattern': [0], 'rand_read_io_pattern': [0], 'rand_write_io_pattern': [0]})
-        # predictions = model.predict(new_data)
-        # self.assertIsInstance(predictions, pd.DataFrame)
-        # self.assertEqual(predictions.shape, (1, 2))
-        pass
 
 if __name__ == '__main__':
     unittest.main()
