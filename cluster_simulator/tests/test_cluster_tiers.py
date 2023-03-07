@@ -24,8 +24,10 @@ class TestClusterConfigFile(unittest.TestCase):
     def test_config_path(self):
         # Test that the cluster is initialized correctly using a YAML config file
         cluster = Cluster(self.env, config_path=TEST_CONFIG_FILE)
-        self.assertEqual(cluster.compute_nodes, 1)
-        self.assertEqual(cluster.compute_cores, 2)
+        print(cluster.compute_nodes)
+        print(type(cluster.compute_nodes))
+        self.assertEqual(cluster.compute_nodes.capacity, 1)
+        self.assertEqual(cluster.compute_cores.capacity, 2)
         self.assertEqual(len(cluster.tiers), 3)
         self.assertEqual(cluster.ephemeral_tier.name, 'ephemeral')
 
@@ -35,8 +37,8 @@ class TestClusterConfigFile(unittest.TestCase):
         cores_per_node = 16
         cluster = Cluster(self.env, config_path=TEST_CONFIG_FILE, compute_nodes=compute_nodes,
                           cores_per_node=cores_per_node)
-        self.assertEqual(cluster.compute_nodes, compute_nodes)
-        self.assertEqual(cluster.compute_cores, compute_nodes * cores_per_node)
+        self.assertEqual(cluster.compute_nodes.capacity, compute_nodes)
+        self.assertEqual(cluster.compute_cores.capacity, compute_nodes * cores_per_node)
         self.assertEqual(len(cluster.tiers), 3)
         self.assertEqual(cluster.ephemeral_tier.name, 'ephemeral')
 
@@ -44,8 +46,8 @@ class TestClusterConfigFile(unittest.TestCase):
         # Test that the cluster is initialized correctly using overridden values for tiers
         tiers = [Tier(self.env, 'tier1', 100e9), Tier(self.env, 'tier2', 500e9)]
         cluster = Cluster(self.env, tiers=tiers)
-        self.assertEqual(cluster.compute_nodes, 1)
-        self.assertEqual(cluster.compute_cores, 2)
+        self.assertEqual(cluster.compute_nodes.capacity, 1)
+        self.assertEqual(cluster.compute_cores.capacity, 2)
         self.assertEqual(len(cluster.tiers), 2)
         self.assertIsNone(cluster.ephemeral_tier)
 
@@ -54,8 +56,8 @@ class TestClusterConfigFile(unittest.TestCase):
         TEST_CONFIG_FILE_NO_EPHEMERAL = os.path.join(CURRENT_DIR, "test_data", "config_no_ephemeral.yaml")
         ephemeral_tier = Tier(self.env, 'my_ephemeral', 200e9)
         cluster = Cluster(self.env, config_path=TEST_CONFIG_FILE_NO_EPHEMERAL, ephemeral_tier=ephemeral_tier)
-        self.assertEqual(cluster.compute_nodes, 1)
-        self.assertEqual(cluster.compute_cores, 2)
+        self.assertEqual(cluster.compute_nodes.capacity, 1)
+        self.assertEqual(cluster.compute_cores.capacity, 2)
         self.assertEqual(len(cluster.tiers), 3)
         self.assertEqual(cluster.ephemeral_tier.name, 'my_ephemeral')
 
@@ -68,8 +70,8 @@ class TestClusterConfigFile(unittest.TestCase):
         cluster = Cluster(self.env, config_path=TEST_CONFIG_FILE, compute_nodes=compute_nodes,
                           cores_per_node=cores_per_node, tiers=tiers,
                           ephemeral_tier=ephemeral_tier)
-        self.assertEqual(cluster.compute_nodes, compute_nodes)
-        self.assertEqual(cluster.compute_cores, compute_nodes * cores_per_node)
+        self.assertEqual(cluster.compute_nodes.capacity, compute_nodes)
+        self.assertEqual(cluster.compute_cores.capacity, compute_nodes * cores_per_node)
         self.assertEqual(len(cluster.tiers), 2)
         self.assertEqual(cluster.ephemeral_tier.name, 'my_ephemeral')
 

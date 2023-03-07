@@ -115,8 +115,8 @@ class Cluster:
         """
         logger.debug("Initializing Cluster instance")
         self.env = env
-        self.compute_nodes = compute_nodes
-        self.compute_cores = cores_per_node * compute_nodes
+        self.compute_nodes = simpy.Resource(env, capacity=compute_nodes)
+        self.compute_cores = simpy.Resource(env, capacity=cores_per_node*compute_nodes)
         self.tiers = tiers or []
         self.ephemeral_tier = ephemeral_tier
 
@@ -133,8 +133,8 @@ class Cluster:
             # Override default values if provided in YAML file
             default_config = config.get('defaults')
             if default_config:
-                self.compute_nodes = compute_nodes or default_config.get('compute_nodes')
-                self.cores_per_node = cores_per_node or default_config.get('cores_per_node')
+                self.compute_nodes = simpy.Resource(env, capacity=compute_nodes or default_config.get('compute_nodes'))
+                self.cores_per_node = simpy.Resource(env, capacity=cores_per_node or default_config.get('cores_per_node'))
 
             if tiers is None:
                 logger.debug("Creating tiers from configuration")
@@ -146,7 +146,8 @@ class Cluster:
                     tier_bandwidth_model_path = tier_cfg.get('bandwidth_model_path')
                     # (self, env, name, max_bandwidth=None, bandwidth_model_path=None, capacity=100e9)
                     logger.debug(f"[Yaml Parsing] tier: {tier_name} | capacity: {tier_capacity} | tier bandwidth: {tier_max_bandwidth} | tier model: {tier_bandwidth_model_path}")
-                    tier = Tier(env=self.env, name=tier_name, max_bandwidth=tier_max_bandwidth, bandwidth_model_path=tier_bandwidth_model_path, capacity=tier_capacity)
+                    tier = Tier(env=self.env, name=tier_name,
+                                max_bandwidth=tier_max_bandwidth, bandwidth_model_path=tier_bandwidth_model_path, capacity=tier_capacity)
                     self.tiers.append(tier)
             else:
                 logger.debug("Overriding tiers with provided values")
@@ -157,7 +158,12 @@ class Cluster:
                 ephemeral_cfg = config.get('ephemeral_tier')
                 if ephemeral_cfg:
                     logger.debug("Creating ephemeral tier")
-                    ephemeral_tier = Tier(env, ephemeral_cfg['name'], ephemeral_cfg['capacity'], ephemeral_cfg['max_bandwidth'])
+                    # (self, env, name, persistent_tier, max_bandwidth, capacity=80e9
+                    ephemeral_tier = EphemeralTier(self.env,
+                                                   ephemeral_cfg['name'],
+                                                   persistent_tier=ephemeral_cfg['persistent_tier'],
+                                                   max_bandwidth=ephemeral_cfg['max_bandwidth'],
+                                                   capacity=ephemeral_cfg['capacity'])
                     self.ephemeral_tier = ephemeral_tier
             else:
                 logger.debug("Overriding ephemeral_tier with provided values")
@@ -292,13 +298,15 @@ class Tier:
         self.name = name
         self.capacity = simpy.Container(self.env, init=0, capacity=capacity)
         self.max_bandwidth = max_bandwidth
+        self.bandwidth = None
+        self.bandwidth_concurrency = dict()
 
-        if isinstance(max_bandwidth, str):
-            if not bandwidth_model_path:
-                raise FileNotFoundError("Bandwidth model file not found")
-            with open(bandwidth_model_path) as f:
-                bandwidth_model = pickle.load(f)
-            self.max_bandwidth = bandwidth_model
+        # if isinstance(max_bandwidth, str):
+        #     if not bandwidth_model_path:
+        #         raise FileNotFoundError("Bandwidth model file not found")
+        #     with open(bandwidth_model_path) as f:
+        #         bandwidth_model = pickle.load(f)
+        #     self.max_bandwidth = bandwidth_model
 
     def get_max_bandwidth(self, cores=1, operation='read', pattern=1):
         """

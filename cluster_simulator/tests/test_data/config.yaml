@@ -27,5 +27,7 @@ tiers:
 
 ephemeral_tier:
   name: ephemeral
+    #   (self, env, name, persistent_tier, max_bandwidth, capacity=80e9)
+  persistent_tier: tier1
   capacity: 1.0e+11
   max_bandwidth: 100.e+6
