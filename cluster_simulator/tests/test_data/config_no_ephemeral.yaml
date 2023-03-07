@@ -1,0 +1,31 @@
+defaults:
+  compute_nodes: 1
+  cores_per_node: 2
+
+tiers:
+  - name: tier1
+    capacity: 100.0e+9
+    max_bandwidth:
+      read:
+        seq: 5
+        rand: 5
+      write:
+        seq: 10
+        rand: 10
+  - name: tier2
+    capacity: 500.e+9
+    max_bandwidth: 50.e+6
+  - name: tier3
+    capacity: 1.e+12
+    max_bandwidth:
+      read:
+        seq: 20
+        rand: 20
+      write:
+        seq: 30
+        rand: 30
+
+# ephemeral_tier:
+#   name: ephemeral
+#   capacity: 1.0e+11
+#   max_bandwidth: 100.e+6
