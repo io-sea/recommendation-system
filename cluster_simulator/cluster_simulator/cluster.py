@@ -15,8 +15,10 @@ import simpy
 from loguru import logger
 import numpy as np
 import math
+import yaml
+import joblib
 from cluster_simulator.utils import convert_size, BandwidthResource
-
+from cluster_simulator import DEFAULT_CONFIG_PATH
 
 
 def convert_size(size_bytes):
@@ -57,26 +59,115 @@ class Cluster:
     """A cluster is a set of compute nodes each node having a fixed number of cores. The storage system is heterogenous and consists on a set of tiers. Each tier has its own capacity and performances.
     Generally speaking, these tiers are referenced as persistent storage, which means that data conveyed through tiers is kept persistently and can be retrieved anytime by an application, unless it is explicitly removed as in data movers methods.
     A cluster contains also a specific type of tiers that is ephemeral, which means that it does not keep data beyond the execution time of an application. Ephemeral tiers are often supported by datanodes that hold their own compute units and also high storage hardware to serve as burst buffers backend. Burst buffers partitions their resources into flavors to dispatch them smartly between applications. They have also their own policy of eviction when storage are (quasi) saturated as well as a destaging capacity in order to move data to a persistent storage tier. As a consequence, each ephemeral tier has its a specific tier attached to it.
+
+
+    Args:
+        env (simpy.Environment): The SimPy environment.
+        config_path (str, optional): Path to the YAML configuration file.
+        compute_nodes (int, optional): Number of compute nodes. Overrides the value
+            specified in the YAML file if provided.
+        cores_per_node (int, optional): Number of cores per node. Overrides the value
+            specified in the YAML file if provided.
+        tiers (list of Tier instances, optional): List of Tier instances. Overrides
+            the value specified in the YAML file if provided.
+        ephemeral_tier (Tier instance, optional): The ephemeral storage tier. Overrides
+            the value specified in the YAML file if provided.
+
+    Raises:
+        ValueError: If there is a mismatch between tier names in the provided
+            list of Tier instances and the YAML file.
+
+    Attributes:
+        env (simpy.Environment): The SimPy environment.
+        compute_nodes (int): Number of compute nodes.
+        compute_cores (int): Total number of cores in the cluster.
+        tiers (list of Tier instances): List of storage tiers in the cluster.
+        ephemeral (Tier instance): The ephemeral storage tier, if any.
+
+    Methods:
+        __str__(): Returns a string representation of the cluster.
+        get_tier_by_name(name): Returns the Tier instance with the specified name.
+        get_tier_by_path(path): Returns the Tier instance with the specified
+            bandwidth model path.
+        set_ephemeral_tier(tier): Sets the ephemeral storage tier.
+
+    Example:
+        # Create a cluster with a custom number of compute nodes and cores per node.
+        cluster = Cluster(env, config_path='config.yaml', compute_nodes=4, cores_per_node=8)
+
+        # Override the tiers specified in the YAML file with a custom list of Tier instances.
+        tiers = [Tier(env, 'tier1', 100e9), Tier(env, 'tier2', 500e9)]
+        cluster = Cluster(env, config_path='config.yaml', tiers=tiers)
     """
 
-    def __init__(self, env, compute_nodes=1, cores_per_node=2, tiers=[], ephemeral_tier=None,
-                 data=None):
-        """Inits a Cluster instance with mentioned attributes.
+    def __init__(self, env, config_path=None, compute_nodes=1, cores_per_node=2, tiers=None,
+                 ephemeral_tier=None):
+        """Initializes a Cluster instance.
 
         Args:
-            env (simpy.Environment): an environement where all simulation happens.
-            compute_nodes (int, optional): number of compute nodes to specify. Defaults to 1.
-            cores_per_node (int, optional): number of cores per compute node. Defaults to 2.
-            tiers (list, optional): list of instances from Tier class. Defaults to [].
-            ephemeral_tier (EphemeralTier, optional): specifies an ephemeral tier attached to this cluster. Defaults to None.
-            data (simpy.Store, optional): a queue like object to store data relative to execution of an application on the cluster. Defaults to None.
+            env (simpy.Environment): The simpy environment where all simulation happens.
+            config_path (str, optional): The path to the YAML configuration file to use. Defaults to DEFAULT_CONFIG_PATH.
+            compute_nodes (int, optional): The number of compute nodes to specify. Overrides the 'compute_nodes' value in the YAML configuration file if provided. Defaults to 1.
+            cores_per_node (int, optional): The number of cores per compute node. Overrides the 'cores_per_node' value in the YAML configuration file if provided. Defaults to 2.
+            tiers (list, optional): A list of instances from the Tier class to use. Overrides the 'tiers' value in the YAML configuration file if provided. Defaults to [].
+            ephemeral_tier (Tier, optional): Specifies an ephemeral tier attached to this cluster. Overrides the 'ephemeral_tier' value in the YAML configuration file if provided. Defaults to None.
+
         """
+        logger.debug("Initializing Cluster instance")
+        self.env = env
         self.compute_nodes = simpy.Resource(env, capacity=compute_nodes)
         self.compute_cores = simpy.Resource(env, capacity=cores_per_node*compute_nodes)
-        self.data = data or None
-        self.tiers = [tier for tier in tiers if isinstance(tier, Tier)]
-        self.ephemeral_tier = ephemeral_tier if isinstance(ephemeral_tier, EphemeralTier) else None
-        # logger.info(self.__str__())
+        self.tiers = tiers or []
+        self.ephemeral_tier = ephemeral_tier
+
+        if config_path:
+            logger.debug(f"Loading configuration from {config_path}")
+            with open(config_path) as f:
+                # config = yaml.load(f, Loader=yaml.FullLoader)
+                config = yaml.safe_load(f)
+
+            # if 'compute_nodes' in config['defaults']:
+            #     self.compute_nodes = compute_nodes or config['defaults']['compute_nodes']
+            # if 'cores_per_node' in config['defaults']:
+            #     self.compute_cores = cores_per_node or config['defaults']['cores_per_node'] * self.compute_nodes
+            # Override default values if provided in YAML file
+            default_config = config.get('defaults')
+            if default_config:
+                self.compute_nodes = simpy.Resource(env, capacity=compute_nodes or default_config.get('compute_nodes'))
+                self.cores_per_node = simpy.Resource(env, capacity=cores_per_node or default_config.get('cores_per_node'))
+
+            if tiers is None:
+                logger.debug("Creating tiers from configuration")
+                self.tiers = []
+                for tier_cfg in config['tiers']:
+                    tier_name = tier_cfg['name']
+                    tier_capacity = int(tier_cfg['capacity'])
+                    tier_max_bandwidth = tier_cfg.get('max_bandwidth')
+                    tier_bandwidth_model_path = tier_cfg.get('bandwidth_model_path')
+                    # (self, env, name, max_bandwidth=None, bandwidth_model_path=None, capacity=100e9)
+                    logger.debug(f"[Yaml Parsing] tier: {tier_name} | capacity: {tier_capacity} | tier bandwidth: {tier_max_bandwidth} | tier model: {tier_bandwidth_model_path}")
+                    tier = Tier(env=self.env, name=tier_name,
+                                max_bandwidth=tier_max_bandwidth, bandwidth_model_path=tier_bandwidth_model_path, capacity=tier_capacity)
+                    self.tiers.append(tier)
+            else:
+                logger.debug("Overriding tiers with provided values")
+                self.tiers = tiers
+
+            if ephemeral_tier is None:
+                logger.debug("ephemeral_tier is None")
+                ephemeral_cfg = config.get('ephemeral_tier')
+                if ephemeral_cfg:
+                    logger.debug("Creating ephemeral tier")
+                    # (self, env, name, persistent_tier, max_bandwidth, capacity=80e9
+                    ephemeral_tier = EphemeralTier(self.env,
+                                                   ephemeral_cfg['name'],
+                                                   persistent_tier=ephemeral_cfg['persistent_tier'],
+                                                   max_bandwidth=ephemeral_cfg['max_bandwidth'],
+                                                   capacity=ephemeral_cfg['capacity'])
+                    self.ephemeral_tier = ephemeral_tier
+            else:
+                logger.debug("Overriding ephemeral_tier with provided values")
+                self.ephemeral_tier = ephemeral_tier
 
     def __str__(self):
         """Displays some cluster properties in readable way.
@@ -90,6 +181,8 @@ class Cluster:
         if self.tiers:
             for tier in self.tiers:
                 description += tier.__str__()
+        if self.ephemeral_tier:
+            description += self.ephemeral_tier.__str__()
         return description
 
     def get_levels(self):
@@ -98,8 +191,8 @@ class Cluster:
         Returns:
             levels (dict): snapshot of the tiers levels.
         """
-        levels = dict([(tier.name, tier.capacity.level) for tier in self.tiers])
-        if self.ephemeral_tier:
+        levels = {tier.name: tier.capacity.level for tier in self.tiers}
+        if self.ephemeral_tier is not None:
             levels[self.ephemeral_tier.name] = self.ephemeral_tier.capacity.level
         return levels
 
@@ -121,53 +214,136 @@ class Cluster:
                 tier.max_bandwidth[operation]['rand'] * (1-pattern)) * cores * 1e6
 
 
+# class Tier:
+#     """Model a tier storage service with a focus on a limited bandwidth resource as well as a limited capacity. In this model we expect a bandwidth value at its asymptotic state, so blocksize is still not a parameter. Only the asymptotic part of the throughput curve is considered. Other considered variables are read/write variables and sequential/random variables.
+#     Output is a scalar value in MB/s.
+#     Typically we access the bandwidth value as in dictionary: b['read']['seq'] = 200MB/s.
+#     # TODO: extend this to a NN as function approximator to allow:
+#         averaging over variables
+#         interpolation when data entry is absent, i.e. b['seq'] gives a value
+
+#     """
+
+#     def __init__(self, env, name, capacity=100e9, max_bandwidth=None,  bandwidth_model_path=None):
+#         """Inits a tier instance with some storage service specifications.
+
+#         Args:
+#             env (simpy.Environment): the simpy environment where all simulations happens.s
+#             name (string): a name to make analytics readable and to assign a unique ID to a tier.
+#             bandwidth (simpy.Resource): bandwidth as limited number of slots that can be consumed.  Default capacity is up to 10 concurrent I/O sharing the maximum value of the bandwidth.
+#             capacity (simpy.Container, optional): storage capacity of the tier. Defaults to 100e9 (100GB).
+#             max_bandwidth (dict): which contains operation and pattern dependant max bandwidths.
+#             Example:
+#                 ssd_bandwidth = {'read':  {'seq': 210, 'rand': 190},
+#                          'write': {'seq': 100, 'rand': 100}}
+#         """
+#         self.env = env
+#         self.name = name
+#         self.capacity = simpy.Container(self.env, init=0, capacity=capacity)
+#         self.max_bandwidth = max_bandwidth
+
+#     def get_max_bandwidth(self, cores=1, operation='read', pattern=1):
+#         if isinstance(self.max_bandwidth, dict):
+#             return (self.max_bandwidth[operation]['seq'] * pattern +
+#                     self.max_bandwidth[operation]['rand'] * (1-pattern)) * cores * 1e6
+#         else:
+#             return self.max_bandwidth.predict([[cores, pattern]])[0] * 1e6
+
+#     def __str__(self):
+#         """Prints cluster related information in a human readable fashion.
+
+#         Returns:
+#             string: properties and state of the cluster.
+#         """
+#         description = "\n-------------------\n"
+#         description += (f"Tier: {self.name} with capacity = {convert_size(self.capacity.capacity)}\n")
+#         description += ("{:<12} {:<12} {:<12}".format('Operation', 'Pattern', 'Bandwidth MB/s')+"\n")
+#         for op, inner_dict in self.max_bandwidth.items():
+#             for pattern, value in inner_dict.items():
+#                 description += ("{:<12} {:<12} {:<12}".format(op, pattern, value)+"\n")
+#         return description
+
+
 class Tier:
-    """Model a tier storage service with a focus on a limited bandwidth resource as well as a limited capacity. In this model we expect a bandwidth value at its asymptotic state, so blocksize is still not a parameter. Only the asymptotic part of the throughput curve is considered. Other considered variables are read/write variables and sequential/random variables.
-    Output is a scalar value in MB/s.
-    Typically we access the bandwidth value as in dictionary: b['read']['seq'] = 200MB/s.
-    # TODO: extend this to a NN as function approximator to allow:
-        averaging over variables
-        interpolation when data entry is absent, i.e. b['seq'] gives a value
+    """
+    A class to represent a tier in a cluster.
+
+    Attributes:
+        env (simpy.Environment): The simulation environment.
+        name (str): The name of the tier.
+        capacity (simpy.Container): The capacity of the tier.
+        max_bandwidth (Union[Dict[str, Dict[int, float]], str, None]): The maximum bandwidth of the tier.
+        bandwidth_model_path (Optional[str]): The path to the bandwidth model file.
+
+    Raises:
+        FileNotFoundError: If the bandwidth model file is not found.
 
     """
 
-    def __init__(self, env, name, bandwidth, capacity=100e9):
-        """Inits a tier instance with some storage service specifications.
+    def __init__(self, env, name, max_bandwidth=None, bandwidth_model_path=None, capacity=100e9):
+        """
+        Initializes a tier with the given parameters.
 
         Args:
-            env (simpy.Environment): the simpy environment where all simulations happens.s
-            name (string): a name to make analytics readable and to assign a unique ID to a tier.
-            bandwidth (simpy.Resource): bandwidth as limited number of slots that can be consumed.  Default capacity is up to 10 concurrent I/O sharing the maximum value of the bandwidth.
-            capacity (simpy.Container, optional): storage capacity of the tier. Defaults to 100e9 (100GB).
-            max_bandwidth (dict): which contains operation and pattern dependant max bandwidths.
-            Example:
-                ssd_bandwidth = {'read':  {'seq': 210, 'rand': 190},
-                         'write': {'seq': 100, 'rand': 100}}
+            env (simpy.Environment): The simulation environment.
+            name (str): The name of the tier.
+            capacity (float, optional): The capacity of the tier in bytes. Defaults to 100e9.
+            max_bandwidth (Union[Dict[str, Dict[int, float]], str, None], optional): The maximum bandwidth of the tier.
+                Can be a dictionary containing bandwidth for different read/write operations and patterns,
+                a string containing the path to the bandwidth model file, or None. Defaults to None.
+            bandwidth_model_path (Optional[str], optional): The path to the bandwidth model file. Defaults to None.
+
         """
         self.env = env
         self.name = name
         self.capacity = simpy.Container(self.env, init=0, capacity=capacity)
-        self.max_bandwidth = bandwidth
-        # modeling percent use of bandwidth
-        #self.bandwidth = simpy.Resource(self.env, capacity=10)
-        #self.bandwidth = BandwidthResource(self.env, event_list=None, capacity=10)
+        self.max_bandwidth = max_bandwidth
         self.bandwidth = None
         self.bandwidth_concurrency = dict()
-        # self.bandwidth = simpy.Container(env, init=100, capacity=100)
-        # logger.info(self.__str__())
 
-    def __str__(self):
-        """Prints cluster related information in a human readable fashion.
+        # if isinstance(max_bandwidth, str):
+        #     if not bandwidth_model_path:
+        #         raise FileNotFoundError("Bandwidth model file not found")
+        #     with open(bandwidth_model_path) as f:
+        #         bandwidth_model = pickle.load(f)
+        #     self.max_bandwidth = bandwidth_model
+
+    def get_max_bandwidth(self, cores=1, operation='read', pattern=1):
+        """
+        Returns the maximum bandwidth of the tier for the given parameters.
+
+        Args:
+            cores (int, optional): The number of cores. Defaults to 1.
+            operation (str, optional): The read/write operation. Defaults to 'read'.
+            pattern (int, optional): The access pattern (1 for sequential, 0 for random). Defaults to 1.
 
         Returns:
-            string: properties and state of the cluster.
+            float: The maximum bandwidth in bytes/sec.
+
+        """
+        if isinstance(self.max_bandwidth, dict):
+            return (self.max_bandwidth[operation]['seq'] * pattern +
+                    self.max_bandwidth[operation]['rand'] * (1-pattern)) * cores
+        else:
+            return self.max_bandwidth.predict([[cores, pattern]])[0]
+
+    def __str__(self):
+        """
+        Returns a string representation of the tier.
+
+        Returns:
+            str: A string representation of the tier.
+
         """
         description = "\n-------------------\n"
         description += (f"Tier: {self.name} with capacity = {convert_size(self.capacity.capacity)}\n")
         description += ("{:<12} {:<12} {:<12}".format('Operation', 'Pattern', 'Bandwidth MB/s')+"\n")
-        for op, inner_dict in self.max_bandwidth.items():
-            for pattern, value in inner_dict.items():
-                description += ("{:<12} {:<12} {:<12}".format(op, pattern, value)+"\n")
+        if isinstance(self.max_bandwidth, dict):
+            for op, inner_dict in self.max_bandwidth.items():
+                for pattern, value in inner_dict.items():
+                    description += ("{:<12} {:<12} {:<12}".format(op, pattern, value)+"\n")
+        else:
+            description += f"Bandwidth model path: {self.bandwidth_model_path}\n"
         return description
 
 
@@ -180,14 +356,14 @@ class EphemeralTier(Tier):
         persistent_tier(Tier): persistent tier attached to this transient/ephemeral tier where all data conveyed by the application will be found.
     """
 
-    def __init__(self, env, name, persistent_tier, bandwidth, capacity=80e9):
+    def __init__(self, env, name, persistent_tier, max_bandwidth, capacity=80e9):
         """Inits an EphemeralTier instance.
 
         Args:
             env (simpy.Environment): the simpy environment where all simulations happens.s
             name (string): unique name
             persistent_tier (Tier): a persistent tier the burst buffer is attached to. Will be automatically used for destaging purposes.
-            bandwidth (simpy.Resource): bandwidth as limited number of slots that can be consumed.  Default capacity is up to 10 concurrent I/O sharing the maximum value of the bandwidth.
+            max_bandwidth (simpy.Resource): bandwidth as limited number of slots that can be consumed.  Default capacity is up to 10 concurrent I/O sharing the maximum value of the bandwidth.
             capacity (simpy.Container, optional): storage capacity of the flavor of the datanode. Defaults to 80e9.
         """
         self.env = env
@@ -199,7 +375,7 @@ class EphemeralTier(Tier):
         self.lower_threshold = 0.7
         self.upper_threshold = 0.9
         # self.cores = simpy.Resource(env, capacity=cores)
-        super().__init__(env, name, bandwidth, capacity=capacity)
+        super().__init__(env, name, max_bandwidth=max_bandwidth, capacity=capacity)
 
     def evict(self):
         """Check if the application should evict some data from the ephemeral tier.
@@ -218,7 +394,7 @@ class EphemeralTier(Tier):
                                   self.lower_threshold*self.capacity.capacity, clean_data)
             if eviction_volume > 0:
                 self.capacity.get(eviction_volume)
-                logger.info(f"{convert_size(eviction_volume)} evicted from tier {self.name}")
+                logger.debug(f"{convert_size(eviction_volume)} evicted from tier {self.name}")
                 return eviction_volume
         return 0
 

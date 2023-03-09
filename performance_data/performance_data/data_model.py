@@ -6,9 +6,15 @@ Please contact Bull S. A. S. for details about its license.
 """
 
 import random
-import pandas as pd
+import re
+import os
+from abc import ABC, abstractmethod
+from performance_data import MODELS_DIRECTORY, DATASET_FILE, GENERATED_DATASET_FILE
 from performance_data.data_table import PhaseData, DataTable
 import pandas as pd
+import joblib
+from loguru import logger
+
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.compose import ColumnTransformer
@@ -72,47 +78,152 @@ class PhaseGenerator:
         df.to_csv(filename, index=False)
 
 
-class RegressionModel:
-    """
-    A class for training and evaluating a regression model on performance data.
+class AbstractModel(ABC):
+    """An abstract class for training and evaluating a regression model on performance data.
 
     Attributes:
-        data (pandas.DataFrame): The performance data loaded from the csv file.
-        X (pandas.DataFrame): The features of the performance data.
-        y (pandas.DataFrame): The targets of the model.
-        X_train (pandas.DataFrame): The training features of the performance data.
-        X_test (pandas.DataFrame): The test features of the performance data.
-        y_train (pandas.DataFrame): The training targets of the model.
-        y_test (pandas.DataFrame): The test targets of the model.
-        preprocessor (ColumnTransformer): The preprocessor for transforming the data into numerical format.
-        model (Pipeline): The pipeline that applies the preprocessor and trains the model.
+        data: A pandas DataFrame containing the performance data loaded from the CSV file.
+        X: A pandas DataFrame containing the features of the performance data.
+        y: A pandas DataFrame containing the targets of the model.
+        X_train: A pandas DataFrame containing the training features of the performance data.
+        X_test: A pandas DataFrame containing the test features of the performance data.
+        y_train: A pandas DataFrame containing the training targets of the model.
+        y_test: A pandas DataFrame containing the test targets of the model.
+        preprocessor: A ColumnTransformer object for transforming the data into numerical format.
+        model: A dictionary containing the trained models objects.
+        model_name: A string representing the name of the trained model.
+
     """
-    def __init__(self, data_file):
+    SCORE_THRESHOLD = 0.7
+
+    def __init__(self):
+        """Initializes the AbstractModel.
+
+        Raises:
+            AssertionError: If no elements found in data.
+
         """
-        Initializes the RegressionModel with the data file.
+        # load data
+        # TODO: avoid data redundancy, create self.data["X_train"].. self.data["tier"]["y_train"]
+        self.input_data = pd.read_csv(GENERATED_DATASET_FILE)
+        self.data = {}
+        self.model = {}
+        # extract list of target tiers
+        # target_tiers = [col.split("_bw")[0] for col in data.columns if col.endswith('_bw')]
+        self.target_tiers = [col for col in self.input_data.columns if col.endswith('_bw')]
+        assert not self.input_data.empty, "No elements found in data."
+        for tier_col in self.target_tiers:
+            # one model per tier
+            self.model[tier_col] = {}
+            # one target y per tier
+            self.data[tier_col] = {}
+            # get dataframes for X and y
+            X, y = self._prepare_data(column=tier_col)
+            assert not y.empty, "No targets found in data."
+            # split data into train and test sets
+            self.data["X_train"], self.data["X_test"], self.data[tier_col]["y_train"], self.data[tier_col]["y_test"] = train_test_split(X, y, test_size=0.2, random_state=0)
+            # register model name
+            self.model[tier_col]["model_name"] = re.sub('(?<!^)(?=[A-Z])', '_', f"{type(self).__name__ + '_' + tier_col}.joblib").lower()
+            # register model path
+            self.model[tier_col]["model_path"] = os.path.join(MODELS_DIRECTORY, self.model[tier_col]["model_name"])
+
+            # if already registered model, load it
+            if os.path.exists(self.model[tier_col]["model_path"]):
+                logger.info(f"Loading model from {self.model[tier_col]['model_path']}")
+                self.model[tier_col]["model"] = joblib.load(self.model[tier_col]["model_path"])
+            else:
+                logger.info(f"Creating a new model: {self.model[tier_col]['model_name']}")
+                self.model[tier_col]["model"] = self._create_model()
+
+    def _prepare_input_data(self, data):
+        """
+        Prepares input data for prediction.
 
         Args:
-            data_file (str): The file name of the data in csv format.
+            data (dict): A dictionary of input data.
+
+        Returns:
+            pandas.DataFrame: The prepared input data.
         """
-        self.data = pd.read_csv(data_file)
-        self.X = self.data.filter(regex='_volume$|_io_pattern$|io_size$')
-        self.y = self.data.filter(regex='_bw$')
-        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(self.X, self.y, test_size=0.2, random_state=0)
-        self.preprocessor = ColumnTransformer(
+        logger.info("Preparing input data...")
+        # dropout targets
+        target_columns = [col for col in data.columns if col.endswith('_bw')]
+        if target_columns:
+            data = data.drop(target_columns, axis=1)
+        logger.debug(f"Input data after dropping target columns: {data.columns.tolist()}")
+        # calculate total volume
+        total_volume = data['read_volume'] + data['write_volume']
+        # divide read_volume and write_volume by total_volume
+        data['read_ratio'] = data['read_volume'] / total_volume
+        data['write_ratio'] = data['write_volume'] / total_volume
+        # scale read_io_size and write_io_size by 8e6
+        data["read_io_size"] = data["read_io_size"] / 8e6
+        data["write_io_size"] = data["write_io_size"] / 8e6
+        data["avg_io_size"] = data["read_io_size"]*data["read_ratio"] + data["write_io_size"]*data["write_ratio"]
+        # remove unnecessary columns
+        data = data.drop(columns=['read_volume', 'write_volume'], axis=1)
+        logger.debug(f"Input data after dropping unnecessary columns: {data.columns.tolist()}")
+        # Apply preprocessing to X data
+        categorical_cols = data.filter(regex='_io_pattern$').columns
+        logger.debug(f"Categorical columns: {categorical_cols.tolist()}")
+        preprocessor = ColumnTransformer(
             transformers=[
-                ("num", StandardScaler(), self.X.filter(regex='_volume$').columns),
-                ("cat", OneHotEncoder(), self.X.filter(regex='_io_pattern$').columns)
-            ])
-        self.model = Pipeline([
-            ("preprocessor", self.preprocessor),
-            ("regressor", LinearRegression())
-        ])
+                # ("num", StandardScaler(), numeric_cols),
+                ("cat", OneHotEncoder(), categorical_cols),
+            ],
+            remainder="passthrough"
+        )
+
+        # transform X data and extract y data
+        X = preprocessor.fit_transform(data)
+        df = pd.DataFrame(X, columns=list(preprocessor.get_feature_names_out()))
+        logger.debug(f"Preprocessed data: {df.head()}")
+
+        return df
+
+    def _prepare_data(self, column=None):
+        """
+        Organizes X and y data by doing some small preprocessing on the loaded dataframe.
+
+        Args:
+            column (str, optional): The target column to extract. Defaults to None.
+
+        Returns:
+            Tuple of (X, y) data.
+        """
+        logger.info("Preparing data...")
+        target_columns = column if column and column in self.input_data.columns else [col for col in self.input_data.columns if col.endswith('_bw')]
+
+        logger.debug(f"Target columns: {target_columns}")
+        # extract features
+        X = self._prepare_input_data(self.input_data)
+        y = self.input_data[target_columns].div(X['remainder__avg_io_size'], axis=0)
+        logger.debug(f"Features: {X.columns.tolist()}")
+
+        return X, y
+
+    @abstractmethod
+    def _create_model(self):
+        """
+        Creates the model object.
+        """
+        pass
 
     def train_model(self):
         """
-        Trains the regression model on the training data.
+        Trains the regression model on the training data and saves it to disk if the score on the test set is better than a threshold.
         """
-        self.model.fit(self.X_train, self.y_train)
+        for target_tier in self.target_tiers:
+            logger.info("Training model...")
+            self.model[target_tier]["model"].fit(self.data["X_train"], self.data[target_tier]["y_train"])
+            self.model[target_tier]["score"] = self.model[target_tier]["model"].score(self.data["X_test"], self.data[target_tier]["y_test"])
+            logger.info(f"Model score for tier {target_tier}: {self.model[target_tier]['score']}")
+
+            if self.model[target_tier]["score"] > self.SCORE_THRESHOLD:
+                if not os.path.exists(os.path.dirname(self.model[target_tier]["model_path"])):
+                    os.makedirs(os.path.dirname(self.model[target_tier]["model_path"]))
+                joblib.dump(self.model[target_tier]["model"], self.model[target_tier]["model_path"])
+                logger.info(f"Saving Model for {target_tier}: {self.model[target_tier]['model_path']} | saved with score: {self.model[target_tier]['score']}")
 
     def evaluate_model(self):
         """
@@ -121,10 +232,11 @@ class RegressionModel:
         Returns:
             The score of the model on the test data.
         """
-        score = self.model.score(self.X_test, self.y_test)
-        return score
+        for target_tier in self.target_tiers:
+            self.model[target_tier]["score"] = self.model[target_tier]["model"].score(self.data["X_test"], self.data[target_tier]["y_test"])
+            logger.info(f"Model: {self.model[target_tier]['model_name']} | Score on test data: {self.model[target_tier]['score']}")
 
-    def predict(self, new_data):
+    def predict(self, new_data, process_input=True):
         """
         Makes predictions on new data using the trained model.
 
@@ -134,95 +246,9 @@ class RegressionModel:
         Returns:
             The predictions made by the model on the new data.
         """
-        predictions = self.model.predict(new_data)
+        predictions = {}
+        input_data = self._prepare_input_data(new_data) if process_input else new_data
+        for target_tier in self.target_tiers:
+            predictions[target_tier] = self.model[target_tier]["model"].predict(input_data)
+            logger.trace(f"Predictions made by the model {self.model[target_tier]['model_name']}: {predictions}")
         return predictions
-
-
-class RandomForestModel:
-    """A class for building a random forest regression model for predicting bandwidth values based on input features.
-
-    Attributes:
-        file_path (str): The path to the CSV file containing the input data.
-        num_trees (int, optional): The number of trees in the random forest. Defaults to 100.
-        max_depth (int, optional): The maximum depth of each tree in the random forest. Defaults to None.
-
-    Methods:
-        _create_pipeline(): Create a pipeline object for preprocessing the input data and fitting a random forest regression model.
-        fit(): Fit the pipeline to the training data.
-        predict(): Make predictions on the test data.
-        evaluate(): Evaluate the performance of the model on the test data by calculating mean squared error and R² score.
-
-    """
-    def __init__(self, file_path, num_trees=100, max_depth=None):
-        """Initialize a RandomForestModel instance.
-
-        Args:
-            file_path (str): The path to the CSV file containing the input data.
-            num_trees (int, optional): The number of trees in the random forest. Defaults to 100.
-            max_depth (int, optional): The maximum depth of each tree in the random forest. Defaults to None.
-
-        """
-        self.num_trees = num_trees
-        self.max_depth = max_depth
-        self.model = RandomForestRegressor(n_estimators=num_trees, max_depth=max_depth, random_state=42)
-        self.pipeline = self._create_pipeline()
-        self.file_path = file_path
-        self.data = pd.read_csv(file_path)
-        self.X = self.data.filter(regex='_volume$|_io_pattern$|_io_size$|nodes$')
-        self.y = self.data.filter(regex='_bw$')
-        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(self.X, self.y, test_size=0.2, random_state=0)
-
-    def _create_pipeline(self):
-        """Create a pipeline object for preprocessing the input data and fitting a random forest regression model.
-
-        Returns:
-            Pipeline: The pipeline object.
-
-        """
-        # Define column transformer for preprocessing
-        numeric_transformer = Pipeline(steps=[
-            ('imputer', SimpleImputer(strategy='median')),
-            ('scaler', StandardScaler())
-        ])
-        categorical_transformer = Pipeline(steps=[
-            ('imputer', SimpleImputer(strategy='most_frequent')),
-            ('onehot', OneHotEncoder(handle_unknown='ignore'))
-        ])
-        preprocessor = ColumnTransformer(
-            transformers=[
-                ('num', numeric_transformer, ['nodes', 'read_volume', 'write_volume', 'read_io_size', 'write_io_size']),
-                ('cat', categorical_transformer, ['read_io_pattern', 'write_io_pattern'])
-            ])
-
-        # Create pipeline
-        pipeline = Pipeline(steps=[
-            ('preprocessor', preprocessor),
-            ('model', self.model)
-        ])
-        return pipeline
-
-    def fit(self):
-        """Fit the pipeline to the training data."""
-        self.pipeline.fit(self.X_train, self.y_train)
-
-    def predict(self):
-        """Make predictions on the test data.
-
-        Returns:
-            numpy.ndarray: The predicted bandwidth values.
-
-        """
-        y_pred = self.pipeline.predict(self.X_test)
-        return y_pred
-
-    def evaluate(self):
-        """Evaluate the performance of the model on the test data by calculating mean squared error and R² score.
-
-        Returns:
-            tuple: A tuple containing the mean squared error and R² score.
-
-        """
-        y_pred = self.pipeline.predict(self.X_test)
-        mse = mean_squared_error(self.y_test, y_pred)
-        r2 = r2_score(self.y_test, y_pred)
-        return mse, r2

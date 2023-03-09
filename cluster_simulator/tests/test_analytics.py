@@ -20,6 +20,7 @@ import os
 # logger.remove()
 # logger.level('DEBUG')
 
+
 class TestAnalyticsSignals(unittest.TestCase):
     def test_signal_interpolation(self):
         t_starts = [0, 0, 20]
@@ -37,7 +38,6 @@ class TestAnalyticsSignals(unittest.TestCase):
         self.assertListEqual(result_write, [50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100])
 
 
-
 class TestAnalytics(unittest.TestCase):
     def setUp(self):
         # sim env an data
@@ -45,25 +45,25 @@ class TestAnalytics(unittest.TestCase):
         self.data = simpy.Store(self.env)
         # tier perfs
         nvram_bandwidth = {'read':  {'seq': 800, 'rand': 600},
-                                'write': {'seq': 400, 'rand': 400}}
+                           'write': {'seq': 400, 'rand': 400}}
         ssd_bandwidth = {'read':  {'seq': 240, 'rand': 180},
-                            'write': {'seq': 100, 'rand': 100}}
+                         'write': {'seq': 100, 'rand': 100}}
         hdd_bandwidth = {'read':  {'seq': 80, 'rand': 80},
-                            'write': {'seq': 40, 'rand': 40}}
+                         'write': {'seq': 40, 'rand': 40}}
 
         # registering Tiers
-        hdd_tier = Tier(self.env, 'HDD', bandwidth=hdd_bandwidth, capacity=1e12)
-        hdd2_tier = Tier(self.env, 'HDD', bandwidth=hdd_bandwidth, capacity=1e12)
-        ssd_tier = Tier(self.env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
-        nvram_tier = Tier(self.env, 'NVRAM', bandwidth=nvram_bandwidth,
-                                capacity=10e9)
+        hdd_tier = Tier(self.env, 'HDD', max_bandwidth=hdd_bandwidth, capacity=1e12)
+        hdd2_tier = Tier(self.env, 'HDD', max_bandwidth=hdd_bandwidth, capacity=1e12)
+        ssd_tier = Tier(self.env, 'SSD', max_bandwidth=ssd_bandwidth, capacity=200e9)
+        nvram_tier = Tier(self.env, 'NVRAM', max_bandwidth=nvram_bandwidth,
+                          capacity=10e9)
         # registering Ephemeral Tier
         bb = EphemeralTier(self.env, name="BB", persistent_tier=ssd_tier,
-                                bandwidth=nvram_bandwidth, capacity=10e9)
+                           max_bandwidth=nvram_bandwidth, capacity=10e9)
 
         # Define the cluster with 1 persistent and 1 ephemeral
         self.cluster = Cluster(self.env, compute_nodes=3, cores_per_node=2,
-                          tiers=[hdd_tier, ssd_tier], ephemeral_tier=bb)
+                               tiers=[hdd_tier, ssd_tier], ephemeral_tier=bb)
 
     def test_rw_mix(self):
         """Tests the display analytics for an application mixing read and write phases"""
@@ -86,9 +86,7 @@ class TestAnalytics(unittest.TestCase):
         fig = display_run(self.data, self.cluster, width=800, height=900)
         fig.show()
 
-
     def test_rw_mix_with_bb(self):
-
         """Tests the display analytics for an application mixing read and write phases with burst buffering"""
         # Simple app: read 1GB -> compute 10s -> write 5GB
         read = [3e9, 2e9]
@@ -108,7 +106,6 @@ class TestAnalytics(unittest.TestCase):
 
         fig = display_run(self.data, self.cluster, width=800, height=900)
         fig.show()
-
 
     def test_rw_mix_with_two_apps(self):
         """Tests the display analytics for two applications mixing read and write phases"""
@@ -200,6 +197,7 @@ class TestAnalytics(unittest.TestCase):
 
         fig = display_run(self.data, self.cluster, width=800, height=900)
         fig.show()
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

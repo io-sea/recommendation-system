@@ -31,6 +31,7 @@ from app_decomposer import API_DICT_TS
 
 SHOW_FIGURE = False
 
+
 def list_jobs(dataset_path):
     """list all present jobs in the dataset folder and return list of files, ids and dataset names.
 
@@ -50,6 +51,7 @@ def list_jobs(dataset_path):
                 job_ids.append(csv_file.split("_")[-1].split(".csv")[0])
                 dataset_names.append(os.path.split(root)[-1])
     return job_files, job_ids, dataset_names
+
 
 def get_job_timeseries_from_file(job_id=None):
     """Method to extract read and write timeseries from a job.
@@ -88,7 +90,8 @@ def get_job_timeseries_from_file(job_id=None):
         for ts in ts_list:
             timeseries[ts_type][ts] = df_clean[[ts]].to_numpy().flatten()
     return timeseries
-    #return , df_clean[["bytesRead"]].to_numpy(), df_clean[["bytesWritten"]].to_numpy()
+    # return , df_clean[["bytesRead"]].to_numpy(), df_clean[["bytesWritten"]].to_numpy()
+
 
 def plot_job_signal(jobid=None):
     x, read_signal, write_signal = get_job_timeseries_from_file(job_id=jobid)
@@ -112,9 +115,11 @@ def plot_signal(x, read_signal, write_signal):
     plt.title("timeseries for job signals")
     return plt
 
+
 class TestJobDecomposerFeatures(unittest.TestCase):
     """Examine and qualify JobDecomposer output phases features and signal representation mixes read and write values within the same phase."""
     """Examine and qualify JobDecomposer on 1D signals."""
+
     def setUp(self):
         """Set up test fixtures, if any."""
         self.env = simpy.Environment()
@@ -123,27 +128,27 @@ class TestJobDecomposerFeatures(unittest.TestCase):
         ssd_bandwidth = {'read':  {'seq': 1, 'rand': 1},
                          'write': {'seq': 1, 'rand': 1}}
 
-        self.ssd_tier = Tier(self.env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
-        self.nvram_tier = Tier(self.env, 'NVRAM', bandwidth=nvram_bandwidth, capacity=80e9)
+        self.ssd_tier = Tier(self.env, 'SSD', max_bandwidth=ssd_bandwidth, capacity=200e9)
+        self.nvram_tier = Tier(self.env, 'NVRAM', max_bandwidth=nvram_bandwidth, capacity=80e9)
 
     def test_get_phases_features_symetric(self):
         """Test if JobDecomposer issues phases features in suitable format."""
         # mock the representation issued by the job decomposer.
         representation = {
-                'node_count': 1,
-                'events': [0, 1],
-                'read_volumes': [0, 50],
-                'read_bw': [0, 10.0],
-                'write_volumes': [0, 50],
-                'write_bw': [0, 5],
-                'read_pattern': ['Uncl', 'Str'],
-                'write_pattern': ['Uncl', 'Str'],
-                'read_operations': [0, 2],
-                'write_operations': [0, 1]
-                }
+            'node_count': 1,
+            'events': [0, 1],
+            'read_volumes': [0, 50],
+            'read_bw': [0, 10.0],
+            'write_volumes': [0, 50],
+            'write_bw': [0, 5],
+            'read_pattern': ['Uncl', 'Str'],
+            'write_pattern': ['Uncl', 'Str'],
+            'read_operations': [0, 2],
+            'write_operations': [0, 1]
+        }
         phases_features = ComplexDecomposer.get_phases_features(representation)
         expected_phases_features = [{'job_id': 'unknown', 'nodes': 1, 'read_volume': 0,
-                                        'write_volume': 0, 'read_io_pattern': 'uncl', 'write_io_pattern': 'uncl', 'read_io_size': 0, 'write_io_size': 0, 'ioi_bw': 0},
+                                     'write_volume': 0, 'read_io_pattern': 'uncl', 'write_io_pattern': 'uncl', 'read_io_size': 0, 'write_io_size': 0, 'ioi_bw': 0},
                                     {'job_id': 'unknown', 'nodes': 1, 'read_volume': 50, 'write_volume': 50, 'read_io_pattern': 'str', 'write_io_pattern': 'str', 'read_io_size': 25.0, 'write_io_size': 50.0, 'ioi_bw': 3.0}]
         self.assertCountEqual(phases_features, expected_phases_features)
 
@@ -157,7 +162,7 @@ class TestJobDecomposerFeatures(unittest.TestCase):
             'volume': {
                 'timestamp': np.array([0, 1, 2, 3], dtype=int),
                 'bytesRead': np.array([0, 10, 0, 0], dtype=int),
-                'bytesWritten': np.array([ 0, 0, 40, 0], dtype=int)},
+                'bytesWritten': np.array([0, 0, 40, 0], dtype=int)},
             'operationsCount': {
                 'timestamp': np.array([0, 1, 2, 3], dtype=int),
                 'operationRead': np.array([0, 2], dtype=int),
@@ -182,9 +187,9 @@ class TestJobDecomposerFeatures(unittest.TestCase):
 
         representation = cd.get_job_representation()
         phases_features = ComplexDecomposer.get_phases_features(representation)
-        expected_phases_features = [{'job_id': 'unknown', 'nodes': 1, 'read_volume': 0, 'write_volume': 0, 'read_io_pattern': 'uncl', 'write_io_pattern': 'uncl', 'read_io_size': 0, 'write_io_size': 0, 'ioi_bw': 0}, {'job_id': 'unknown', 'nodes': 1, 'read_volume': 10, 'write_volume': 0, 'read_io_pattern': 'seq', 'write_io_pattern': 'uncl', 'read_io_size': 5.0, 'write_io_size': 0, 'ioi_bw': 2.0}, {'job_id': 'unknown', 'nodes': 1, 'read_volume': 0, 'write_volume': 40, 'read_io_pattern': 'uncl', 'write_io_pattern': 'str', 'read_io_size': 0, 'write_io_size': 0, 'ioi_bw': 8.0}, {'job_id': 'unknown', 'nodes': 1, 'read_volume': 0, 'write_volume': 0, 'read_io_pattern': 'uncl', 'write_io_pattern': 'uncl', 'read_io_size': 0, 'write_io_size': 0, 'ioi_bw': 0}]
+        expected_phases_features = [{'job_id': 'unknown', 'nodes': 1, 'read_volume': 0, 'write_volume': 0, 'read_io_pattern': 'uncl', 'write_io_pattern': 'uncl', 'read_io_size': 0, 'write_io_size': 0, 'ioi_bw': 0}, {'job_id': 'unknown', 'nodes': 1, 'read_volume': 10, 'write_volume': 0, 'read_io_pattern': 'seq', 'write_io_pattern': 'uncl', 'read_io_size': 5.0, 'write_io_size': 0, 'ioi_bw': 2.0}, {
+            'job_id': 'unknown', 'nodes': 1, 'read_volume': 0, 'write_volume': 40, 'read_io_pattern': 'uncl', 'write_io_pattern': 'str', 'read_io_size': 0, 'write_io_size': 0, 'ioi_bw': 8.0}, {'job_id': 'unknown', 'nodes': 1, 'read_volume': 0, 'write_volume': 0, 'read_io_pattern': 'uncl', 'write_io_pattern': 'uncl', 'read_io_size': 0, 'write_io_size': 0, 'ioi_bw': 0}]
         self.assertCountEqual(phases_features, expected_phases_features)
-
 
     @patch.object(ComplexDecomposer, 'get_job_node_count')
     @patch.object(Configuration, 'get_kc_token')
@@ -196,7 +201,7 @@ class TestJobDecomposerFeatures(unittest.TestCase):
             'volume': {
                 'timestamp': np.array([0, 1, 2, 3], dtype=int),
                 'bytesRead': np.array([0, 10, 50, 0], dtype=int),
-                'bytesWritten': np.array([ 0, 0, 40, 0], dtype=int)},
+                'bytesWritten': np.array([0, 0, 40, 0], dtype=int)},
             'operationsCount': {
                 'timestamp': np.array([0, 1, 2, 3], dtype=int),
                 'operationRead': np.array([0, 2, 5, 0], dtype=int),
@@ -224,11 +229,10 @@ class TestJobDecomposerFeatures(unittest.TestCase):
         print(phases_features)
         expected_phases_features = [{'job_id': 'unknown', 'nodes': 1, 'read_volume': 0,
                                      'write_volume': 0, 'read_io_pattern': 'uncl', 'write_io_pattern': 'uncl', 'read_io_size': 0, 'write_io_size': 0, 'ioi_bw': 0.0},
-                                    {'job_id': 'unknown', 'nodes': 1, 'read_volume': 60, 'write_volume': 40, 'read_io_pattern': 'seq', 'write_io_pattern': 'str', 'read_io_size': 30.0, 'write_io_size': 0, 'ioi_bw': 14.0},
+                                    {'job_id': 'unknown', 'nodes': 1, 'read_volume': 60, 'write_volume': 40, 'read_io_pattern': 'seq',
+                                        'write_io_pattern': 'str', 'read_io_size': 30.0, 'write_io_size': 0, 'ioi_bw': 14.0},
                                     {'job_id': 'unknown', 'nodes': 1, 'read_volume': 0, 'write_volume': 0, 'read_io_pattern': 'uncl', 'write_io_pattern': 'uncl', 'read_io_size': 0, 'write_io_size': 0, 'ioi_bw': 0.0}]
         self.assertCountEqual(phases_features, expected_phases_features)
-
-
 
     @patch.object(ComplexDecomposer, 'get_job_node_count')
     @patch.object(Configuration, 'get_kc_token')
@@ -254,9 +258,8 @@ class TestJobDecomposerFeatures(unittest.TestCase):
 
         # Original signal
         timestamps = (cd.timestamps.flatten() - cd.timestamps.flatten()[0])/5
-        read_signal =  cd.read_signal.flatten()/1e6
+        read_signal = cd.read_signal.flatten()/1e6
         write_signal = cd.write_signal.flatten()/1e6
-
 
         plt.plot(timestamps, read_signal, label="read signal")
         plt.plot(timestamps, write_signal, label="write signal")
@@ -270,17 +273,16 @@ class TestJobDecomposerFeatures(unittest.TestCase):
         read_bw_scaled = list(map(lambda x: x/1e6, read_bw))
         write_bw_scaled = list(map(lambda x: x/1e6, write_bw))
 
-
         data = simpy.Store(self.env)
         cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=2,
                           tiers=[self.ssd_tier, self.nvram_tier])
         app = Application(self.env, name=f"job#{jobid}",
                           compute=compute,
-                           read=reads,
-                           write=writes,
-                           data=data,
-                           read_bw=read_bw_scaled,
-                           write_bw=write_bw_scaled)
+                          read=reads,
+                          write=writes,
+                          data=data,
+                          read_bw=read_bw_scaled,
+                          write_bw=write_bw_scaled)
         self.env.process(app.run(cluster, placement=[0]*(10*len(compute))))
         self.env.run()
         # Extract app execution signals
@@ -299,7 +301,6 @@ class TestJobDecomposerFeatures(unittest.TestCase):
         plt.legend()
         plt.title(f"Simulated timeseries for jobid = {jobid}")
         plt.show()
-
 
     @patch.object(ComplexDecomposer, 'get_job_node_count')
     @patch.object(Configuration, 'get_kc_token')
@@ -325,9 +326,8 @@ class TestJobDecomposerFeatures(unittest.TestCase):
 
         # Original signal
         timestamps = (cd.timestamps.flatten() - cd.timestamps.flatten()[0])/5
-        read_signal =  cd.read_signal.flatten()/1e6
+        read_signal = cd.read_signal.flatten()/1e6
         write_signal = cd.write_signal.flatten()/1e6
-
 
         plt.plot(timestamps, read_signal, label="read signal")
         plt.plot(timestamps, write_signal, label="write signal")
@@ -341,17 +341,16 @@ class TestJobDecomposerFeatures(unittest.TestCase):
         read_bw_scaled = list(map(lambda x: x/1e6, read_bw))
         write_bw_scaled = list(map(lambda x: x/1e6, write_bw))
 
-
         data = simpy.Store(self.env)
         cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=2,
                           tiers=[self.ssd_tier, self.nvram_tier])
         app = Application(self.env, name=f"job#{jobid}",
                           compute=compute,
-                           read=reads,
-                           write=writes,
-                           data=data,
-                           read_bw=read_bw_scaled,
-                           write_bw=write_bw_scaled)
+                          read=reads,
+                          write=writes,
+                          data=data,
+                          read_bw=read_bw_scaled,
+                          write_bw=write_bw_scaled)
         self.env.process(app.run(cluster, placement=[0]*(10*len(compute))))
         self.env.run()
         # Extract app execution signals
@@ -370,5 +369,3 @@ class TestJobDecomposerFeatures(unittest.TestCase):
         plt.legend()
         plt.title(f"Simulated timeseries for jobid = {jobid}")
         plt.show()
-
-

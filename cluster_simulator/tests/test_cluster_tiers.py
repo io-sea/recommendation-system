@@ -1,3 +1,4 @@
+import os
 import unittest
 import time
 import numpy as np
@@ -6,6 +7,73 @@ from loguru import logger
 
 from cluster_simulator.cluster import Cluster, Tier, EphemeralTier, bandwidth_share_model, compute_share_model, get_tier, convert_size
 from cluster_simulator.phase import DelayPhase, ComputePhase, IOPhase
+
+
+CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
+TEST_CONFIG_FILE = os.path.join(CURRENT_DIR, "test_data", "config.yaml")
+
+
+class TestClusterConfigFile(unittest.TestCase):
+
+    def setUp(self):
+        self.env = simpy.Environment()
+        # NOTE: in pyyaml, scientif. notation includes "." and "+/-"
+        # example: 100e9 -> 100.0e+9
+        # see https://github.com/yaml/pyyaml/issues/173
+
+    def test_config_path(self):
+        # Test that the cluster is initialized correctly using a YAML config file
+        cluster = Cluster(self.env, config_path=TEST_CONFIG_FILE)
+        print(cluster.compute_nodes)
+        print(type(cluster.compute_nodes))
+        self.assertEqual(cluster.compute_nodes.capacity, 1)
+        self.assertEqual(cluster.compute_cores.capacity, 2)
+        self.assertEqual(len(cluster.tiers), 3)
+        self.assertEqual(cluster.ephemeral_tier.name, 'ephemeral')
+
+    def test_override_compute_nodes_and_cores_per_node(self):
+        # Test that the cluster is initialized correctly using overridden values for compute nodes and cores per node
+        compute_nodes = 8
+        cores_per_node = 16
+        cluster = Cluster(self.env, config_path=TEST_CONFIG_FILE, compute_nodes=compute_nodes,
+                          cores_per_node=cores_per_node)
+        self.assertEqual(cluster.compute_nodes.capacity, compute_nodes)
+        self.assertEqual(cluster.compute_cores.capacity, compute_nodes * cores_per_node)
+        self.assertEqual(len(cluster.tiers), 3)
+        self.assertEqual(cluster.ephemeral_tier.name, 'ephemeral')
+
+    def test_override_tiers(self):
+        # Test that the cluster is initialized correctly using overridden values for tiers
+        tiers = [Tier(self.env, 'tier1', 100e9), Tier(self.env, 'tier2', 500e9)]
+        cluster = Cluster(self.env, tiers=tiers)
+        self.assertEqual(cluster.compute_nodes.capacity, 1)
+        self.assertEqual(cluster.compute_cores.capacity, 2)
+        self.assertEqual(len(cluster.tiers), 2)
+        self.assertIsNone(cluster.ephemeral_tier)
+
+    def test_override_ephemeral_tier(self):
+        # Test that the cluster is initialized correctly using overridden values for the ephemeral tier
+        TEST_CONFIG_FILE_NO_EPHEMERAL = os.path.join(CURRENT_DIR, "test_data", "config_no_ephemeral.yaml")
+        ephemeral_tier = Tier(self.env, 'my_ephemeral', 200e9)
+        cluster = Cluster(self.env, config_path=TEST_CONFIG_FILE_NO_EPHEMERAL, ephemeral_tier=ephemeral_tier)
+        self.assertEqual(cluster.compute_nodes.capacity, 1)
+        self.assertEqual(cluster.compute_cores.capacity, 2)
+        self.assertEqual(len(cluster.tiers), 3)
+        self.assertEqual(cluster.ephemeral_tier.name, 'my_ephemeral')
+
+    def test_override_all_parameters(self):
+        # Test that the cluster is initialized correctly using overridden values for all parameters
+        compute_nodes = 8
+        cores_per_node = 16
+        tiers = [Tier(self.env, 'tier1', capacity=100e9), Tier(self.env, 'tier2', capacity=500e9)]
+        ephemeral_tier = Tier(self.env, 'my_ephemeral', capacity=200e9)
+        cluster = Cluster(self.env, config_path=TEST_CONFIG_FILE, compute_nodes=compute_nodes,
+                          cores_per_node=cores_per_node, tiers=tiers,
+                          ephemeral_tier=ephemeral_tier)
+        self.assertEqual(cluster.compute_nodes.capacity, compute_nodes)
+        self.assertEqual(cluster.compute_cores.capacity, compute_nodes * cores_per_node)
+        self.assertEqual(len(cluster.tiers), 2)
+        self.assertEqual(cluster.ephemeral_tier.name, 'my_ephemeral')
 
 
 class TestClusterTiers(unittest.TestCase):
@@ -17,9 +85,9 @@ class TestClusterTiers(unittest.TestCase):
                          'write': {'seq': 100, 'rand': 100}}
         hdd_bandwidth = {'read':  {'seq': 80, 'rand': 80},
                          'write': {'seq': 40, 'rand': 40}}
-        self.hdd_tier = Tier(self.env, 'HDD', bandwidth=hdd_bandwidth, capacity=1e12)
-        self.ssd_tier = Tier(self.env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
-        self.nvram_tier = Tier(self.env, 'NVRAM', bandwidth=self.nvram_bandwidth, capacity=10e9)
+        self.hdd_tier = Tier(self.env, 'HDD', max_bandwidth=hdd_bandwidth, capacity=1e12)
+        self.ssd_tier = Tier(self.env, 'SSD', max_bandwidth=ssd_bandwidth, capacity=200e9)
+        self.nvram_tier = Tier(self.env, 'NVRAM', max_bandwidth=self.nvram_bandwidth, capacity=10e9)
 
     def test_get_tier_as_object_and_recursive(self):
         """Test reaching tier object using object"""
@@ -27,8 +95,8 @@ class TestClusterTiers(unittest.TestCase):
         result = get_tier(cluster, tier_reference=self.hdd_tier)
         result2 = get_tier(cluster, result)
         self.assertIsInstance(result, Tier)
-        self.assertEquals(result, self.hdd_tier)
-        self.assertEquals(result2, self.hdd_tier)
+        self.assertEqual(result, self.hdd_tier)
+        self.assertEqual(result2, self.hdd_tier)
 
     def test_get_tier_as_None(self):
         """Test reaching tier object using None as tier_reference generates Exception."""
@@ -40,25 +108,25 @@ class TestClusterTiers(unittest.TestCase):
         """Test reaching tier object using object"""
         cluster = Cluster(self.env, tiers=[self.hdd_tier, self.ssd_tier])
         result = get_tier(cluster, tier_reference=1)
-        self.assertEquals(result, self.ssd_tier)
+        self.assertEqual(result, self.ssd_tier)
 
     def test_get_tier_name_no_bb(self):
         """Test reaching tier object using integer or string"""
         cluster = Cluster(self.env, tiers=[self.hdd_tier, self.ssd_tier])
         result = get_tier(cluster, tier_reference="HDD")
-        self.assertEquals(result.name, "HDD")
+        self.assertEqual(result.name, "HDD")
         result = get_tier(cluster, 0)
-        self.assertEquals(result.name, "HDD")
+        self.assertEqual(result.name, "HDD")
 
     def test_get_tier_name_with_bb(self):
         """Test reaching tier object using integer or string"""
         # define burst buffer with its backend PFS
         bb = EphemeralTier(self.env, name="BB", persistent_tier=self.hdd_tier,
-                           bandwidth=self.nvram_bandwidth, capacity=10e9)
+                           max_bandwidth=self.nvram_bandwidth, capacity=10e9)
         cluster = Cluster(self.env, tiers=[self.hdd_tier, self.ssd_tier],
                           ephemeral_tier=bb)
         result = get_tier(cluster, tier_reference=0, use_bb=True)
-        self.assertEquals(result.name, "BB")
+        self.assertEqual(result.name, "BB")
         self.assertIsInstance(result, EphemeralTier)
         # retrieve bb backend tier
         self.assertEqual(result.persistent_tier, self.hdd_tier)
@@ -67,11 +135,11 @@ class TestClusterTiers(unittest.TestCase):
         """Test reaching tier object using integer or string"""
         # define burst buffer with its backend PFS
         bb = EphemeralTier(self.env, name="BB", persistent_tier=self.hdd_tier,
-                           bandwidth=self.nvram_bandwidth, capacity=10e9)
+                           max_bandwidth=self.nvram_bandwidth, capacity=10e9)
         cluster = Cluster(self.env, tiers=[self.hdd_tier, self.ssd_tier],
                           ephemeral_tier=bb)
         result = get_tier(cluster, tier_reference="BB", use_bb=True)
-        self.assertEquals(result.name, "BB")
+        self.assertEqual(result.name, "BB")
         self.assertIsInstance(result, EphemeralTier)
         # retrieve bb backend tier
         self.assertEqual(result.persistent_tier, self.hdd_tier)
@@ -80,7 +148,7 @@ class TestClusterTiers(unittest.TestCase):
         """Test init and creation of a tier"""
         sbb_tier = EphemeralTier(self.env, name='SBB',
                                  persistent_tier=self.ssd_tier,
-                                 bandwidth=self.nvram_bandwidth,
+                                 max_bandwidth=self.nvram_bandwidth,
                                  capacity=10e9)
         cluster = Cluster(self.env, tiers=[self.hdd_tier, self.ssd_tier],
                           ephemeral_tier=sbb_tier)
@@ -97,12 +165,12 @@ class TestClusterMonitoring(unittest.TestCase):
                          'write': {'seq': 100, 'rand': 100}}
         hdd_bandwidth = {'read':  {'seq': 80, 'rand': 80},
                          'write': {'seq': 40, 'rand': 40}}
-        self.hdd_tier = Tier(self.env, 'HDD', bandwidth=hdd_bandwidth, capacity=1e12)
-        self.ssd_tier = Tier(self.env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
-        self.nvram_tier = Tier(self.env, 'NVRAM', bandwidth=self.nvram_bandwidth,
+        self.hdd_tier = Tier(self.env, 'HDD', max_bandwidth=hdd_bandwidth, capacity=1e12)
+        self.ssd_tier = Tier(self.env, 'SSD', max_bandwidth=ssd_bandwidth, capacity=200e9)
+        self.nvram_tier = Tier(self.env, 'NVRAM', max_bandwidth=self.nvram_bandwidth,
                                capacity=10e9)
         self.bb = EphemeralTier(self.env, name="BB", persistent_tier=self.hdd_tier,
-                                bandwidth=self.nvram_bandwidth, capacity=10e9)
+                                max_bandwidth=self.nvram_bandwidth, capacity=10e9)
 
     def test_register_levels_empty(self):
         """Test registering tiers levels"""
@@ -134,11 +202,11 @@ class TestClusterTierEviction(unittest.TestCase):
                          'write': {'seq': 100, 'rand': 100}}
         hdd_bandwidth = {'read':  {'seq': 80, 'rand': 80},
                          'write': {'seq': 40, 'rand': 40}}
-        self.hdd_tier = Tier(self.env, 'HDD', bandwidth=hdd_bandwidth, capacity=1e12)
-        self.ssd_tier = Tier(self.env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
-        self.nvram_tier = Tier(self.env, 'NVRAM', bandwidth=self.nvram_bandwidth, capacity=10e9)
+        self.hdd_tier = Tier(self.env, 'HDD', max_bandwidth=hdd_bandwidth, capacity=1e12)
+        self.ssd_tier = Tier(self.env, 'SSD', max_bandwidth=ssd_bandwidth, capacity=200e9)
+        self.nvram_tier = Tier(self.env, 'NVRAM', max_bandwidth=self.nvram_bandwidth, capacity=10e9)
         self.bb = EphemeralTier(self.env, name="BB", persistent_tier=self.hdd_tier,
-                                bandwidth=self.nvram_bandwidth, capacity=10e9)
+                                max_bandwidth=self.nvram_bandwidth, capacity=10e9)
         self.cluster = Cluster(self.env, tiers=[self.hdd_tier, self.ssd_tier],
                                ephemeral_tier=self.bb)
 

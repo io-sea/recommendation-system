@@ -12,6 +12,7 @@ from cluster_simulator.analytics import get_execution_signal, get_execution_sign
 
 GRAPHICS = False
 
+
 class TestAppInit(unittest.TestCase):
     def setUp(self):
         self.env = simpy.Environment()
@@ -20,8 +21,8 @@ class TestAppInit(unittest.TestCase):
         ssd_bandwidth = {'read':  {'seq': 210, 'rand': 190},
                          'write': {'seq': 100, 'rand': 100}}
 
-        self.ssd_tier = Tier(self.env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
-        self.nvram_tier = Tier(self.env, 'NVRAM', bandwidth=nvram_bandwidth, capacity=80e9)
+        self.ssd_tier = Tier(self.env, 'SSD', max_bandwidth=ssd_bandwidth, capacity=200e9)
+        self.nvram_tier = Tier(self.env, 'NVRAM', max_bandwidth=nvram_bandwidth, capacity=80e9)
 
     def test_application_init(self):
         # Simple app: read 1GB -> compute 10s -> write 5GB
@@ -176,8 +177,10 @@ class TestAppInit(unittest.TestCase):
         key = next(iter(output))
         self.assertEqual(output[key]['read_bw'][0], 210.)
 
+
 class TestExecutionSignal2(unittest.TestCase):
     """Testing signal extracted from get_execution_signal routine."""
+
     def setUp(self):
         self.env = simpy.Environment()
         nvram_bandwidth = {'read':  {'seq': 420, 'rand': 760},
@@ -185,8 +188,8 @@ class TestExecutionSignal2(unittest.TestCase):
         ssd_bandwidth = {'read':  {'seq': 210, 'rand': 190},
                          'write': {'seq': 100, 'rand': 100}}
 
-        self.ssd_tier = Tier(self.env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
-        self.nvram_tier = Tier(self.env, 'NVRAM', bandwidth=nvram_bandwidth, capacity=80e9)
+        self.ssd_tier = Tier(self.env, 'SSD', max_bandwidth=ssd_bandwidth, capacity=200e9)
+        self.nvram_tier = Tier(self.env, 'NVRAM', max_bandwidth=nvram_bandwidth, capacity=80e9)
 
     def test_app_execution_data(self):
         """Test the output formatting of data once data is injected."""
@@ -236,9 +239,9 @@ class TestExecutionSignal2(unittest.TestCase):
         if GRAPHICS:
             fig1 = plt.figure("Throughput data")
             plt.plot(output[app.name]['time'], output[app.name]['read_bw'], marker='o',
-                        label="read signal from ExecSim")
+                     label="read signal from ExecSim")
             plt.plot(output[app.name]['time'], output[app.name]['write_bw'], marker='o',
-                        label="write signal from ExecSim")
+                     label="write signal from ExecSim")
             plt.grid(True)
             plt.legend()
             plt.show()
@@ -255,10 +258,10 @@ class TestExecutionSignal2(unittest.TestCase):
         write = [0, 5e9]
         tiers = [0, 1]
         app = Application(self.env,
-                        compute=compute,
-                        read=read,
-                        write=write,
-                        data=data)
+                          compute=compute,
+                          read=read,
+                          write=write,
+                          data=data)
         # only on SSD
         nvram_bandwidth = {'read':  {'seq': 420, 'rand': 760},
                            'write': {'seq': 200, 'rand': 505}}
@@ -278,15 +281,17 @@ class TestExecutionSignal2(unittest.TestCase):
         if GRAPHICS:
             fig1 = plt.figure("Throughput data")
             plt.plot(output[app.name]['time'], output[app.name]['read_bw'], marker='o',
-                        label="read signal from ExecSim")
+                     label="read signal from ExecSim")
             plt.plot(output[app.name]['time'], output[app.name]['write_bw'], marker='o',
-                        label="write signal from ExecSim")
+                     label="write signal from ExecSim")
             plt.grid(True)
             plt.legend()
             plt.show()
 
+
 class TestExecutionSignal(unittest.TestCase):
     """Testing signal extracted from get_execution_signal routine."""
+
     def setUp(self):
         self.env = simpy.Environment()
         nvram_bandwidth = {'read':  {'seq': 420, 'rand': 760},
@@ -294,8 +299,8 @@ class TestExecutionSignal(unittest.TestCase):
         ssd_bandwidth = {'read':  {'seq': 210, 'rand': 190},
                          'write': {'seq': 100, 'rand': 100}}
 
-        self.ssd_tier = Tier(self.env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
-        self.nvram_tier = Tier(self.env, 'NVRAM', bandwidth=nvram_bandwidth, capacity=80e9)
+        self.ssd_tier = Tier(self.env, 'SSD', max_bandwidth=ssd_bandwidth, capacity=200e9)
+        self.nvram_tier = Tier(self.env, 'NVRAM', max_bandwidth=nvram_bandwidth, capacity=80e9)
 
     def test_app_execution_data(self):
         """Test the output formatting of data once data is injected."""
@@ -338,7 +343,6 @@ class TestExecutionSignal(unittest.TestCase):
         self.assertListEqual(read_bw, [0, 210, 0, 0])
         self.assertListEqual(write_bw, [0, 0, 0, 100])
         # np.testing.assert_array_almost_equal(np.array(read_bw), np.array([0, 210, 0, 0, 0]))
-
 
     def test_app_execution_real_app_nvram(self):
         """Test the output formatting of data once app is executed."""
@@ -395,14 +399,14 @@ class TestExecutionSignal(unittest.TestCase):
         app_time = output[app.name]["time"]
         read_bw = output[app.name]["read_bw"]
         write_bw = output[app.name]["write_bw"]
-        #print(app_time)
-        #print(np.trapz(read_bw))
-        #print((read_bw))
-        #print((write_bw))
+        # print(app_time)
+        # print(np.trapz(read_bw))
+        # print((read_bw))
+        # print((write_bw))
         # print(np.unique(read_bw))
         # print(np.unique(write_bw))
         self.assertSetEqual(set(np.unique(read_bw)), {105, 0})
-        self.assertSetEqual(set(np.unique(write_bw)), {0,50, 100})
+        self.assertSetEqual(set(np.unique(write_bw)), {0, 50, 100})
 
         if GRAPHICS:
             plot_simple_signal(app_time, read_bw, write_bw)
@@ -419,7 +423,7 @@ class TestExecutionSignal(unittest.TestCase):
         bw = [200, 200]
         tiers = [0, 0]
         app = Application(self.env,
-                          #name="test",
+                          # name="test",
                           compute=compute,
                           read=read,
                           write=write,
@@ -454,7 +458,7 @@ class TestExecutionSignal(unittest.TestCase):
         read = [2.1e9, 0]
         write = [2e9, 0]
         app = Application(self.env,
-                          #name="test",
+                          # name="test",
                           compute=compute,
                           read=read,
                           write=write,
@@ -478,6 +482,7 @@ class TestExecutionSignal(unittest.TestCase):
         if GRAPHICS:
             plot_simple_signal(app_time, read_bw, write_bw)
 
+
 class TestBasicApps(unittest.TestCase):
     def setUp(self):
         self.env = simpy.Environment()
@@ -486,8 +491,8 @@ class TestBasicApps(unittest.TestCase):
         ssd_bandwidth = {'read':  {'seq': 210, 'rand': 190},
                          'write': {'seq': 100, 'rand': 100}}
 
-        self.ssd_tier = Tier(self.env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
-        self.nvram_tier = Tier(self.env, 'NVRAM', bandwidth=nvram_bandwidth, capacity=80e9)
+        self.ssd_tier = Tier(self.env, 'SSD', max_bandwidth=ssd_bandwidth, capacity=200e9)
+        self.nvram_tier = Tier(self.env, 'NVRAM', max_bandwidth=nvram_bandwidth, capacity=80e9)
 
     def test_app_simple(self):
         data = simpy.Store(self.env)
@@ -597,10 +602,10 @@ class TestPhaseSuperposition(unittest.TestCase):
         ssd_bandwidth = {'read':  {'seq': 210, 'rand': 190},
                          'write': {'seq': 100, 'rand': 100}}
         hdd_bandwidth = {'read':  {'seq': 80, 'rand': 80},
-                    'write': {'seq': 40, 'rand': 40}}
-        self.hdd_tier = Tier(self.env, 'HDD', bandwidth=hdd_bandwidth, capacity=1e12)
-        self.ssd_tier = Tier(self.env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
-        self.nvram_tier = Tier(self.env, 'NVRAM', bandwidth=nvram_bandwidth, capacity=80e9)
+                         'write': {'seq': 40, 'rand': 40}}
+        self.hdd_tier = Tier(self.env, 'HDD', max_bandwidth=hdd_bandwidth, capacity=1e12)
+        self.ssd_tier = Tier(self.env, 'SSD', max_bandwidth=ssd_bandwidth, capacity=200e9)
+        self.nvram_tier = Tier(self.env, 'NVRAM', max_bandwidth=nvram_bandwidth, capacity=80e9)
 
     def test_2_computes_sequential(self):
         """Two compute phases that should run sequentially because the cluster
@@ -744,6 +749,7 @@ class TestPhaseSuperposition(unittest.TestCase):
         # self.assertEqual(data.items[0]["t_start"], data.items[1]["t_start"])
         # fig = display_run(data, cluster, width=800, height=900)
         # fig.show()
+
     def test_2_apps_parallel_2(self):
         """Two I/O phases that should run in parallel because the cluster
         has 2 cores."""
@@ -764,6 +770,7 @@ class TestPhaseSuperposition(unittest.TestCase):
         # fig = display_run(data, cluster, width=800, height=900)
         # fig.show()
 
+
 class TestBufferedApplications(unittest.TestCase):
     def setUp(self):
         self.env = simpy.Environment()
@@ -774,12 +781,12 @@ class TestBufferedApplications(unittest.TestCase):
                          'write': {'seq': 100, 'rand': 100}}
         hdd_bandwidth = {'read':  {'seq': 80, 'rand': 80},
                          'write': {'seq': 40, 'rand': 40}}
-        self.hdd_tier = Tier(self.env, 'HDD', bandwidth=hdd_bandwidth, capacity=1e12)
-        self.ssd_tier = Tier(self.env, 'SSD', bandwidth=ssd_bandwidth, capacity=200e9)
-        self.nvram_tier = Tier(self.env, 'NVRAM', bandwidth=self.nvram_bandwidth,
+        self.hdd_tier = Tier(self.env, 'HDD', max_bandwidth=hdd_bandwidth, capacity=1e12)
+        self.ssd_tier = Tier(self.env, 'SSD', max_bandwidth=ssd_bandwidth, capacity=200e9)
+        self.nvram_tier = Tier(self.env, 'NVRAM', max_bandwidth=self.nvram_bandwidth,
                                capacity=10e9)
         self.bb = EphemeralTier(self.env, name="BB", persistent_tier=self.hdd_tier,
-                                bandwidth=self.nvram_bandwidth, capacity=10e9)
+                                max_bandwidth=self.nvram_bandwidth, capacity=10e9)
 
     def test_noSBB_app(self):
         """Test running simple apps in cluster having a datanode with BB but not requested."""
@@ -908,8 +915,6 @@ class TestBufferedApplications(unittest.TestCase):
 
         self.env.run()
         self.assertEqual(app1.get_ephemeral_size(), 10e9)
-
-
 
 
 if __name__ == '__main__':

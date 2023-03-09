@@ -159,6 +159,7 @@ class IOPhase:
     """
     # list of IOPhase instances that are in running state so it is possible to update IOs following a change in bandwidth consumption
     current_ios = []
+
     def __init__(self, cores=1, operation='read', volume=1e9, pattern=1,
                  data=None, appname=None, bw=None):
         """Inits an instance of I/O phase."""
@@ -355,10 +356,10 @@ class IOPhase:
             self.register_step(t_start, step_duration, available_bandwidth, cluster,
                                target_tier, initial_levels, source_tier)
             if isinstance(source_tier, EphemeralTier):
-            #if isinstance(target_tier, EphemeralTier):
+                # if isinstance(target_tier, EphemeralTier):
                 initial_levels = cluster.get_levels()
                 eviction = source_tier.evict()
-                #eviction = target_tier.evict()
+                # eviction = target_tier.evict()
                 if eviction:
                     # register eviction step
                     self.register_step(t_start, step_duration, available_bandwidth, cluster,
@@ -406,8 +407,6 @@ class IOPhase:
             available_bandwidth = max_bandwidth/self.bandwidth_concurrency
 
         return available_bandwidth
-
-
 
     def get_step_duration(self, cluster, tier, volume):
         """Get the adequate step duration to not avoid I/O event or volume saturation in tier
@@ -591,6 +590,7 @@ class IOPhase:
 
 class MixIOPhase():
     """Class that allows to run a mix of I/O operations."""
+
     def __init__(self, cores=1, read_volume=1e9, write_volume=1e9, read_pattern=1, write_pattern=1,
                  data=None, appname=None, read_bw=None, write_bw=None):
         """Initialize the MixIO class."""
@@ -610,8 +610,6 @@ class MixIOPhase():
         # initialize the read and write phases
         self.read_io = IOPhase(cores=cores, operation='read', volume=read_volume, pattern=self.read_pattern, data=self.data, appname=self.appname, bw=read_bw)
         self.write_io = IOPhase(cores=cores, operation='write', volume=write_volume, pattern=self.write_pattern, data=self.data, appname=self.appname, bw=write_bw)
-
-
 
     @property
     def volume(self):
@@ -648,7 +646,7 @@ class MixIOPhase():
         self.read_io.register_step(t_start, step_duration, available_bandwidth, cluster, tier,
                                    initial_levels=initial_levels, source_tier=source_tier, eviction=eviction)
         self.write_io.register_step(t_start, step_duration, available_bandwidth, cluster, tier,
-                                   initial_levels=initial_levels, source_tier=source_tier, eviction=eviction)
+                                    initial_levels=initial_levels, source_tier=source_tier, eviction=eviction)
 
     def update_tier(self, tier, volume):
         """Update tier level with the algebric value of volume.
@@ -722,23 +720,22 @@ class MixIOPhase():
         # write_event = Event()
         logger.info(f"(App {self.appname}) - Start RW I/O phase at {env.now}")
         if isinstance(tier, EphemeralTier):
-            #if self.read_volume > 0:
+            # if self.read_volume > 0:
             # do prefetch for ephemeral tier
             io_read_prefetch = self.env.process(self.read_io.move_step(self.env, cluster,
-                                                                        tier.persistent_tier,
-                                                                        tier, erase=False))
+                                                                       tier.persistent_tier,
+                                                                       tier, erase=False))
             ret1 = yield io_read_prefetch
             io_read_event = self.env.process(self.read_io.run_step(self.env, cluster, tier))
-            #if self.write_volume > 0:
+            # if self.write_volume > 0:
             io_write_event = self.env.process(self.write_io.run_step(self.env, cluster, tier))
             # destage
             destage_event = self.env.process(self.write_io.move_step(self.env, cluster, tier,
-                                                            tier.persistent_tier, erase=False))
+                                                                     tier.persistent_tier, erase=False))
             # TODO: should prefetech starts in the same time as the read?
             # Default is sequential, the write should begin simultaneously with read as well as destaging
             if ret1:
                 ret2 = yield io_read_event & io_write_event & destage_event
-
 
             # do not wait for the destage to complete
             # TODO: logic will fail if destaging is faster than the IO
@@ -753,6 +750,3 @@ class MixIOPhase():
             ret = all([value for key, value in response.items()])
         logger.info(f"(App {self.appname}) - End RW I/O phase at {env.now}")
         return ret
-
-
-
