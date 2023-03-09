@@ -104,6 +104,8 @@ class PhaseData:
                 perf["nfs_bw"].append(self.run_phase_workload(phase, self.target["nfs"], False))
             if "lfs_bw" in target_names:
                 perf["lfs_bw"].append(self.run_phase_workload(phase, self.target["lfs"], False))
+            if "fs1_bw" in target_names:
+                perf["fs1_bw"].append(self.run_phase_workload(phase, self.target["fs1"], False))
             if "sbb_bw" in target_names:
                 perf["sbb_bw"].append(self.run_phase_workload(phase, self.target["lfs"], True))
 
