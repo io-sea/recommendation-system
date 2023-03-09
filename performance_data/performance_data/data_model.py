@@ -159,6 +159,7 @@ class AbstractModel(ABC):
         # scale read_io_size and write_io_size by 8e6
         data["read_io_size"] = data["read_io_size"] / 8e6
         data["write_io_size"] = data["write_io_size"] / 8e6
+        data["avg_io_size"] = data["read_io_size"]*data["read_ratio"] + data["write_io_size"]*data["write_ratio"]
         # remove unnecessary columns
         data = data.drop(columns=['read_volume', 'write_volume'], axis=1)
         logger.debug(f"Input data after dropping unnecessary columns: {data.columns.tolist()}")
@@ -192,10 +193,11 @@ class AbstractModel(ABC):
         """
         logger.info("Preparing data...")
         target_columns = column if column and column in self.input_data.columns else [col for col in self.input_data.columns if col.endswith('_bw')]
-        y = self.input_data[target_columns]
+
         logger.debug(f"Target columns: {target_columns}")
         # extract features
         X = self._prepare_input_data(self.input_data)
+        y = self.input_data[target_columns].div(X['remainder__avg_io_size'], axis=0)
         logger.debug(f"Features: {X.columns.tolist()}")
 
         return X, y
@@ -215,12 +217,13 @@ class AbstractModel(ABC):
             logger.info("Training model...")
             self.model[target_tier]["model"].fit(self.data["X_train"], self.data[target_tier]["y_train"])
             self.model[target_tier]["score"] = self.model[target_tier]["model"].score(self.data["X_test"], self.data[target_tier]["y_test"])
-            logger.info(f"Model score: {self.model[target_tier]['score']}")
-            # if self.model[target_tier]["score"] > self.SCORE_THRESHOLD:
-            if not os.path.exists(os.path.dirname(self.model[target_tier]["model_path"])):
-                os.makedirs(os.path.dirname(self.model[target_tier]["model_path"]))
-            joblib.dump(self.model[target_tier]["model"], self.model[target_tier]["model_path"])
-            logger.info(f"Model: {self.model[target_tier]['model_path']} | saved with score: {self.model[target_tier]['score']}")
+            logger.info(f"Model score for tier {target_tier}: {self.model[target_tier]['score']}")
+
+            if self.model[target_tier]["score"] > self.SCORE_THRESHOLD:
+                if not os.path.exists(os.path.dirname(self.model[target_tier]["model_path"])):
+                    os.makedirs(os.path.dirname(self.model[target_tier]["model_path"]))
+                joblib.dump(self.model[target_tier]["model"], self.model[target_tier]["model_path"])
+                logger.info(f"Saving Model for {target_tier}: {self.model[target_tier]['model_path']} | saved with score: {self.model[target_tier]['score']}")
 
     def evaluate_model(self):
         """
@@ -233,7 +236,7 @@ class AbstractModel(ABC):
             self.model[target_tier]["score"] = self.model[target_tier]["model"].score(self.data["X_test"], self.data[target_tier]["y_test"])
             logger.info(f"Model: {self.model[target_tier]['model_name']} | Score on test data: {self.model[target_tier]['score']}")
 
-    def predict(self, new_data):
+    def predict(self, new_data, process_input=True):
         """
         Makes predictions on new data using the trained model.
 
@@ -244,8 +247,8 @@ class AbstractModel(ABC):
             The predictions made by the model on the new data.
         """
         predictions = {}
-        input_data = self._prepare_input_data(new_data)
+        input_data = self._prepare_input_data(new_data) if process_input else new_data
         for target_tier in self.target_tiers:
             predictions[target_tier] = self.model[target_tier]["model"].predict(input_data)
-            logger.info(f"Predictions made by the model {self.model[target_tier]['model_name']}: {predictions}")
+            logger.trace(f"Predictions made by the model {self.model[target_tier]['model_name']}: {predictions}")
         return predictions
