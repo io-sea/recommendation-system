@@ -17,7 +17,7 @@ from sklearn.linear_model import LinearRegression
 from sklearn.compose import ColumnTransformer
 
 # whether or not populate the dataset file with new data
-__POPULATE_DATASET__ = False
+__POPULATE_DATASET__ = True
 
 
 class TestPhaseGenerator(unittest.TestCase):
@@ -25,8 +25,8 @@ class TestPhaseGenerator(unittest.TestCase):
 
     def setUp(self):
         """Create an instance of the DataGenerator class for use in the tests."""
-        self.num_entries = 200
-        self.volume = 50e6
+        self.num_entries = 500
+        self.volume = 500e6
         self.generator = PhaseGenerator(num_entries=self.num_entries,
                                         volume=self.volume)
         current_dir = dirname(dirname(os.path.abspath(__file__)))
@@ -76,7 +76,9 @@ class TestPhaseGenerator(unittest.TestCase):
 class TestCompleteDataTable(unittest.TestCase):
 
     def setUp(self):
-        self.target = dict(lfs="/fsiof/mimounis/tmp", nfs="/scratch/mimounis/tmp")
+        # self.target = dict(lfs="/fsiof/mimounis/tmp", nfs="/scratch/mimounis/tmp")
+        # self.target = dict(lfs="/fsiof/mimounis/tmp", nfs="/home_nfs/mimounis/tmp")
+        self.target = dict(lfs="/fsiof/mimounis/tmp", fs1="/fs1/mimounis/tmp")
         self.accelerator = False  # "SBB"
         current_dir = dirname(dirname(os.path.abspath(__file__)))
         self.filename = os.path.join(current_dir, "tests",

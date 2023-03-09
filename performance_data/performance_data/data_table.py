@@ -17,6 +17,7 @@ from performance_data.fakeapp_workload import FakeappWorkload as Workload
 
 __CAPING_VOLUME__ = 1e9
 
+
 class PhaseData:
     def __init__(self, phases, target, ioi=False, sample=1, lite=False):
         """Initializes the phases data with features extracted from AppDecomposer, runs the associated workload and return data.
@@ -44,7 +45,7 @@ class PhaseData:
         Return:
             avg_bw (float):  average bandwidth
         """
-        #run fakeapp n times to get the avg bandwidth
+        # run fakeapp n times to get the avg bandwidth
         latencies = 0
         volumes = 0
         # phase_volume = max(1e9, 100*phase["IOsize"]) if self.lite and phase["volume"] > 0 else phase["volume"]
@@ -89,7 +90,7 @@ class PhaseData:
             perf_df = phases_perf.get_phase_data(target_names=["nfs_bw", "lfs_bw"])
         """
         # Validate input tier names
-        valid_tiers = {"nfs_bw", "lfs_bw", "sbb_bw"}
+        valid_tiers = {"fs1_bw", "nfs_bw", "lfs_bw", "sbb_bw"}
         if not set(target_names).issubset(valid_tiers):
             invalid_tiers = set(target_names) - valid_tiers
             raise ValueError(f"Invalid tier names: {invalid_tiers}")
@@ -111,6 +112,7 @@ class PhaseData:
 
         return perf_df
 
+
 class DataTable:
     """A class for reading, completing, and saving performance data for storage system simulations.
 
@@ -124,6 +126,7 @@ class DataTable:
         lite (bool): A flag indicating whether to cap the volume of the phase for performance measurement at 1GB.
         perf_data (pandas.DataFrame): A DataFrame containing the performance data.
     """
+
     def __init__(self, targets,  accelerator=False, ioi=False, sample=1, filename=None, lite=False):
         """Initialize the data model with the phase features extracted from AppDecomposer.
 
@@ -195,7 +198,7 @@ class DataTable:
 
         # Load performance data from file
         try:
-        # Load performance data from file
+            # Load performance data from file
             self.perf_data = pd.read_csv(self.filename)
         except FileNotFoundError as e:
             logger.error(f"File not found: {self.filename}. {e}")
@@ -234,5 +237,3 @@ class DataTable:
         logger.info(f"Complete table saved to: {output_filename}")
 
         return self.perf_data
-
-
