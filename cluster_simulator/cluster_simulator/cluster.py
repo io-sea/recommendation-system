@@ -15,6 +15,7 @@ import simpy
 from loguru import logger
 import numpy as np
 import math
+import joblib
 import yaml
 import joblib
 from cluster_simulator.utils import convert_size, BandwidthResource
@@ -123,19 +124,15 @@ class Cluster:
         if config_path:
             logger.debug(f"Loading configuration from {config_path}")
             with open(config_path) as f:
-                # config = yaml.load(f, Loader=yaml.FullLoader)
                 config = yaml.safe_load(f)
 
-            # if 'compute_nodes' in config['defaults']:
-            #     self.compute_nodes = compute_nodes or config['defaults']['compute_nodes']
-            # if 'cores_per_node' in config['defaults']:
-            #     self.compute_cores = cores_per_node or config['defaults']['cores_per_node'] * self.compute_nodes
             # Override default values if provided in YAML file
             default_config = config.get('defaults')
             if default_config:
                 self.compute_nodes = simpy.Resource(env, capacity=compute_nodes or default_config.get('compute_nodes'))
                 self.cores_per_node = simpy.Resource(env, capacity=cores_per_node or default_config.get('cores_per_node'))
 
+            # Create tiers from configuration
             if tiers is None:
                 logger.debug("Creating tiers from configuration")
                 self.tiers = []
@@ -144,7 +141,10 @@ class Cluster:
                     tier_capacity = int(tier_cfg['capacity'])
                     tier_max_bandwidth = tier_cfg.get('max_bandwidth')
                     tier_bandwidth_model_path = tier_cfg.get('bandwidth_model_path')
-                    # (self, env, name, max_bandwidth=None, bandwidth_model_path=None, capacity=100e9)
+
+                    if tier_max_bandwidth is None and tier_bandwidth_model_path is None:
+                        raise ValueError('Either max_bandwidth or model_path is mandatory')
+
                     logger.debug(f"[Yaml Parsing] tier: {tier_name} | capacity: {tier_capacity} | tier bandwidth: {tier_max_bandwidth} | tier model: {tier_bandwidth_model_path}")
                     tier = Tier(env=self.env, name=tier_name,
                                 max_bandwidth=tier_max_bandwidth, bandwidth_model_path=tier_bandwidth_model_path, capacity=tier_capacity)
@@ -210,8 +210,22 @@ class Cluster:
         """
         if not isinstance(tier, Tier):
             tier = get_tier(self, tier)
-        return (tier.max_bandwidth[operation]['seq'] * pattern +
-                tier.max_bandwidth[operation]['rand'] * (1-pattern)) * cores * 1e6
+
+        if tier.bandwidth_model_path:
+            tier_model = joblib.load(tier.bandwidth_model_path)
+
+        if isinstance(tier.max_bandwidth, dict):
+            return (tier.max_bandwidth[operation]['seq'] * pattern +
+                    tier.max_bandwidth[operation]['rand'] * (1-pattern)) * cores * 1e6
+
+        if isinstance(self.max_bandwidth, (int, float)):
+            return self.max_bandwidth
+        # elif isinstance(self.max_bandwidth, (int, float)):
+        #     return self.max_bandwidth
+
+        # else:
+        #     tier_model = joblib.load(self.bandwidth_model_path)
+        #     return self.max_bandwidth.predict([[cores, pattern]])[0]
 
 
 # class Tier:
@@ -298,8 +312,12 @@ class Tier:
         self.name = name
         self.capacity = simpy.Container(self.env, init=0, capacity=capacity)
         self.max_bandwidth = max_bandwidth
+        self.bandwidth_model_path = bandwidth_model_path
         self.bandwidth = None
         self.bandwidth_concurrency = dict()
+
+        # load the joblib model
+        # if self.bandwidth_model_path:
 
         # if isinstance(max_bandwidth, str):
         #     if not bandwidth_model_path:
@@ -324,8 +342,8 @@ class Tier:
         if isinstance(self.max_bandwidth, dict):
             return (self.max_bandwidth[operation]['seq'] * pattern +
                     self.max_bandwidth[operation]['rand'] * (1-pattern)) * cores
-        else:
-            return self.max_bandwidth.predict([[cores, pattern]])[0]
+        elif isinstance(self.max_bandwidth, (int, float)):
+            return self.max_bandwidth
 
     def __str__(self):
         """
@@ -342,8 +360,11 @@ class Tier:
             for op, inner_dict in self.max_bandwidth.items():
                 for pattern, value in inner_dict.items():
                     description += ("{:<12} {:<12} {:<12}".format(op, pattern, value)+"\n")
-        else:
-            description += f"Bandwidth model path: {self.bandwidth_model_path}\n"
+
+        if isinstance(self.max_bandwidth, (int, float)):
+            description += ("{:<12} {:<12} {:<12}".format("any", "any", float(self.max_bandwidth))+"\n")
+        # else:
+        #     description += f"Bandwidth model path: {self.bandwidth_model_path}\n"
         return description
 
 

@@ -23,6 +23,22 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
+from sklearn.base import RegressorMixin
+
+
+DEFAULT_CATEGORIES = {"rand", "stride", "seq", "uncl"}
+
+def load_model(model_path):
+    """
+    Loads a trained model from file.
+
+    Args:
+        model_path (str): The path to the saved model.
+
+    Returns:
+        The loaded model object.
+    """
+    return joblib.load(model_path)
 
 
 class PhaseGenerator:
@@ -78,6 +94,263 @@ class PhaseGenerator:
         df.to_csv(filename, index=False)
 
 
+class RegressionModel(ABC, RegressorMixin):
+    """Abstract base class for regression models."""
+
+    @abstractmethod
+    def fit(self, X, y):
+        """Fit the regression model to the training data.
+
+        Args:
+            X: array-like or sparse matrix of shape (n_samples, n_features).
+                Training data.
+            y: array-like of shape (n_samples,).
+                Target values.
+
+        Returns:
+            self: object.
+        """
+        pass
+
+    @abstractmethod
+    def predict(self, X):
+        """Predict target values for the given test data.
+
+        Args:
+            X: array-like or sparse matrix of shape (n_samples, n_features).
+                Test data.
+
+        Returns:
+            y_pred: array-like of shape (n_samples,).
+                Predicted target values.
+        """
+        pass
+
+
+class TierModel(RegressionModel):
+    """
+    Concrete regression model that implements the abstract base class RegressionModel using scikit-learn's LinearRegression class or any other regressor that can be passed as an argument.
+
+    Attributes:
+        model: object, optional (default=LinearRegression())
+            Regression model object to be used for fitting the data.
+
+    Methods:
+        fit(X, y):
+            Fits the regression model to the training data.
+        predict(X):
+            Predicts target values for the given test data.
+    """
+
+    def __init__(self, regressor=LinearRegression()):
+        """
+        Initializes the TierModel object with a specified regression model object.
+
+        Parameters:
+            regressor: object, optional (default=LinearRegression())
+                Regression model object to be used for fitting the data.
+        """
+        self.model = regressor
+
+    def fit(self, X, y):
+        """
+        Fits the regression model to the training data.
+
+        Parameters:
+            X: array-like or sparse matrix of shape (n_samples, n_features)
+                Training data.
+            y: array-like of shape (n_samples,)
+                Target values.
+
+        Returns:
+            self: object
+        """
+        self.model.fit(X, y)
+        return self
+
+    def predict(self, X):
+        """
+        Predicts target values for the given test data.
+
+        Parameters:
+            X: array-like or sparse matrix of shape (n_samples, n_features)
+                Test data.
+
+        Returns:
+            y_pred: array-like of shape (n_samples,)
+                Predicted target values.
+        """
+        return self.model.predict(X)
+
+
+class DataModel:
+    """
+    Class for preparing data from a CSV file and training multiple TierModel instances.
+
+    Attributes:
+        X: pandas DataFrame of shape (n_samples, n_features)
+            Input data.
+        y: pandas DataFrame of shape (n_samples, n_targets)
+            Target data.
+
+    Methods:
+        load_data(file_path):
+            Loads data from a CSV file.
+        train_models():
+            Trains multiple TierModel instances, one per target column in the target data.
+    """
+
+    def __init__(self, data_file=GENERATED_DATASET_FILE, cats=DEFAULT_CATEGORIES, models=None):
+        self.data_file = data_file
+        self.cats = cats
+        self.X = None
+        self.y = None
+        if models is None:
+            models = []
+        self.models = models
+
+    def load_data(self):
+        """
+        Loads data from a CSV file.
+
+        Parameters:
+            file_path: str
+                Path to the CSV file containing input and target data.
+
+        Returns:
+            None
+        """
+        self.input_data = pd.read_csv(self.data_file)
+        self.target_tiers = [col for col in self.input_data.columns if col.endswith('_bw')]
+        assert not self.input_data.empty, "No elements found in data."
+
+    def _prepare_input_data(self, data):
+        """
+        The _prepare_input_data method prepares input data for prediction by performing several data preprocessing steps. It takes in a dictionary of input data and returns a pandas DataFrame of the prepared input data.
+
+        The method first drops the target columns from the input data, if they exist. It then calculates the total volume of read and write operations and divides the read and write volumes by the total volume. The read and write I/O sizes are then scaled by 8e6 and the average I/O size is calculated using the scaled read and write I/O sizes and the read and write ratios. The unnecessary columns are then dropped and the categorical columns are identified for preprocessing. A ColumnTransformer object is then used to apply preprocessing to the X data, including standard scaling of numeric columns and one-hot encoding of categorical columns. The transformed X data is returned as a pandas DataFrame of the prepared input data.
+
+        Args:
+            data (dict): A dictionary of input data.
+
+        Returns:
+            pandas.DataFrame: The prepared input data.
+        """
+        logger.info("Preparing input data...")
+        # dropout targets
+        target_columns = [col for col in data.columns if col.endswith('_bw')]
+        if target_columns:
+            data = data.drop(target_columns, axis=1)
+        logger.debug(f"Input data after dropping target columns: {data.columns.tolist()}")
+        # calculate total volume
+        total_volume = data['read_volume'] + data['write_volume']
+        # divide read_volume and write_volume by total_volume
+        data['read_ratio'] = data['read_volume'] / total_volume
+        data['write_ratio'] = data['write_volume'] / total_volume
+        # scale read_io_size and write_io_size by 8e6
+        data["read_io_size"] = data["read_io_size"] / 8e6
+        data["write_io_size"] = data["write_io_size"] / 8e6
+        data["avg_io_size"] = data["read_io_size"]*data["read_ratio"] + data["write_io_size"]*data["write_ratio"]
+        # remove unnecessary columns
+        data = data.drop(columns=['read_volume', 'write_volume'], axis=1)
+        logger.debug(f"Input data after dropping unnecessary columns: {data.columns.tolist()}")
+        # Apply preprocessing to X data
+        categorical_cols = data.filter(regex='_io_pattern$').columns
+        logger.debug(f"Categorical columns: {categorical_cols.tolist()}")
+
+        # Update category dictionary with new categories
+        category_dict = {}
+        for col in data.columns:
+            if col.endswith("_io_pattern"):
+                categories = self.cats
+                if col in category_dict:
+                    category_dict[col].update(categories)
+                else:
+                    category_dict[col] = categories
+
+        # Get all categories
+        all_categories = [list(category_dict.get(col, set())) for col in data.columns if col.endswith("_io_pattern")]
+
+        preprocessor = ColumnTransformer(
+            transformers=[
+                # ("num", StandardScaler(), numeric_cols),
+                ("cat", OneHotEncoder(categories=all_categories), categorical_cols),
+            ],
+            remainder="passthrough"
+        )
+
+        # transform X data and extract y data
+        X = preprocessor.fit_transform(data)
+        df = pd.DataFrame(X, columns=list(preprocessor.get_feature_names_out()))
+        logger.debug(f"Preprocessed data: {df.head()}")
+
+        return df
+
+    def _prepare_data(self, column=None):
+        """
+        Organizes X and y data by doing some small preprocessing on the loaded dataframe.
+        The _prepare_data method of a class prepares the input data for training by organizing X and y data with some small preprocessing.
+
+        The method takes an optional argument column which specifies the target column to extract. If column is not provided or is not found in the loaded dataframe, the method looks for target columns with names ending in _bw.
+
+        The method then extracts the features from the input data using the _prepare_input_data method and computes the target values y by dividing the target column(s) by the average IO size of the input data.
+
+        The method returns a tuple of X and y data.
+
+        Args:
+            column (str, optional): The target column to extract. Defaults to None.
+
+        Returns:
+            Tuple of (X, y) data.
+                X: Pandas DataFrame of input data features.
+                        Example:
+
+                            col_1   col_2   col_3
+                            0    0.1     0.5     0.8
+                            1    0.2     0.4     0.7
+                            2    0.3     0.5     0.6
+
+                    y: Pandas DataFrame of target values.
+                        Example:
+
+                            target_1    target_2
+                            0    2.3         4.5
+                            1    3.1         5.6
+                            2    1.8         3.2
+        """
+        logger.info("Preparing data...")
+        target_columns = column if column and column in self.input_data.columns else [col for col in self.input_data.columns if col.endswith('_bw')]
+
+        logger.debug(f"Target columns: {target_columns}")
+        # extract features
+        X = self._prepare_input_data(self.input_data)
+        y = self.input_data[target_columns].div(X['remainder__avg_io_size'], axis=0)
+        logger.debug(f"Features: {X.columns.tolist()}")
+
+        return X, y
+
+    def train_model(self, X, y):
+        """
+        Trains TierModel instances for each tier column in the target data.
+
+        Parameters:
+            X: pandas DataFrame of shape (n_samples, n_features)
+                Input data.
+            y: pandas DataFrame of shape (n_samples, n_targets)
+                Target data.
+
+        Returns:
+            models: dictionary
+                Dictionary containing trained TierModel instances, one per target column in the target data.
+        """
+        models = {}
+        for col in y.columns:
+            model = TierModel()
+            model.fit(X, y[col])
+            models[col] = model
+        return models
+
+
 class AbstractModel(ABC):
     """An abstract class for training and evaluating a regression model on performance data.
 
@@ -130,100 +403,91 @@ class AbstractModel(ABC):
             # if already registered model, load it
             if os.path.exists(self.model[tier_col]["model_path"]):
                 logger.info(f"Loading model from {self.model[tier_col]['model_path']}")
-                self.model[tier_col]["model"] = joblib.load(self.model[tier_col]["model_path"])
+                self.model[tier_col] = joblib.load(self.model[tier_col]["model_path"])
             else:
                 logger.info(f"Creating a new model: {self.model[tier_col]['model_name']}")
                 self.model[tier_col]["model"] = self._create_model()
 
-    def _prepare_input_data(self, data):
-        """
-        Prepares input data for prediction.
-
-        Args:
-            data (dict): A dictionary of input data.
-
-        Returns:
-            pandas.DataFrame: The prepared input data.
-        """
-        logger.info("Preparing input data...")
-        # dropout targets
-        target_columns = [col for col in data.columns if col.endswith('_bw')]
-        if target_columns:
-            data = data.drop(target_columns, axis=1)
-        logger.debug(f"Input data after dropping target columns: {data.columns.tolist()}")
-        # calculate total volume
-        total_volume = data['read_volume'] + data['write_volume']
-        # divide read_volume and write_volume by total_volume
-        data['read_ratio'] = data['read_volume'] / total_volume
-        data['write_ratio'] = data['write_volume'] / total_volume
-        # scale read_io_size and write_io_size by 8e6
-        data["read_io_size"] = data["read_io_size"] / 8e6
-        data["write_io_size"] = data["write_io_size"] / 8e6
-        data["avg_io_size"] = data["read_io_size"]*data["read_ratio"] + data["write_io_size"]*data["write_ratio"]
-        # remove unnecessary columns
-        data = data.drop(columns=['read_volume', 'write_volume'], axis=1)
-        logger.debug(f"Input data after dropping unnecessary columns: {data.columns.tolist()}")
-        # Apply preprocessing to X data
-        categorical_cols = data.filter(regex='_io_pattern$').columns
-        logger.debug(f"Categorical columns: {categorical_cols.tolist()}")
-        preprocessor = ColumnTransformer(
-            transformers=[
-                # ("num", StandardScaler(), numeric_cols),
-                ("cat", OneHotEncoder(), categorical_cols),
-            ],
-            remainder="passthrough"
-        )
-
-        # transform X data and extract y data
-        X = preprocessor.fit_transform(data)
-        df = pd.DataFrame(X, columns=list(preprocessor.get_feature_names_out()))
-        logger.debug(f"Preprocessed data: {df.head()}")
-
-        return df
-
-    def _prepare_data(self, column=None):
-        """
-        Organizes X and y data by doing some small preprocessing on the loaded dataframe.
-
-        Args:
-            column (str, optional): The target column to extract. Defaults to None.
-
-        Returns:
-            Tuple of (X, y) data.
-        """
-        logger.info("Preparing data...")
-        target_columns = column if column and column in self.input_data.columns else [col for col in self.input_data.columns if col.endswith('_bw')]
-
-        logger.debug(f"Target columns: {target_columns}")
-        # extract features
-        X = self._prepare_input_data(self.input_data)
-        y = self.input_data[target_columns].div(X['remainder__avg_io_size'], axis=0)
-        logger.debug(f"Features: {X.columns.tolist()}")
-
-        return X, y
-
-    @abstractmethod
+    @ abstractmethod
     def _create_model(self):
         """
         Creates the model object.
         """
         pass
 
+    def save_model(self, tier_col=None):
+        """
+        Saves the trained model in joblib format.
+
+        Args:
+            tier_col (str, optional): The name of the target tier column to save. If None, all models will be saved. Defaults to None.
+        """
+
+        if tier_col is not None:
+            if tier_col not in self.target_tiers:
+                raise ValueError(f"Invalid tier column: {tier_col}")
+            if tier_col not in self.model:
+                raise ValueError(f"No model found for tier column: {tier_col}")
+            if "model" not in self.model[tier_col]:
+                raise ValueError(f"No trained model found for tier column: {tier_col}")
+            if not os.path.exists(os.path.dirname(self.model[tier_col]["model_path"])):
+                os.makedirs(os.path.dirname(self.model[tier_col]["model_path"]))
+            joblib.dump(self.model[tier_col], self.model[tier_col]["model_path"])
+            logger.info(f"Model {self.model[tier_col]['model_name']} for {tier_col} saved to {self.model[tier_col]['model_path']}")
+        else:
+            for target_tier in self.target_tiers:
+                if "model" in self.model[target_tier]:
+                    if not os.path.exists(os.path.dirname(self.model[target_tier]["model_path"])):
+                        os.makedirs(os.path.dirname(self.model[target_tier]["model_path"]))
+                    joblib.dump(self.model[target_tier], self.model[target_tier]["model_path"])
+                    logger.info(f"Model {self.model[target_tier]['model_name']} for {target_tier} saved to {self.model[target_tier]['model_path']}")
+
+    # def load_model(self, tier_col=None):
+    #     """
+    #     Loads a trained model from disk in joblib format.
+
+    #     Args:
+    #         tier_col (str, optional): The name of the target tier column to load. If None, all models will be loaded. Defaults to None.
+    #     """
+    #     if tier_col is not None:
+    #         if tier_col not in self.target_tiers:
+    #             raise ValueError(f"Invalid tier column: {tier_col}")
+    #         if tier_col not in self.model:
+    #             raise ValueError(f"No model found for tier column: {tier_col}")
+    #         if "model" not in self.model[tier_col]:
+    #             raise ValueError(f"No trained model found for tier column: {tier_col}")
+    #         if os.path.exists(self.model[tier_col]["model_path"]):
+    #             self.model[tier_col]["model"] = joblib.load(self.model[tier_col]["model_path"])
+    #             logger.info(f"Model {self.model[tier_col]['model_name']} for {tier_col} loaded from {self.model[tier_col]['model_path']}")
+    #         else:
+    #             logger.warning(f"No model found at {self.model[tier_col]['model_path']}")
+    #     else:
+    #         for target_tier in self.target_tiers:
+    #             if "model" in self.model[target_tier]:
+    #                 if os.path.exists(self.model[target_tier]["model_path"]):
+    #                     self.model[target_tier]["model"] = joblib.load(self.model[target_tier]["model_path"])
+    #                     logger.info(f"Model {self.model[target_tier]['model_name']} for {target_tier} loaded from {self.model[target_tier]['model_path']}")
+    #                 else:
+    #                     logger.warning(f"No model found at {self.model[target_tier]['model_path']}")
+
     def train_model(self):
         """
         Trains the regression model on the training data and saves it to disk if the score on the test set is better than a threshold.
         """
         for target_tier in self.target_tiers:
-            logger.info("Training model...")
+            logger.info("Training models...")
+            print(self.model[target_tier])
+            print(type(self.model[target_tier]))
             self.model[target_tier]["model"].fit(self.data["X_train"], self.data[target_tier]["y_train"])
             self.model[target_tier]["score"] = self.model[target_tier]["model"].score(self.data["X_test"], self.data[target_tier]["y_test"])
             logger.info(f"Model score for tier {target_tier}: {self.model[target_tier]['score']}")
 
             if self.model[target_tier]["score"] > self.SCORE_THRESHOLD:
-                if not os.path.exists(os.path.dirname(self.model[target_tier]["model_path"])):
-                    os.makedirs(os.path.dirname(self.model[target_tier]["model_path"]))
-                joblib.dump(self.model[target_tier]["model"], self.model[target_tier]["model_path"])
-                logger.info(f"Saving Model for {target_tier}: {self.model[target_tier]['model_path']} | saved with score: {self.model[target_tier]['score']}")
+                self.save_model(tier_col=target_tier)
+                # if not os.path.exists(os.path.dirname(self.model[target_tier]["model_path"])):
+                #     os.makedirs(os.path.dirname(self.model[target_tier]["model_path"]))
+                # joblib.dump(self.model[target_tier]["model"], self.model[target_tier]["model_path"])
+                # logger.info(f"Saving Model for {target_tier}: {self.model[target_tier]['model_path']} | saved with score: {self.model[target_tier]['score']}")
 
     def evaluate_model(self):
         """

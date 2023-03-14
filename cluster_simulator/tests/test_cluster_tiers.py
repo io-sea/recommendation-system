@@ -76,6 +76,19 @@ class TestClusterConfigFile(unittest.TestCase):
         self.assertEqual(cluster.ephemeral_tier.name, 'my_ephemeral')
 
 
+class TestClusterConfigFileBandwidth(unittest.TestCase):
+
+    def setUp(self):
+        self.env = simpy.Environment()
+        TEST_CONFIG_FILE_WITH_MODEL = os.path.join(CURRENT_DIR, "test_data", "config_with_model.yaml")
+        self.cluster = Cluster(self.env, config_path=TEST_CONFIG_FILE_WITH_MODEL)
+
+    def test_config_path_with_model(self):
+        # Test that the cluster is initialized correctly using a YAML config file
+        for tier in self.cluster.tiers:
+            print(tier)
+
+
 class TestClusterTiers(unittest.TestCase):
     def setUp(self):
         self.env = simpy.Environment()
