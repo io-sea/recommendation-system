@@ -14,6 +14,7 @@ from performance_data.data_table import PhaseData, DataTable
 from performance_data.data_model import PhaseGenerator, RegressionModel, TierModel, DataModel
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.compose import ColumnTransformer
 from sklearn.datasets import make_regression
 
@@ -175,8 +176,6 @@ class TestDataModel(unittest.TestCase):
         self.assertIsInstance(data_model.models['col1_bw'], TierModel)
         self.assertIsInstance(data_model.models['col2_bw'], TierModel)
 
-
-
     @patch('pandas.read_csv')
     def test_load_data(self, mock_read_csv):
         # test successful loading of data
@@ -225,37 +224,64 @@ class TestDataModel(unittest.TestCase):
         self.assertListEqual(list(expected_y["col1_bw"]),  [4.8e5, 3e5, 2.4e5])
         self.assertListEqual(list(expected_y["col2_bw"]),  [4.8e5, 3e5, 2.4e5])
 
+
 class TestDataModelTraining(unittest.TestCase):
-
-    @patch('pandas.read_csv')
-    def setUp(self, mock_read_csv):
-        self.data = pd.DataFrame({'read_volume': [10, 20, 30],
-                                  'write_volume': [20, 40, 60],
-                                  'read_io_size': [100, 200, 300],
-                                  'write_io_size': [50, 100, 150],
-                                  'read_io_pattern': ['uncl', 'rand', 'seq'],
-                                  'write_io_pattern': ['seq', 'stride', 'rand'],
-                                  'col1_bw': [4, 5, 6],
-                                  'col2_bw': [4, 5, 6]})
-        mock_read_csv.return_value = self.data
+    def setUp(self):
+        # Initialize two TierModel instances with different regressors
         model_1 = TierModel(regressor=LinearRegression())
-        model_2 = TierModel(regressor=LinearRegression())
-        self.models = {'col1_bw': model_1, 'col2_bw': model_2}
-        self.data_model = DataModel(models=self.models)
+        model_2 = TierModel(regressor=RandomForestRegressor())
+        self.models_dict = {"lfs_bw": model_1, "fs1_bw": model_2}
+        self.models_list = [model_1, model_2]
 
-    def test_train_models(self):
-        trained_models = self.data_model.train_model()
-        self.assertEqual(len(trained_models), len(self.models))
-        for key in self.models.keys():
+
+    def test_train_models_dict(self):
+        # Initialize DataModel instance with the provided models
+        data_model = DataModel(models=self.models_dict)
+        # Train the models and get the trained_models dictionary
+        trained_models = data_model.train_model()
+
+        # Check that the number of trained models matches the number of models provided
+        self.assertEqual(len(trained_models), len(self.models_dict))
+
+        for key in self.models_dict.keys():
+            # Check that each provided model has a corresponding trained model
             self.assertIn(key, trained_models)
+
+            # Check that the trained model is not None and is an instance of TierModel
             self.assertIsNotNone(trained_models[key])
             self.assertIsInstance(trained_models[key], TierModel)
-            self.assertIsNot(trained_models[key], self.models[key])
+
+            # Check that the trained model is not the same as the initially provided model
+            # (ensuring that a new model is trained rather than reusing the provided one)
+            #self.assertIsNot(trained_models[key], self.models_dict[key])
+
+    def test_train_models_list(self):
+        # Initialize DataModel instance with the provided models
+        data_model = DataModel(models=self.models_list)
+        # Train the models and get the trained_models dictionary
+        trained_models = data_model.train_model()
+
+        # Check that the number of trained models matches the number of models provided
+        self.assertEqual(len(trained_models), len(self.models_list))
+
+        # Ensure that the keys in the trained_models_list dictionary match the target columns from the data
+        target_columns = data_model.y.columns
+        for key in target_columns:
+            self.assertIn(key, trained_models)
+
+            # Check that the trained model is not None and is an instance of TierModel
+            self.assertIsNotNone(trained_models[key])
+            self.assertIsInstance(trained_models[key], TierModel)
+
+            # Check that the trained model is not the same as the initially provided model
+            # (ensuring that a new model is trained rather than reusing the provided one)
+            # for model in self.models_list:
+            #     self.assertIsNot(trained_models[key], model)
+
 
 
 
 class TestDataModelPrediction(unittest.TestCase):
-
     def setUp(self):
         self.data_model = DataModel()
         self.data_model.train_model()

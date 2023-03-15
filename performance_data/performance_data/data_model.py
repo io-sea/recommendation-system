@@ -213,21 +213,23 @@ class DataModel:
 
         self.models = {}
         logger.info("Initializing DataModel.")
+
         if models is None:
             logger.debug("No models provided. Initializing default models.")
-            for col in self.y.columns:
-                self.models[col] = TierModel(regressor=LinearRegression())
+            self.models = {col: TierModel(regressor=LinearRegression()) for col in self.y.columns}
+
         elif isinstance(models, dict):
             logger.debug("Models provided as a dictionary. Initializing models.")
-            for col in self.y.columns:
-                if col not in models:
-                    # if a model is not specified for a target column, use LinearRegression
-                    logger.debug(f"No model specified for '{col}', using LinearRegression as default.")
-                    models[col] = TierModel(regressor=LinearRegression())
+            for key, model in models.items():
+                if key in self.y.columns:
+                    self.models[key] = model
+                    logger.debug(f"Model for '{key}' initialized.")
+                else:
+                    self.models[key] = TierModel(regressor=LinearRegression())
+                    logger.debug(f"Model for '{key}' not provided, initialized as default.")
 
         elif isinstance(models, list):
             logger.debug("Models provided as a list. Initializing models.")
-            self.models = {}
             for i, model in enumerate(models):
                 self.models[self.y.columns[i]] = model
                 logger.debug(f"Model for '{self.y.columns[i]}' initialized.")
@@ -358,29 +360,28 @@ class DataModel:
 
         return X, y
 
-    def train_model(self):
+    def train_model(self, test_size=0.2, random_state=None):
         """
-        Trains TierModel instances for each tier column in the target data.
+        Trains TierModel instances for each tier column in the target data using the training dataset
+        and evaluates their performance using the testing dataset.
 
         Parameters:
-            X: pandas DataFrame of shape (n_samples, n_features)
-                Input data.
-            y: pandas DataFrame of shape (n_samples, n_targets)
-                Target data.
-        TODO: split data into train and test sets in this method
+            test_size: float, default=0.2
+                The proportion of the dataset to include in the test split.
+            random_state: int or None, default=None
+                Controls the shuffling applied to the data before applying the split.
+                Pass an int for reproducible output across multiple function calls.
+
         Returns:
             models: dictionary
                 Dictionary containing trained TierModel instances, one per target column in the target data.
         """
-        self.models = {}
+        X_train, X_test, y_train, y_test = train_test_split(self.X, self.y, test_size=test_size, random_state=random_state)
         for col in self.y.columns:
-            model = TierModel()
-            # Train model
-            model.fit(self.X, self.y[col])
-            self.models[col] = model
+            self.models[col] = self.models[col].fit(X_train, y_train[col])
             # Compute scores for each model
-            score = model.score(self.X, self.y[col])
-            logger.info(f"Model {type(model).__bases__[0].__name__} for Tier: {col} trained with score:{score}")
+            score = self.models[col].score(X_test, y_test[col])
+            logger.info(f"Model {self.models[col].model} for Tier: {col} trained with score:{score}")
 
         return self.models
 
@@ -438,7 +439,6 @@ class AbstractModel(ABC):
 
         """
         # load data
-        # TODO: avoid data redundancy, create self.data["X_train"].. self.data["tier"]["y_train"]
         self.input_data = pd.read_csv(GENERATED_DATASET_FILE)
         self.data = {}
         self.model = {}
