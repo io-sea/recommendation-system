@@ -200,6 +200,7 @@ class DataModel:
         train_models():
             Trains multiple TierModel instances, one per target column in the target data.
     """
+    THRESHOLD = 0.7
 
     def __init__(self, data_file=GENERATED_DATASET_FILE, cats=DEFAULT_CATEGORIES, models=None):
         self.data_file = data_file
@@ -254,7 +255,8 @@ class DataModel:
         logger.info(f"Target tiers: {self.target_tiers}")
         assert not self.input_data.empty, "No elements found in data."
 
-    def _prepare_input_data(self, data):
+    @staticmethod
+    def _prepare_input_data(data, all_categories=["uncl", "seq", "rand", "stride"]):
         """
         The _prepare_input_data method prepares input data for prediction by performing several data preprocessing steps. It takes in a dictionary of input data and returns a pandas DataFrame of the prepared input data.
 
@@ -292,7 +294,7 @@ class DataModel:
         category_dict = {}
         for col in data.columns:
             if col.endswith("_io_pattern"):
-                categories = self.cats
+                categories = all_categories#self.cats
                 if col in category_dict:
                     category_dict[col].update(categories)
                 else:
@@ -354,13 +356,18 @@ class DataModel:
         zero_factor = self.input_data.apply(lambda row: 0 if row["read_volume"] == 0 and row["write_volume"] == 0 else 1, axis=1)
         logger.debug(f"Target columns: {target_columns}")
         # extract features
-        X = self._prepare_input_data(self.input_data)
+        X = DataModel._prepare_input_data(self.input_data)
         y = self.input_data[target_columns].multiply(zero_factor, axis=0).div(X['remainder__avg_io_size'].replace(0, np.nan), axis=0).fillna(0)
         logger.debug(f"Features: {X.columns.tolist()}")
 
         return X, y
 
-    def train_model(self, test_size=0.2, random_state=None):
+    def model_name(self, col):
+        # model corresponds to self.models[col], col
+        return re.sub('(?<!^)(?=[A-Z])', '_',
+                      f"{type(self.models[col].model).__name__ + '_' + col}.joblib").lower()
+
+    def train_model(self, test_size=0.2, random_state=None, save_dir=MODELS_DIRECTORY):
         """
         Trains TierModel instances for each tier column in the target data using the training dataset
         and evaluates their performance using the testing dataset.
@@ -382,8 +389,34 @@ class DataModel:
             # Compute scores for each model
             score = self.models[col].score(X_test, y_test[col])
             logger.info(f"Model {self.models[col].model} for Tier: {col} trained with score:{score}")
-
+            # Save the model if its score is above the threshold
+            if score > self.THRESHOLD:
+                self.save_model(col, save_dir)
         return self.models
+
+    def save_model(self, col, save_dir=None):
+        """
+        Saves a trained model to the specified directory using joblib.
+
+        Parameters:
+            col: str
+                The target column name, which is used to identify the corresponding trained model.
+
+        Returns:
+            None
+        """
+        model_name = self.model_name(col)
+        model = self.models[col]
+        save_dir = save_dir if save_dir else self.MODELS_DIRECTORY
+
+        # Create the save_dir directory if it does not exist
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+
+
+        file_path = os.path.join(save_dir, model_name)
+        joblib.dump(model, file_path)
+        logger.info(f"Model {model_name} for '{col}' saved at '{file_path}'")
 
     def predict(self, input_data):
         """
@@ -403,7 +436,7 @@ class DataModel:
         if "nodes" not in input_data.columns:
             input_data["nodes"] = 1
         # Prepare input data
-        X = self._prepare_input_data(input_data)
+        X = DataModel._prepare_input_data(input_data)
         # Predict target values for each model
         predictions = {}
         for col, model in self.models.items():
@@ -411,6 +444,33 @@ class DataModel:
             predictions[col] = y_pred
 
         return pd.DataFrame(predictions)
+
+def load_and_predict(model_path, new_data):
+    """
+    Load a model from a joblib file and use it to predict on new data.
+
+    Parameters:
+        model_path: str
+            The path to the joblib file containing the trained model.
+        new_data: pandas DataFrame
+            The new data for which to make predictions.
+
+    Returns:
+        pandas DataFrame: The predicted values.
+    """
+    # Load the model from the joblib file
+    model = joblib.load(model_path)
+
+    # Check if new_data is a pandas DataFrame
+    if not isinstance(new_data, pd.DataFrame):
+        raise ValueError("Input data must be a pandas DataFrame.")
+
+    # Use the loaded model to make predictions on new_data
+    predictions = model.predict(DataModel._prepare_input_data(new_data))
+
+    # Return the predictions
+    return pd.DataFrame(predictions)
+
 
 
 class AbstractModel(ABC):
@@ -572,7 +632,7 @@ class AbstractModel(ABC):
             The predictions made by the model on the new data.
         """
         predictions = {}
-        input_data = self._prepare_input_data(new_data) if process_input else new_data
+        input_data = DataModel._prepare_input_data(new_data) if process_input else new_data
         for target_tier in self.target_tiers:
             predictions[target_tier] = self.model[target_tier]["model"].predict(input_data)
             logger.trace(f"Predictions made by the model {self.model[target_tier]['model_name']}: {predictions}")

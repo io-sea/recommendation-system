@@ -7,22 +7,27 @@ from os.path import dirname
 import unittest
 from abc import ABC, abstractmethod
 import random
+import tempfile
 import pandas as pd
 import numpy as np
 from unittest.mock import MagicMock, patch, Mock
 from performance_data.data_table import PhaseData, DataTable
 from performance_data.data_model import PhaseGenerator, RegressionModel, TierModel, DataModel
+from performance_data.data_model import load_and_predict
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.compose import ColumnTransformer
 from sklearn.datasets import make_regression
 
+
 # whether or not populate the dataset file with new data
 __POPULATE_DATASET__ = False
 CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
 TEST_DATA = os.path.join(os.path.dirname(CURRENT_DIR), "tests", "test_data",
                          "test_dataset.csv")
+TEST_MODELS = os.path.join(os.path.dirname(CURRENT_DIR), "tests", "test_data",
+                           "test_models")
 
 
 class TestPhaseGenerator(unittest.TestCase):
@@ -280,7 +285,6 @@ class TestDataModelTraining(unittest.TestCase):
 
 
 
-
 class TestDataModelPrediction(unittest.TestCase):
     def setUp(self):
         self.data_model = DataModel()
@@ -335,6 +339,52 @@ class TestDataModelPrediction(unittest.TestCase):
         })
         with self.assertRaises(ValueError):
             predictions = self.data_model.predict(extra_columns_dataframe)
+
+
+class TestDataModelSaving(unittest.TestCase):
+
+    def setUp(self):
+        model_1 = TierModel(regressor=LinearRegression())
+        model_2 = TierModel(regressor=LinearRegression())
+        self.models = {"lfs_bw": model_1, "fs1_bw": model_2}
+        self.data_model = DataModel(models=self.models)
+        self.data_model.train_model(save_dir=TEST_MODELS)
+
+    def test_save_model(self):
+        col = "lfs_bw"
+        self.data_model.save_model(col, save_dir=TEST_MODELS)
+        model_name = self.data_model.model_name(col)
+        file_path = os.path.join(TEST_MODELS, model_name)
+        self.assertTrue(os.path.exists(file_path), f"Model file not found at '{file_path}'")
+
+
+
+MODEL_PATH = '/home_nfs/mimounis/iosea-wp3-recommandation-system/performance_data/tests/test_data/test_models/linear_regression_lfs_bw.joblib'
+
+class TestDataModelLoadAndPredict(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Define the sample data for testing
+        cls.sample_data = pd.DataFrame({
+                                        'nodes': [1, 1],
+                                        'read_io_size': [1000000, 2000000],
+                                        'write_io_size': [3000000, 4000000],
+                                        'read_volume': [100, 200],
+                                        'write_volume': [300, 400],
+                                        'read_io_pattern': ['seq', 'rand'],
+                                        'write_io_pattern': ['uncl', 'stride']
+        })
+
+    def test_load_and_predict(self):
+        # Call the load_and_predict function
+        predictions = load_and_predict(MODEL_PATH, self.sample_data)
+        # Check if predictions is a pandas DataFrame
+        self.assertIsInstance(predictions, pd.DataFrame)
+
+        # Check if the shape of predictions matches the expected shape
+        expected_shape = (len(self.sample_data), 1)  # Assuming the model outputs a single target column
+        self.assertEqual(predictions.shape, expected_shape)
+
 
 
             # Add additional checks here to ensure that the trained models are correct.
