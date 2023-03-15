@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 import random
 import pandas as pd
 import numpy as np
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, Mock
 from performance_data.data_table import PhaseData, DataTable
 from performance_data.data_model import PhaseGenerator, RegressionModel, TierModel, DataModel
 from sklearn.model_selection import train_test_split
@@ -19,6 +19,9 @@ from sklearn.datasets import make_regression
 
 # whether or not populate the dataset file with new data
 __POPULATE_DATASET__ = False
+CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
+TEST_DATA = os.path.join(os.path.dirname(CURRENT_DIR), "tests", "test_data",
+                         "test_dataset.csv")
 
 
 class TestPhaseGenerator(unittest.TestCase):
@@ -144,52 +147,77 @@ class TestDataModel(unittest.TestCase):
                                   'write_io_pattern': ['seq', 'stride', 'rand'],
                                   'col1_bw': [4, 5, 6],
                                   'col2_bw': [4, 5, 6]})
-        self.model = DataModel()
-        self.model.input_data = self.data
 
     @patch('pandas.read_csv')
-    def test_init(self, mock_read_csv):
-        # test default models parameter
-        data_model = DataModel()
-        self.assertIsInstance(data_model.models, list)
-        self.assertEqual(len(data_model.models), 0)
+    def test_init_no_model(self, mock_read_csv):
+        mock_read_csv.return_value = self.data
+        self.model = DataModel()
+        self.assertIsInstance(self.model.models, dict)
 
-        # test non-default models parameter
+    @patch('pandas.read_csv')
+    def test_init_dict_model(self, mock_read_csv):
+        mock_read_csv.return_value = self.data
+        models_dict = {'col1_bw': TierModel(), 'col2_bw': TierModel()}
+        data_model = DataModel(models=models_dict)
+        print(data_model.models)
+        # self.assertIsInstance(data_model.models, dict)
+        # self.assertEqual(len(data_model.models), 2)
+        # self.assertIsInstance(data_model.models['col1_bw'], TierModel)
+        # self.assertIsInstance(data_model.models['col2_bw'], TierModel)
+
+    @patch('pandas.read_csv')
+    def test_init_list_model(self, mock_read_csv):
+        mock_read_csv.return_value = self.data
         mock_model = TierModel()
-        data_model = DataModel(models=[mock_model])
-        self.assertEqual(len(data_model.models), 1)
-        self.assertIsInstance(data_model.models[0], TierModel)
+        data_model = DataModel(models=[mock_model, mock_model])
+        self.assertIsInstance(data_model.models, dict)
+        self.assertEqual(len(data_model.models), 2)
+        self.assertIsInstance(data_model.models['col1_bw'], TierModel)
+        self.assertIsInstance(data_model.models['col2_bw'], TierModel)
+
+
 
     @patch('pandas.read_csv')
     def test_load_data(self, mock_read_csv):
         # test successful loading of data
-        mock_read_csv.return_value = pd.DataFrame({'col1': [1, 2, 3], 'col2_bw': [4, 5, 6]})
+        mock_read_csv.return_value = pd.DataFrame({'read_volume': [10, 20, 30],
+                                                    'write_volume': [20, 40, 60],
+                                                    'read_io_size': [100, 200, 300],
+                                                    'write_io_size': [50, 100, 150],
+                                                    'read_io_pattern': ['uncl', 'rand', 'seq'],
+                                                    'write_io_pattern': ['seq', 'stride', 'rand'],
+                                                    'col1': [4, 5, 6],
+                                                    'col2_bw': [4, 5, 6]})
         data_model = DataModel()
-        data_model.load_data()
         self.assertIsInstance(data_model.input_data, pd.DataFrame)
         self.assertListEqual(data_model.target_tiers, ["col2_bw"])
 
+    @patch('pandas.read_csv')
+    def test_load_empty_data(self, mock_read_csv):
         # test loading empty data
         mock_read_csv.return_value = pd.DataFrame()
-        data_model = DataModel()
         with self.assertRaises(AssertionError):
+            data_model = DataModel()
             data_model.load_data()
 
+
     def test_prepare_input_data(self):
+        self.model = DataModel()
         preprocessed_data = self.model._prepare_input_data(self.data)
         self.assertEqual(preprocessed_data.shape, (3, 13))
         self.assertCountEqual(preprocessed_data.columns, ['cat__read_io_pattern_rand',
-                                                          'cat__read_io_pattern_stride',
-                                                          'cat__read_io_pattern_seq', 'cat__read_io_pattern_uncl',
-                                                          'cat__write_io_pattern_rand', 'cat__write_io_pattern_stride',
-                                                          'cat__write_io_pattern_seq', 'cat__write_io_pattern_uncl',
-                                                          'remainder__read_io_size', 'remainder__write_io_size',
-                                                          'remainder__read_ratio', 'remainder__write_ratio',
-                                                          'remainder__avg_io_size'])
-
-    def test_prepare_data(self):
+                                                        'cat__read_io_pattern_stride',
+                                                        'cat__read_io_pattern_seq', 'cat__read_io_pattern_uncl',
+                                                        'cat__write_io_pattern_rand', 'cat__write_io_pattern_stride',
+                                                        'cat__write_io_pattern_seq', 'cat__write_io_pattern_uncl',
+                                                        'remainder__read_io_size', 'remainder__write_io_size',
+                                                        'remainder__read_ratio', 'remainder__write_ratio',
+                                                        'remainder__avg_io_size'])
+    @patch('pandas.read_csv')
+    def test_prepare_data(self, mock_read_csv):
+        mock_read_csv.return_value = self.data
+        self.model = DataModel()
         X, y = self.model._prepare_data()
-        print(y)
         expected_y = pd.DataFrame({
             'col1_bw': [4.8e5, 3e5, 2.4e5],
             'col2_bw': [4.8e5, 3e5, 2.4e5]
@@ -199,25 +227,88 @@ class TestDataModel(unittest.TestCase):
 
 class TestDataModelTraining(unittest.TestCase):
 
-    def setUp(self):
-        self.X = pd.DataFrame(np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]]),
-                              columns=['col_1', 'col_2', 'col_3'])
-        self.y = pd.DataFrame(np.array([[10, 20], [40, 50], [70, 80], [100, 110]]),
-                              columns=['target_1_bw', 'target_2_bw'])
-        self.data_model = DataModel(models={})
-
-    def test_train_models(self):
+    @patch('pandas.read_csv')
+    def setUp(self, mock_read_csv):
+        self.data = pd.DataFrame({'read_volume': [10, 20, 30],
+                                  'write_volume': [20, 40, 60],
+                                  'read_io_size': [100, 200, 300],
+                                  'write_io_size': [50, 100, 150],
+                                  'read_io_pattern': ['uncl', 'rand', 'seq'],
+                                  'write_io_pattern': ['seq', 'stride', 'rand'],
+                                  'col1_bw': [4, 5, 6],
+                                  'col2_bw': [4, 5, 6]})
+        mock_read_csv.return_value = self.data
         model_1 = TierModel(regressor=LinearRegression())
         model_2 = TierModel(regressor=LinearRegression())
-        models = {'target_1_bw': model_1, 'target_2_bw': model_2}
-        self.data_model.models = models
-        trained_models = self.data_model.train_model(X=self.X, y=self.y)
-        self.assertEqual(len(trained_models), len(models))
-        for key in models.keys():
+        self.models = {'col1_bw': model_1, 'col2_bw': model_2}
+        self.data_model = DataModel(models=self.models)
+
+    def test_train_models(self):
+        trained_models = self.data_model.train_model()
+        self.assertEqual(len(trained_models), len(self.models))
+        for key in self.models.keys():
             self.assertIn(key, trained_models)
             self.assertIsNotNone(trained_models[key])
             self.assertIsInstance(trained_models[key], TierModel)
-            self.assertIsNot(trained_models[key], models[key])
+            self.assertIsNot(trained_models[key], self.models[key])
+
+
+
+class TestDataModelPrediction(unittest.TestCase):
+
+    def setUp(self):
+        self.data_model = DataModel()
+        self.data_model.train_model()
+
+    def test_predict_with_empty_dataframe(self):
+        empty_dataframe = pd.DataFrame()
+        with self.assertRaises(ValueError):
+            first_key = next(iter(self.data_model.models))
+            self.data_model.models[first_key].predict(empty_dataframe)
+
+    def test_predict_with_valid_dataframe(self):
+        valid_dataframe = pd.DataFrame({
+            'nodes': [1, 1],
+            'read_io_size': [1000000, 2000000],
+            'write_io_size': [3000000, 4000000],
+            'read_volume': [100, 200],
+            'write_volume': [300, 400],
+            'read_io_pattern': ['seq', 'rand'],
+            'write_io_pattern': ['uncl', 'stride'],
+        })
+        predictions = self.data_model.predict(valid_dataframe)
+        self.assertIsInstance(predictions, pd.DataFrame)
+        self.assertEqual(predictions.shape[0], valid_dataframe.shape[0])
+        self.assertEqual(predictions.shape[1], len(self.data_model.models))
+
+    def test_predict_with_dataframe_missing_nodes(self):
+        missing_nodes_dataframe = pd.DataFrame({
+            'read_io_size': [1000000, 2000000],
+            'write_io_size': [3000000, 4000000],
+            'read_volume': [100, 200],
+            'write_volume': [300, 400],
+            'read_io_pattern': ['seq', 'rand'],
+            'write_io_pattern': ['uncl', 'stride'],
+        })
+        predictions = self.data_model.predict(missing_nodes_dataframe)
+        self.assertIsInstance(predictions, pd.DataFrame)
+        self.assertEqual(predictions.shape[0], missing_nodes_dataframe.shape[0])
+        self.assertEqual(predictions.shape[1], len(self.data_model.models))
+
+    def test_predict_with_dataframe_with_extra_columns(self):
+        extra_columns_dataframe = pd.DataFrame({
+            'nodes': [1, 1],
+            'read_io_size': [1000000, 2000000],
+            'write_io_size': [3000000, 4000000],
+            'read_volume': [100, 200],
+            'write_volume': [300, 400],
+            'read_io_pattern': ['seq', 'rand'],
+            'write_io_pattern': ['uncl', 'stride'],
+            'extra_col1': [1, 2],
+            'extra_col2': [3, 4],
+        })
+        with self.assertRaises(ValueError):
+            predictions = self.data_model.predict(extra_columns_dataframe)
 
 
             # Add additional checks here to ensure that the trained models are correct.

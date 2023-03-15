@@ -12,6 +12,7 @@ from abc import ABC, abstractmethod
 from performance_data import MODELS_DIRECTORY, DATASET_FILE, GENERATED_DATASET_FILE
 from performance_data.data_table import PhaseData, DataTable
 import pandas as pd
+import numpy as np
 import joblib
 from loguru import logger
 
@@ -205,9 +206,34 @@ class DataModel:
         self.cats = cats
         self.X = None
         self.y = None
+
+        # load data
+        self.load_data()
+        self.X, self.y = self._prepare_data()
+
+        self.models = {}
+        logger.info("Initializing DataModel.")
         if models is None:
-            models = []
-        self.models = models
+            logger.debug("No models provided. Initializing default models.")
+            for col in self.y.columns:
+                self.models[col] = TierModel(regressor=LinearRegression())
+        elif isinstance(models, dict):
+            logger.debug("Models provided as a dictionary. Initializing models.")
+            for col in self.y.columns:
+                if col not in models:
+                    # if a model is not specified for a target column, use LinearRegression
+                    logger.debug(f"No model specified for '{col}', using LinearRegression as default.")
+                    models[col] = TierModel(regressor=LinearRegression())
+
+        elif isinstance(models, list):
+            logger.debug("Models provided as a list. Initializing models.")
+            self.models = {}
+            for i, model in enumerate(models):
+                self.models[self.y.columns[i]] = model
+                logger.debug(f"Model for '{self.y.columns[i]}' initialized.")
+        else:
+            logger.error("Invalid value for 'models' parameter. Must be a dictionary, a list, or None.")
+            raise TypeError("Invalid value for 'models' parameter. Must be a dictionary, a list, or None.")
 
     def load_data(self):
         """
@@ -222,6 +248,8 @@ class DataModel:
         """
         self.input_data = pd.read_csv(self.data_file)
         self.target_tiers = [col for col in self.input_data.columns if col.endswith('_bw')]
+        logger.info(f"Ingesting input data in dataframe of size {self.input_data.shape}")
+        logger.info(f"Target tiers: {self.target_tiers}")
         assert not self.input_data.empty, "No elements found in data."
 
     def _prepare_input_data(self, data):
@@ -236,7 +264,7 @@ class DataModel:
         Returns:
             pandas.DataFrame: The prepared input data.
         """
-        logger.info("Preparing input data...")
+        logger.info(f"Preparing input data with columns: {list(data.columns)}")
         # dropout targets
         target_columns = [col for col in data.columns if col.endswith('_bw')]
         if target_columns:
@@ -245,12 +273,12 @@ class DataModel:
         # calculate total volume
         total_volume = data['read_volume'] + data['write_volume']
         # divide read_volume and write_volume by total_volume
-        data['read_ratio'] = data['read_volume'] / total_volume
-        data['write_ratio'] = data['write_volume'] / total_volume
+        data['read_ratio'] = (data['read_volume'] / total_volume).fillna(0)
+        data['write_ratio'] = (data['write_volume'] / total_volume).fillna(0)
         # scale read_io_size and write_io_size by 8e6
         data["read_io_size"] = data["read_io_size"] / 8e6
         data["write_io_size"] = data["write_io_size"] / 8e6
-        data["avg_io_size"] = data["read_io_size"]*data["read_ratio"] + data["write_io_size"]*data["write_ratio"]
+        data["avg_io_size"] = (data["read_io_size"]*data["read_ratio"] + data["write_io_size"]*data["write_ratio"]).fillna(0)
         # remove unnecessary columns
         data = data.drop(columns=['read_volume', 'write_volume'], axis=1)
         logger.debug(f"Input data after dropping unnecessary columns: {data.columns.tolist()}")
@@ -282,7 +310,7 @@ class DataModel:
         # transform X data and extract y data
         X = preprocessor.fit_transform(data)
         df = pd.DataFrame(X, columns=list(preprocessor.get_feature_names_out()))
-        logger.debug(f"Preprocessed data: {df.head()}")
+        logger.debug(f"Preprocessed input data: {df.columns.tolist()}")
 
         return df
 
@@ -321,15 +349,16 @@ class DataModel:
         logger.info("Preparing data...")
         target_columns = column if column and column in self.input_data.columns else [col for col in self.input_data.columns if col.endswith('_bw')]
 
+        zero_factor = self.input_data.apply(lambda row: 0 if row["read_volume"] == 0 and row["write_volume"] == 0 else 1, axis=1)
         logger.debug(f"Target columns: {target_columns}")
         # extract features
         X = self._prepare_input_data(self.input_data)
-        y = self.input_data[target_columns].div(X['remainder__avg_io_size'], axis=0)
+        y = self.input_data[target_columns].multiply(zero_factor, axis=0).div(X['remainder__avg_io_size'].replace(0, np.nan), axis=0).fillna(0)
         logger.debug(f"Features: {X.columns.tolist()}")
 
         return X, y
 
-    def train_model(self, X, y):
+    def train_model(self):
         """
         Trains TierModel instances for each tier column in the target data.
 
@@ -338,17 +367,49 @@ class DataModel:
                 Input data.
             y: pandas DataFrame of shape (n_samples, n_targets)
                 Target data.
-
+        TODO: split data into train and test sets in this method
         Returns:
             models: dictionary
                 Dictionary containing trained TierModel instances, one per target column in the target data.
         """
-        models = {}
-        for col in y.columns:
+        self.models = {}
+        for col in self.y.columns:
             model = TierModel()
-            model.fit(X, y[col])
-            models[col] = model
-        return models
+            # Train model
+            model.fit(self.X, self.y[col])
+            self.models[col] = model
+            # Compute scores for each model
+            score = model.score(self.X, self.y[col])
+            logger.info(f"Model {type(model).__bases__[0].__name__} for Tier: {col} trained with score:{score}")
+
+        return self.models
+
+    def predict(self, input_data):
+        """
+        Predicts the target values for input data.
+
+        Parameters:
+            input_data: pandas DataFrame of shape (n_samples, n_features)
+                Input data.
+
+        Returns:
+            pandas DataFrame of shape (n_samples, n_targets)
+                Predicted target values.
+        """
+        if not isinstance(input_data, pd.DataFrame):
+            raise ValueError("Input data must be a pandas DataFrame.")
+        # Add 'nodes' column if it doesn't exist
+        if "nodes" not in input_data.columns:
+            input_data["nodes"] = 1
+        # Prepare input data
+        X = self._prepare_input_data(input_data)
+        # Predict target values for each model
+        predictions = {}
+        for col, model in self.models.items():
+            y_pred = model.predict(X)
+            predictions[col] = y_pred
+
+        return pd.DataFrame(predictions)
 
 
 class AbstractModel(ABC):
