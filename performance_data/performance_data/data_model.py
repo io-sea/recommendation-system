@@ -24,6 +24,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
+from sklearn.model_selection import KFold
 from sklearn.base import RegressorMixin
 
 
@@ -182,6 +183,36 @@ class TierModel(RegressionModel):
                 Predicted target values.
         """
         return self.model.predict(X)
+
+    def get_params(self, deep=True):
+        """
+        Get parameters for this estimator.
+
+        Parameters:
+            deep: bool, default=True
+                If True, will return the parameters for this estimator and
+                contained subobjects that are estimators.
+
+        Returns:
+            params: dict
+                Parameter names mapped to their values.
+        """
+        return self.model.get_params(deep=deep)
+
+    def set_params(self, **params):
+        """
+        Set the parameters of this estimator.
+
+        Parameters:
+            **params: dict
+                Estimator parameters.
+
+        Returns:
+            self: object
+                Estimator instance.
+        """
+        self.model.set_params(**params)
+        return self
 
 
 class DataModel:
@@ -364,6 +395,7 @@ class DataModel:
 
     def model_name(self, col):
         # model corresponds to self.models[col], col
+        # name is the name of the model class with lower case and underscores
         return re.sub('(?<!^)(?=[A-Z])', '_',
                       f"{type(self.models[col].model).__name__ + '_' + col}.joblib").lower()
 
@@ -383,12 +415,24 @@ class DataModel:
             models: dictionary
                 Dictionary containing trained TierModel instances, one per target column in the target data.
         """
-        X_train, X_test, y_train, y_test = train_test_split(self.X, self.y, test_size=test_size, random_state=random_state)
+        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(self.X, self.y, test_size=test_size, random_state=random_state)
+        kfold = KFold(n_splits=5, shuffle=True, random_state=random_state)
         for col in self.y.columns:
-            self.models[col] = self.models[col].fit(X_train, y_train[col])
-            # Compute scores for each model
-            score = self.models[col].score(X_test, y_test[col])
-            logger.info(f"Model {self.models[col].model} for Tier: {col} trained with score:{score}")
+            # self.models[col] = self.models[col].fit(self.X_train, self.y_train[col])
+            # # Compute scores for each model
+            # score = self.models[col].score(self.X_test, self.y_test[col])
+            scores = []
+
+            for train_index, test_index in kfold.split(self.X_train):
+                X_train, X_test = self.X_train.iloc[train_index], self.X_train.iloc[test_index]
+                y_train, y_test = self.y_train[col].iloc[train_index], self.y_train[col].iloc[test_index]
+
+                self.models[col] = self.models[col].fit(X_train, y_train)
+                score = self.models[col].score(X_test, y_test)
+                scores.append(score)
+
+            score = np.mean(scores)
+            logger.info(f"Model {self.models[col].model} for Tier: {col} trained with score:{score:.3}")
             # Save the model if its score is above the threshold
             if score > self.THRESHOLD:
                 self.save_model(col, save_dir)
