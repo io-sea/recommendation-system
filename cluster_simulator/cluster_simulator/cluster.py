@@ -12,6 +12,7 @@ Please contact Bull S. A. S. for details about its license.
 """
 
 import simpy
+import os
 from loguru import logger
 import numpy as np
 import math
@@ -20,6 +21,7 @@ import yaml
 import joblib
 from cluster_simulator.utils import convert_size, BandwidthResource
 from cluster_simulator import DEFAULT_CONFIG_PATH
+from performance_data.data_model import load_and_predict
 
 
 def convert_size(size_bytes):
@@ -54,6 +56,19 @@ def monitor_step(data, lst):
     logger.debug(state)
     if isinstance(data, simpy.Store):
         data.put(lst)
+
+def read_yaml(input_data):
+    # Check if the input is a file path
+    if isinstance(input_data, str) and os.path.isfile(input_data):
+        with open(input_data, 'r') as file:
+            data = yaml.safe_load(file)
+    # Check if the input is a YAML data string
+    elif isinstance(input_data, str):
+        data = yaml.safe_load(input_data)
+    else:
+        raise ValueError("Invalid input. Please provide a YAML file path or a YAML data string.")
+
+    return data
 
 
 class Cluster:
@@ -123,8 +138,9 @@ class Cluster:
 
         if config_path:
             logger.debug(f"Loading configuration from {config_path}")
-            with open(config_path) as f:
-                config = yaml.safe_load(f)
+            # with open(config_path) as f:
+            #     config = yaml.safe_load(f)
+            config = read_yaml(config_path)
 
             # Override default values if provided in YAML file
             default_config = config.get('defaults')
@@ -326,7 +342,7 @@ class Tier:
         #         bandwidth_model = pickle.load(f)
         #     self.max_bandwidth = bandwidth_model
 
-    def get_max_bandwidth(self, cores=1, operation='read', pattern=1):
+    def get_max_bandwidth(self, cores=1, operation='read', pattern=1, new_data=None):
         """
         Returns the maximum bandwidth of the tier for the given parameters.
 
@@ -339,6 +355,10 @@ class Tier:
             float: The maximum bandwidth in bytes/sec.
 
         """
+        if self.bandwidth_model_path:
+            predictions = load_and_predict(self.bandwidth_model_path, new_data, iops=True)
+            return predictions.values.flatten()/1e6
+
         if isinstance(self.max_bandwidth, dict):
             return (self.max_bandwidth[operation]['seq'] * pattern +
                     self.max_bandwidth[operation]['rand'] * (1-pattern)) * cores
@@ -354,7 +374,7 @@ class Tier:
 
         """
         description = "\n-------------------\n"
-        description += (f"Tier: {self.name} with capacity = {convert_size(self.capacity.capacity)}\n")
+        description += (f"Tier:({type(self).__name__}) {self.name} with capacity = {convert_size(self.capacity.capacity)}\n")
         description += ("{:<12} {:<12} {:<12}".format('Operation', 'Pattern', 'Bandwidth MB/s')+"\n")
         if isinstance(self.max_bandwidth, dict):
             for op, inner_dict in self.max_bandwidth.items():
@@ -363,8 +383,8 @@ class Tier:
 
         if isinstance(self.max_bandwidth, (int, float)):
             description += ("{:<12} {:<12} {:<12}".format("any", "any", float(self.max_bandwidth))+"\n")
-        # else:
-        #     description += f"Bandwidth model path: {self.bandwidth_model_path}\n"
+        if self.bandwidth_model_path:
+            description += f"Bandwidth model path: {self.bandwidth_model_path}\n"
         return description
 
 
