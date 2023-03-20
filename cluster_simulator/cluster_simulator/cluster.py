@@ -357,7 +357,7 @@ class Tier:
         """
         if self.bandwidth_model_path:
             predictions = load_and_predict(self.bandwidth_model_path, new_data, iops=True)
-            return predictions.values.flatten()/1e6
+            return predictions.values.flatten()
 
         if isinstance(self.max_bandwidth, dict):
             return (self.max_bandwidth[operation]['seq'] * pattern +

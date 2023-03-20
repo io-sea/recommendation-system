@@ -16,6 +16,9 @@ import numpy as np
 import joblib
 from loguru import logger
 
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.wrappers.scikit_learn import KerasRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.compose import ColumnTransformer
@@ -215,6 +218,7 @@ class TierModel(RegressionModel):
         return self
 
 
+
 class DataModel:
     """
     Class for preparing data from a CSV file and training multiple TierModel instances.
@@ -299,6 +303,7 @@ class DataModel:
         Returns:
             pandas.DataFrame: The prepared input data.
         """
+        data = data.copy()
         logger.info(f"Preparing input data with columns: {list(data.columns)}")
         # dropout targets
         target_columns = [col for col in data.columns if col.endswith('_bw')]
@@ -389,7 +394,14 @@ class DataModel:
         # extract features
         X = DataModel._prepare_input_data(self.input_data)
         y = self.input_data[target_columns].multiply(zero_factor, axis=0).div(X['remainder__avg_io_size'].replace(0, np.nan), axis=0).fillna(0)
+
+        # Find the maximum value for each column in the target_columns
+        max_values = y[target_columns].max()
+
+        # Normalize y by dividing each column with its respective maximum value
+        #y_normalized = y.div(max_values, axis=1)
         logger.debug(f"Features: {X.columns.tolist()}")
+        #logger.info(f"Max values: {max_values}")
 
         return X, y
 
@@ -501,7 +513,7 @@ def load_and_predict(model_path, new_data, iops=False):
             The new data for which to make predictions.
         iops: bool, optional, default=False
             If True, adjust the predictions based on the 'remainder__avg_io_size' column
-            in the input data. This is useful when predicting IOPS instead of latency.
+            in the input data. This is useful when predicting IOPS instead of bandwidth.
 
     Returns:
         pandas DataFrame: The predicted values.
@@ -522,7 +534,6 @@ def load_and_predict(model_path, new_data, iops=False):
 
     # Make predictions
     model_predictions = pd.DataFrame(model.predict(X))
-
     # Adjust predictions if iops is True
     if iops:
         predictions = model_predictions * X['remainder__avg_io_size'].values.reshape(-1, 1)
@@ -535,168 +546,56 @@ def load_and_predict(model_path, new_data, iops=False):
     return predictions
 
 
-
-class AbstractModel(ABC):
-    """An abstract class for training and evaluating a regression model on performance data.
+class DeepNNModel(TierModel):
+    """
+    Subclass of TierModel that creates a deep neural network (NN) model for regression tasks.
 
     Attributes:
-        data: A pandas DataFrame containing the performance data loaded from the CSV file.
-        X: A pandas DataFrame containing the features of the performance data.
-        y: A pandas DataFrame containing the targets of the model.
-        X_train: A pandas DataFrame containing the training features of the performance data.
-        X_test: A pandas DataFrame containing the test features of the performance data.
-        y_train: A pandas DataFrame containing the training targets of the model.
-        y_test: A pandas DataFrame containing the test targets of the model.
-        preprocessor: A ColumnTransformer object for transforming the data into numerical format.
-        model: A dictionary containing the trained models objects.
-        model_name: A string representing the name of the trained model.
-
+        depth: int
+            The number of hidden layers in the neural network.
+        width: int
+            The number of neurons in each hidden layer.
+        input_dim: int
+            The number of input features for the neural network.
     """
-    SCORE_THRESHOLD = 0.7
-
-    def __init__(self):
-        """Initializes the AbstractModel.
-
-        Raises:
-            AssertionError: If no elements found in data.
-
+    def __init__(self, depth=15, width=32, input_dim=14, epochs=50, **kwargs):
         """
-        # load data
-        self.input_data = pd.read_csv(GENERATED_DATASET_FILE)
-        self.data = {}
-        self.model = {}
-        # extract list of target tiers
-        # target_tiers = [col.split("_bw")[0] for col in data.columns if col.endswith('_bw')]
-        self.target_tiers = [col for col in self.input_data.columns if col.endswith('_bw')]
-        assert not self.input_data.empty, "No elements found in data."
-        for tier_col in self.target_tiers:
-            # one model per tier
-            self.model[tier_col] = {}
-            # one target y per tier
-            self.data[tier_col] = {}
-            # get dataframes for X and y
-            X, y = self._prepare_data(column=tier_col)
-            assert not y.empty, "No targets found in data."
-            # split data into train and test sets
-            self.data["X_train"], self.data["X_test"], self.data[tier_col]["y_train"], self.data[tier_col]["y_test"] = train_test_split(X, y, test_size=0.2, random_state=0)
-            # register model name
-            self.model[tier_col]["model_name"] = re.sub('(?<!^)(?=[A-Z])', '_', f"{type(self).__name__ + '_' + tier_col}.joblib").lower()
-            # register model path
-            self.model[tier_col]["model_path"] = os.path.join(MODELS_DIRECTORY, self.model[tier_col]["model_name"])
+        Initializes the DeepNNModel object with the specified depth and width.
 
-            # if already registered model, load it
-            if os.path.exists(self.model[tier_col]["model_path"]):
-                logger.info(f"Loading model from {self.model[tier_col]['model_path']}")
-                self.model[tier_col] = joblib.load(self.model[tier_col]["model_path"])
-            else:
-                logger.info(f"Creating a new model: {self.model[tier_col]['model_name']}")
-                self.model[tier_col]["model"] = self._create_model()
-
-    @ abstractmethod
-    def _create_model(self):
+        Parameters:
+            depth: int
+                The number of hidden layers in the neural network.
+            width: int
+                The number of neurons in each hidden layer.
+            input_dim: int
+                The number of input features for the neural network.
+            **kwargs: dict
+                Additional keyword arguments for KerasRegressor.
         """
-        Creates the model object.
+        self.depth = depth
+        self.width = width
+        self.input_dim = input_dim
+        self.epochs = epochs
+        super().__init__(regressor=self._build_nn_model(), **kwargs)
+
+    def _build_nn_model(self):
         """
-        pass
-
-    def save_model(self, tier_col=None):
-        """
-        Saves the trained model in joblib format.
-
-        Args:
-            tier_col (str, optional): The name of the target tier column to save. If None, all models will be saved. Defaults to None.
-        """
-
-        if tier_col is not None:
-            if tier_col not in self.target_tiers:
-                raise ValueError(f"Invalid tier column: {tier_col}")
-            if tier_col not in self.model:
-                raise ValueError(f"No model found for tier column: {tier_col}")
-            if "model" not in self.model[tier_col]:
-                raise ValueError(f"No trained model found for tier column: {tier_col}")
-            if not os.path.exists(os.path.dirname(self.model[tier_col]["model_path"])):
-                os.makedirs(os.path.dirname(self.model[tier_col]["model_path"]))
-            joblib.dump(self.model[tier_col], self.model[tier_col]["model_path"])
-            logger.info(f"Model {self.model[tier_col]['model_name']} for {tier_col} saved to {self.model[tier_col]['model_path']}")
-        else:
-            for target_tier in self.target_tiers:
-                if "model" in self.model[target_tier]:
-                    if not os.path.exists(os.path.dirname(self.model[target_tier]["model_path"])):
-                        os.makedirs(os.path.dirname(self.model[target_tier]["model_path"]))
-                    joblib.dump(self.model[target_tier], self.model[target_tier]["model_path"])
-                    logger.info(f"Model {self.model[target_tier]['model_name']} for {target_tier} saved to {self.model[target_tier]['model_path']}")
-
-    # def load_model(self, tier_col=None):
-    #     """
-    #     Loads a trained model from disk in joblib format.
-
-    #     Args:
-    #         tier_col (str, optional): The name of the target tier column to load. If None, all models will be loaded. Defaults to None.
-    #     """
-    #     if tier_col is not None:
-    #         if tier_col not in self.target_tiers:
-    #             raise ValueError(f"Invalid tier column: {tier_col}")
-    #         if tier_col not in self.model:
-    #             raise ValueError(f"No model found for tier column: {tier_col}")
-    #         if "model" not in self.model[tier_col]:
-    #             raise ValueError(f"No trained model found for tier column: {tier_col}")
-    #         if os.path.exists(self.model[tier_col]["model_path"]):
-    #             self.model[tier_col]["model"] = joblib.load(self.model[tier_col]["model_path"])
-    #             logger.info(f"Model {self.model[tier_col]['model_name']} for {tier_col} loaded from {self.model[tier_col]['model_path']}")
-    #         else:
-    #             logger.warning(f"No model found at {self.model[tier_col]['model_path']}")
-    #     else:
-    #         for target_tier in self.target_tiers:
-    #             if "model" in self.model[target_tier]:
-    #                 if os.path.exists(self.model[target_tier]["model_path"]):
-    #                     self.model[target_tier]["model"] = joblib.load(self.model[target_tier]["model_path"])
-    #                     logger.info(f"Model {self.model[target_tier]['model_name']} for {target_tier} loaded from {self.model[target_tier]['model_path']}")
-    #                 else:
-    #                     logger.warning(f"No model found at {self.model[target_tier]['model_path']}")
-
-    def train_model(self):
-        """
-        Trains the regression model on the training data and saves it to disk if the score on the test set is better than a threshold.
-        """
-        for target_tier in self.target_tiers:
-            logger.info("Training models...")
-            print(self.model[target_tier])
-            print(type(self.model[target_tier]))
-            self.model[target_tier]["model"].fit(self.data["X_train"], self.data[target_tier]["y_train"])
-            self.model[target_tier]["score"] = self.model[target_tier]["model"].score(self.data["X_test"], self.data[target_tier]["y_test"])
-            logger.info(f"Model score for tier {target_tier}: {self.model[target_tier]['score']}")
-
-            if self.model[target_tier]["score"] > self.SCORE_THRESHOLD:
-                self.save_model(tier_col=target_tier)
-                # if not os.path.exists(os.path.dirname(self.model[target_tier]["model_path"])):
-                #     os.makedirs(os.path.dirname(self.model[target_tier]["model_path"]))
-                # joblib.dump(self.model[target_tier]["model"], self.model[target_tier]["model_path"])
-                # logger.info(f"Saving Model for {target_tier}: {self.model[target_tier]['model_path']} | saved with score: {self.model[target_tier]['score']}")
-
-    def evaluate_model(self):
-        """
-        Evaluates the model on the test data and returns the score.
+        Builds the neural network model using Keras.
 
         Returns:
-            The score of the model on the test data.
+            nn_model: KerasRegressor
+                The KerasRegressor object wrapping the neural network model.
         """
-        for target_tier in self.target_tiers:
-            self.model[target_tier]["score"] = self.model[target_tier]["model"].score(self.data["X_test"], self.data[target_tier]["y_test"])
-            logger.info(f"Model: {self.model[target_tier]['model_name']} | Score on test data: {self.model[target_tier]['score']}")
+        def create_model():
+            model = Sequential()
+            model.add(Dense(self.width, input_dim=self.input_dim, activation='relu'))
 
-    def predict(self, new_data, process_input=True):
-        """
-        Makes predictions on new data using the trained model.
+            for _ in range(self.depth - 1):
+                model.add(Dense(self.width, activation='relu'))
 
-        Args:
-            new_data (pandas.DataFrame): The new data for which predictions are to be made.
+            model.add(Dense(1, activation='linear'))
+            model.compile(loss='mean_squared_error', optimizer='adam')
+            return model
 
-        Returns:
-            The predictions made by the model on the new data.
-        """
-        predictions = {}
-        input_data = DataModel._prepare_input_data(new_data) if process_input else new_data
-        for target_tier in self.target_tiers:
-            predictions[target_tier] = self.model[target_tier]["model"].predict(input_data)
-            logger.trace(f"Predictions made by the model {self.model[target_tier]['model_name']}: {predictions}")
-        return predictions
+        nn_model = KerasRegressor(build_fn=create_model, epochs=self.epochs)
+        return nn_model

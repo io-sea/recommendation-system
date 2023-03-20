@@ -12,14 +12,15 @@ import pandas as pd
 import numpy as np
 from unittest.mock import MagicMock, patch, Mock
 from performance_data.data_table import PhaseData, DataTable
-from performance_data.data_model import PhaseGenerator, RegressionModel, TierModel, DataModel
+from performance_data.data_model import PhaseGenerator, RegressionModel, TierModel, DataModel, DeepNNModel
 from performance_data.data_model import load_and_predict
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.compose import ColumnTransformer
 from sklearn.datasets import make_regression
-
+from sklearn.metrics import mean_squared_error
+from copy import deepcopy
 
 # whether or not populate the dataset file with new data
 __POPULATE_DATASET__ = False
@@ -372,8 +373,7 @@ class TestDataModelLoadAndPredict(unittest.TestCase):
                                         'read_volume': [100, 200],
                                         'write_volume': [300, 400],
                                         'read_io_pattern': ['seq', 'rand'],
-                                        'write_io_pattern': ['uncl', 'stride']
-        })
+                                        'write_io_pattern': ['uncl', 'stride']        })
 
     def test_load_and_predict(self):
         # Call the load_and_predict function
@@ -387,132 +387,28 @@ class TestDataModelLoadAndPredict(unittest.TestCase):
 
 
 
-            # Add additional checks here to ensure that the trained models are correct.
-# class TestAbstractModel(unittest.TestCase):
-#     """
-#     A test suite for the AbstractModel class and its methods.
-#     """
+class TestDeepNNModel(unittest.TestCase):
 
-#     def setUp(self):
-#         """
-#         Sets up a DummyModel instance for testing.
-#         """
-#         class DummyModel(AbstractModel):
-#             def _create_model(self):
-#                 return LinearRegression()
-#         self.model = DummyModel()
+    def setUp(self):
+        self.X_train = np.random.rand(100, 14)
+        self.y_train = np.random.rand(100)
+        self.X_test = np.random.rand(50, 14)
 
-#     def test_models_exist(self):
-#         """
-#         Sets up a DummyModel instance for testing.
-#         """
-#         self.assertIsInstance(self.model.model, dict)
-#         self.assertIsInstance(self.model.data, dict)
+        self.tier_model = TierModel(regressor=DeepNNModel(depth=3, width=32, input_dim=14))
 
-#     def test_model_path(self):
-#         """
-#         Tests that the model_path attribute is a string.
-#         """
-#         for tier in self.model.target_tiers:
-#             self.assertIsInstance(self.model.model[tier]["model_path"], str)
+    def test_deep_nn_model_fit(self):
+        model = deepcopy(self.tier_model)
+        model.fit(self.X_train, self.y_train)
 
-#     def test_prepare_data(self):
-#         """
-#         Tests that the data, X, and y attributes are not None and are of the correct type.
-#         """
-#         self.assertIsNotNone(self.model.data)
-#         self.assertIsInstance(self.model.data["X_train"], pd.DataFrame)
-#         self.assertFalse(self.model.data["X_train"].empty)
-#         for tier in self.model.target_tiers:
-#             self.assertIsInstance(self.model.data[tier]["y_train"], pd.Series)
-
-#     def test_prepare_input_data(self):
-#         """
-#         Tests that the _prepare_input_data method returns a DataFrame with the correct columns.
-#         """
-#         some_data = pd.DataFrame({'nodes': [1, 1, 1, 1],
-#                                   'read_volume': [20e6, 30e6, 30e6, 30e6],
-#                                   'write_volume': [10e6, 50e6, 30e6, 30e6],
-#                                   'read_io_pattern': ['rand', 'uncl', 'stride', 'seq'],
-#                                   'write_io_pattern': ['stride', 'seq', 'uncl', 'rand'], 'read_io_size': [512e3, 4e3, 8e6, 1e6],
-#                                   'write_io_size': [512e3, 8e6, 4e3, 1e6]})
-#         some_input_data = self.model._prepare_input_data(some_data)
-#         self.assertIsInstance(some_input_data, pd.DataFrame)
-#         self.assertLessEqual(len(some_data.columns), len(some_input_data.columns))
-
-#     @patch('joblib.dump')
-#     def test_save_model(self, mock_dump):
-#         # Set up a mock model path
-#         model_path = 'path/to/model.joblib'
-
-#         # Call the save_model method
-#         self.model.save_model()
-
-#         # Check that dump was called
-#         self.assertTrue(mock_dump.called)
-
-#     def test_model_is_trained(self):
-#         """
-#         Tests that the model attribute is not None after training the model.
-#         """
-#         self.model.train_model()
-#         self.assertIsNotNone(self.model.model)
-
-#     def test_train_evaluate(self):
-#         """
-#         Test the training, evaluation, and prediction functionality of the model.
-
-#         Trains the model, evaluates it on test data, and makes predictions on new data to ensure that the model is functioning as expected. The test passes if the model is successfully trained and evaluated, and the predicted output has the expected shape.
-
-#         Returns:
-#             None.
-#         """
-#         self.model.train_model()
-#         score = self.model.evaluate_model()
-
-#     def test_predict(self):
-#         # Assert that the model has been trained and will predict on new data
-#         new_data = pd.DataFrame({'nodes': [1, 1, 1, 1],
-#                                  'read_volume': [20e6, 30e6, 30e6, 30e6],
-#                                  'write_volume': [10e6, 50e6, 30e6, 30e6],
-#                                  'read_io_pattern': ['rand', 'uncl', 'stride', 'seq'], 'write_io_pattern': ['stride', 'seq', 'uncl', 'rand'], 'read_io_size': [512e3, 4e3, 8e6, 1e6],
-#                                  'write_io_size': [512e3, 8e6, 4e3, 1e6]})
-#         prepared_new_data = self.model._prepare_input_data(new_data)
-#         self.assertIsInstance(prepared_new_data, pd.DataFrame)
-#         # train on initial data
-#         self.model.train_model()
-#         predictions = self.model.predict(new_data)
-#         self.assertIsInstance(predictions, dict)
-#         self.assertTrue(bool(predictions))
-#         for key, prediction in predictions.items():
-#             self.assertEqual(prediction.shape[0], 4)
-#             self.assertIsInstance(prediction, np.ndarray)
+    def test_deep_nn_model_predict(self):
+        model = deepcopy(self.tier_model)
+        model.fit(self.X_train, self.y_train)
+        predictions = model.predict(self.X_test)
+        self.assertEqual(predictions.shape, (50,))
 
 
-# class TestLoadModel(unittest.TestCase):
-#     def setUp(self):
-#         """
-#         Sets up a DummyModel instance for testing.
-#         """
-#         class DummyModel(AbstractModel):
-#             def _create_model(self):
-#                 return LinearRegression()
-#         self.model = DummyModel()
-#         self.model.train_model()
-#         self.model.save_model()
-#         self.new_data = pd.DataFrame({'nodes': [1, 1, 1, 1],
-#                                       'read_volume': [20e6, 30e6, 30e6, 30e6],
-#                                       'write_volume': [10e6, 50e6, 30e6, 30e6],
-#                                       'read_io_pattern': ['rand', 'uncl', 'stride', 'seq'], 'write_io_pattern': ['stride', 'seq', 'uncl', 'rand'], 'read_io_size': [512e3, 4e3, 8e6, 1e6],
-#                                       'write_io_size': [512e3, 8e6, 4e3, 1e6]})
-#     def test_load(self):
-#         # NOTE: to be finished
-#         for tier in self.model.target_tiers:
-#             path = self.model.model[tier]["model_path"]
-#         loaded_model = load_model(path)
-#         print(loaded_model)
-#         print(type(loaded_model))
-#         predictions = loaded_model["model"].predict(self.new_data)
-#         print(predictions)
+
+
+
 if __name__ == '__main__':
     unittest.main()
