@@ -118,6 +118,7 @@ class TestAppInit(unittest.TestCase):
         read_bw = [10, 12]
         write = [0, 5e9]
         write_bw = [4, 6]
+        bw = [55, 55]
         tiers = [0, 1]
         app = Application(self.env,
                           compute=compute,

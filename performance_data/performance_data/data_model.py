@@ -235,9 +235,10 @@ class DataModel:
         train_models():
             Trains multiple TierModel instances, one per target column in the target data.
     """
-    THRESHOLD = 0.7
+    THRESHOLD = 1.7
 
     def __init__(self, data_file=GENERATED_DATASET_FILE, cats=DEFAULT_CATEGORIES, models=None):
+        logger.info("Initializing DataModel object.")
         self.data_file = data_file
         self.cats = cats
         self.X = None
@@ -248,7 +249,7 @@ class DataModel:
         self.X, self.y = self._prepare_data()
 
         self.models = {}
-        logger.info("Initializing DataModel.")
+        logger.info("Initializing models.")
 
         if models is None:
             logger.debug("No models provided. Initializing default models.")
@@ -284,9 +285,9 @@ class DataModel:
         Returns:
             None
         """
+        logger.info(f"Ingesting input data.")
         self.input_data = pd.read_csv(self.data_file)
         self.target_tiers = [col for col in self.input_data.columns if col.endswith('_bw')]
-        logger.info(f"Ingesting input data in dataframe of size {self.input_data.shape}")
         logger.info(f"Target tiers: {self.target_tiers}")
         assert not self.input_data.empty, "No elements found in data."
 

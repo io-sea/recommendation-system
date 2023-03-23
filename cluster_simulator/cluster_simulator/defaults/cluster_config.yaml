@@ -4,7 +4,7 @@ defaults:
 
 tiers:
   - name: tier1
-    capacity: 100e9
+    capacity: 100.e+9
     max_bandwidth:
       read:
         seq: 200
@@ -14,7 +14,7 @@ tiers:
         rand: 50
 
   - name: tier2
-    capacity: 500e9
+    capacity: 500.e+9
     max_bandwidth:
       read:
         seq: 500
@@ -24,12 +24,12 @@ tiers:
         rand: 150
 
   - name: tier3
-    capacity: 500e9
+    capacity: 500.e+9
     bandwidth_model_path: "models/tier3_bandwidth.joblib"
 
 ephemeral_tier:
   name: ephemeral
-  capacity: 1e9
+  capacity: 50.e+9
   max_bandwidth:
     read:
       seq: 500

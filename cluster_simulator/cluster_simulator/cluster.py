@@ -145,8 +145,10 @@ class Cluster:
             # Override default values if provided in YAML file
             default_config = config.get('defaults')
             if default_config:
-                self.compute_nodes = simpy.Resource(env, capacity=compute_nodes or default_config.get('compute_nodes'))
-                self.cores_per_node = simpy.Resource(env, capacity=cores_per_node or default_config.get('cores_per_node'))
+                compute_nodes = compute_nodes or default_config.get('compute_nodes')
+                cores_per_node = cores_per_node or default_config.get('cores_per_node')
+                self.compute_nodes = simpy.Resource(env, capacity=compute_nodes)
+                self.cores_per_node = simpy.Resource(env, capacity=cores_per_node*compute_nodes)
 
             # Create tiers from configuration
             if tiers is None:
@@ -234,8 +236,8 @@ class Cluster:
             return (tier.max_bandwidth[operation]['seq'] * pattern +
                     tier.max_bandwidth[operation]['rand'] * (1-pattern)) * cores * 1e6
 
-        if isinstance(self.max_bandwidth, (int, float)):
-            return self.max_bandwidth
+        if isinstance(tier.max_bandwidth, (int, float)):
+            return tier.max_bandwidth
         # elif isinstance(self.max_bandwidth, (int, float)):
         #     return self.max_bandwidth
 
@@ -356,6 +358,7 @@ class Tier:
 
         """
         if self.bandwidth_model_path:
+            assert new_data is not None, "provide new data for bandwidth prediction"
             predictions = load_and_predict(self.bandwidth_model_path, new_data, iops=True)
             return predictions.values.flatten()
 

@@ -33,7 +33,7 @@ def accumulate_intervals(x_phase, y_phase):
     return points, y
 
 
-def display_apps(data, width=800, height=600):
+def display_apps_dataflow(data, width=800, height=600):
 
     DEFAULT_COLORS = ['rgb(31, 119, 180)', 'rgb(255, 127, 14)',
                       'rgb(44, 160, 44)', 'rgb(214, 39, 40)',
@@ -421,6 +421,134 @@ def display_run(data, cluster, width=800, height=600, nbr_points=None):
 
     return fig
 
+
+def display_apps_dataflow(data, cluster, width=800, height=600, nbr_points=None):
+    # | Monitoring| app: P6 | type: movement | cpu_usage: 1 | t_start: 281.0 | t_end: 287.5 | bandwidth_concurrency: 1 | bandwidth: 40.0 MB/s | phase_duration: 6.5 | volume: 260.0 MB | tiers: ['HDD'] | data_placement: {'placement': 'HDD', 'source': 'BB'} | init_level: {'HDD': 11740000000.0, 'BB': 8490000000.0} | tier_level: {'HDD': 12000000000.0, 'BB': 8490000000.0} | BB_level: 8490000000.0
+    # | Monitoring| app: N6 | type: eviction | cpu_usage: 1 | t_start: 93.5 | t_end: 93.5 | bandwidth_concurrency: 3 | bandwidth: inf MB/s | phase_duration: 0 | volume: 740.0 MB | tiers: ['HDD'] | data_placement: {'placement': 'BB'} | init_level: {'HDD': 2740000000.0, 'BB': 10000000000.0} | tier_level: {'HDD': 2740000000.0, 'BB': 9260000000.0} | BB_level: 9260000000.0
+
+    jet_colors = colors.PLOTLY_SCALES['Viridis']
+    apps = list(set(list(data['app'] for data in data.items)))
+    # sort by app key
+    items = sorted(data.items, key=itemgetter('app'))
+    # list of apps
+    list_apps = ["app#"+app for app, _ in groupby(items,  key=itemgetter('app'))]
+
+
+
+    subplots_list = list_apps
+
+    fig = make_subplots(rows=len(subplots_list), cols=1, shared_xaxes=True,
+                        # vertical_spacing=0.2,
+                        subplot_titles=subplots_list)
+
+    # iterate on apps to plot their dataflows
+    i = 1
+    for app, app_elements in groupby(items,  key=itemgetter('app')):
+        # print(f"----------{app}----------")
+        # app_color = DEFAULT_COLORS[i]
+        offset = 0
+
+        app_time = []
+        phase_bw_read = []
+        phase_bw_write = []
+        app_bw_read = []
+        app_bw_write = []
+        t_starts = []
+        t_ends = []
+
+        text = []
+
+        x_mvt = []
+        y_mvt = []
+        text_mvt = []
+
+        for phase in app_elements:
+            if phase['type'] not in ['movement', 'eviction']:
+                t_starts.append(phase["t_start"])
+                t_ends.append(phase["t_end"])
+
+                if phase['type'] == 'compute':
+                    # remove intermediate 0 padding if not final
+                    app_bw_read.append(0)
+                    app_bw_write.append(0)
+
+                elif phase["type"] == "read":
+                    app_bw_read.append(phase["bandwidth"])
+                    app_bw_write.append(0)
+
+                elif phase["type"]  == "write":
+                    app_bw_read.append(0)
+                    app_bw_write.append(phase["bandwidth"])
+
+                else:
+                    app_bw_read.append(0)
+                    app_bw_write.append(0)
+
+
+                placement = "|on:"+phase["data_placement"]["placement"] if phase["data_placement"] else ''
+
+                text.append(phase["type"].upper() + placement + "|volume="+convert_size(phase["volume"]))
+                text.append(phase["type"].upper() + placement + "|volume="+convert_size(phase["volume"]))
+
+            if phase["type"] in ['movement']:
+                x_mvt.append(phase["t_start"])
+                x_mvt.append(phase["t_end"])
+                y_mvt.append(phase["bandwidth"])
+                y_mvt.append(phase["bandwidth"])
+                placement = "|in:"+phase["data_placement"]["placement"] if phase["data_placement"] else ''
+                source = ""
+                if "data_placement" in phase and "source" in phase["data_placement"]:
+                    source = "|from:"+phase["data_placement"]["source"]
+
+                text_mvt.append(phase["type"].upper() + placement + source + "|volume="+convert_size(phase["volume"]))
+                text_mvt.append(phase["type"].upper() + placement + "|volume="+convert_size(phase["volume"]))
+
+        # do the interpolation
+        if not nbr_points:
+            N = 1 + int(max(t_ends) - min(t_starts))
+        else:
+            N = nbr_points
+        app_time = np.linspace(min(t_starts), max(t_ends), N).tolist()
+        app_bw_read = interpolate_signal_from_simulation(app_time, t_starts, t_ends, app_bw_read)
+        app_bw_write = interpolate_signal_from_simulation(app_time, t_starts, t_ends, app_bw_write)
+        # plot the app phases
+        fig.add_trace(go.Scatter(x=np.array(app_time), y=np.array(app_bw_read),
+                                    text=text,
+                                    textposition="top center",
+                                    name="app#"+app+"#read", line_shape='linear'),
+                                    #line=dict(color=jet_colors[i][1])),
+                                    row=i, col=1)
+        fig.add_trace(go.Scatter(x=np.array(app_time), y=np.array(app_bw_write),
+                                    text=text,
+                                    textposition="top center",
+                                    name="app#"+app+"#write", line_shape='linear'),
+                                    #line=dict(color=jet_colors[i][1])),
+                                    row=i, col=1)
+        fig.add_trace(go.Scatter(x=np.array(x_mvt), y=np.array(y_mvt),
+                                    text=text_mvt,
+                                    textposition="top center",
+                                    name=app + " mvt", #line_shape='linear',
+                                    line={'shape':'linear','dash': 'dot'}), row=i, col=1)
+        fig['layout']['yaxis'+str(i)]['title'] = 'dataflow in MB/s'
+        fig.update_xaxes(title_text="time in s")
+        i += 1
+
+
+    # # CPU tracing
+    # points, values = accumulate_intervals(x_phase, y_phase)
+    # fig.add_trace(go.Scatter(x=np.array(points), y=np.array(values),
+    #                             line_shape='hv', showlegend=False), row=i, col=1)
+
+    # fig.add_trace(go.Scatter(x=np.array([points[0], points[-1]]), y=np.array([cluster.compute_cores.capacity]*2), text=["Maximum available cores in cluster=" + str(cluster.compute_cores.capacity)]*2, line_shape='hv', showlegend=False,
+    #                             line=dict(color='red', width=3, dash='dot')), row=i, col=1)
+    # fig['layout']['yaxis'+str(i)]['title'] = 'CPU usage'
+    # i += 1
+
+    fig.update_layout(width=width, height=height, title_text="Application Dataflow")
+
+
+
+    return fig
 
 def get_execution_signal(data):
     """Extract from data structure generated by an App execution the subsequent apps' signal in order to be able to get traces independantely."""

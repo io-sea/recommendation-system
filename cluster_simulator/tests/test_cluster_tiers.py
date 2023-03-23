@@ -2,12 +2,13 @@ import os
 import unittest
 import time
 import numpy as np
+import pandas as pd
 import simpy
 from loguru import logger
 
 from cluster_simulator.cluster import Cluster, Tier, EphemeralTier, bandwidth_share_model, compute_share_model, get_tier, convert_size
 from cluster_simulator.phase import DelayPhase, ComputePhase, IOPhase
-
+from cluster_simulator.application import Application
 
 CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
 TEST_CONFIG_FILE = os.path.join(CURRENT_DIR, "test_data", "config.yaml")
@@ -85,9 +86,61 @@ class TestClusterConfigFileBandwidth(unittest.TestCase):
 
     def test_config_path_with_model(self):
         # Test that the cluster is initialized correctly using a YAML config file
-        for tier in self.cluster.tiers:
-            print(tier)
+        self.assertEqual(self.cluster.tiers[0].capacity.capacity, 100e9)
+        self.assertEqual(self.cluster.tiers[1].capacity.capacity, 500e9)
+        self.assertEqual(self.cluster.tiers[2].capacity.capacity, 500e9)
+        self.assertEqual(self.cluster.tiers[3].capacity.capacity, 500e9)
+        self.assertEqual(self.cluster.ephemeral_tier.capacity.capacity, 50e9)
 
+    def test_get_max_bandwidth(self):
+        self.assertEqual(self.cluster.tiers[0].get_max_bandwidth(operation='read', pattern=1), 5)
+        self.assertEqual(self.cluster.tiers[0].get_max_bandwidth(operation='write', pattern=0), 10)
+        self.assertEqual(self.cluster.tiers[3].get_max_bandwidth(), 40)
+        self.assertEqual(self.cluster.tiers[3].get_max_bandwidth(operation='write'), 40)
+        self.assertEqual(self.cluster.tiers[3].get_max_bandwidth(pattern=0), 40)
+
+    def test_get_max_bandwidth_with_model(self):
+        new_data = pd.DataFrame({
+            'nodes': [1, 1],
+            'read_io_size': [8e6, 6e6],
+            'write_io_size': [8e6, 6e6],
+            'read_volume': [169e6, 200e6],
+            'write_volume': [330e6, 200e6],
+            'read_io_pattern': ['stride', 'seq'],
+            'write_io_pattern': ['stride', 'seq'],
+        })
+        self.assertIsInstance(self.cluster.tiers[1].get_max_bandwidth(new_data=new_data), np.ndarray)
+
+    def test_get_max_bandwidth_with_model_pure_read_write(self):
+        new_data = pd.DataFrame({ #phase features
+            'nodes': [1, 1],
+            'read_io_size': [8e6, 6e6],
+            'write_io_size': [8e6, 6e6],
+            'read_volume': [169e6, 0],
+            'write_volume': [0, 200e6],
+            'read_io_pattern': ['stride', 'seq'],
+            'write_io_pattern': ['stride', 'seq'],
+        })
+        self.assertIsInstance(self.cluster.tiers[1].get_max_bandwidth(new_data=new_data), np.ndarray)
+
+class TestClusterConfigFileBandwidthApplication(unittest.TestCase):
+
+    def setUp(self):
+        self.env = simpy.Environment()
+        TEST_CONFIG_FILE_WITH_MODEL = os.path.join(CURRENT_DIR, "test_data", "config_with_model.yaml")
+        self.cluster = Cluster(self.env, config_path=TEST_CONFIG_FILE_WITH_MODEL)
+    def test_get_max_bandwidth_with_model_with_application(self):
+        data = simpy.Store(self.env)
+        compute = [0,  10]
+        read = [1e9, 0]
+        write = [0, 5e9]
+        tiers = [1, 0]
+        app = Application(self.env,
+                          compute=compute,
+                          read=read,
+                          write=write)
+        self.env.process(app.run(self.cluster, placement=[0, 0]))
+        self.env.run()
 
 class TestClusterTiers(unittest.TestCase):
     def setUp(self):
