@@ -72,7 +72,7 @@ def display_apps_dataflow(data, width=800, height=600):
                                     textposition="top center",
                                     name=app, line_shape='hv', showlegend=False), row=i+1, col=1)
         i += 1
-        fig.update_xaxes(title_text="time in s")
+        # fig.update_xaxes(title_text="time in s")
         fig.update_yaxes(title_text="bandwidth in MB/s")
         fig.update_layout(width=width, height=height, title_text=f"Stacked Volume Time Series for apps:{apps}")
     return fig
@@ -275,7 +275,7 @@ def display_run(data, cluster, width=800, height=600, nbr_points=None):
                                     name=app + " mvt", #line_shape='linear',
                                     line={'shape':'linear','dash': 'dot'}), row=i, col=1)
         fig['layout']['yaxis'+str(i)]['title'] = 'dataflow in MB/s'
-        fig.update_xaxes(title_text="time in s")
+        # fig.update_xaxes(title_text="time in s")
         i += 1
 
     x_phase = []
@@ -530,7 +530,7 @@ def display_apps_dataflow(data, cluster, width=800, height=600, nbr_points=None)
                                     name=app + " mvt", #line_shape='linear',
                                     line={'shape':'linear','dash': 'dot'}), row=i, col=1)
         fig['layout']['yaxis'+str(i)]['title'] = 'dataflow in MB/s'
-        fig.update_xaxes(title_text="time in s")
+        # fig.update_xaxes(title_text="time in s")
         i += 1
 
 
@@ -840,7 +840,7 @@ def display_run_with_signal(data, cluster, app_signal, width=1200, height=600):
                                     textposition="top center",
                                     name=app + " mvt", line_shape='linear', line={'dash': 'dot'}), row=i, col=1)
         fig['layout']['yaxis'+str(i)]['title'] = 'dataflow in MB/s'
-        fig.update_xaxes(title_text="time in s")
+        # fig.update_xaxes(title_text="time in s")
         i += 1
     x_phase = []
     y_phase = []

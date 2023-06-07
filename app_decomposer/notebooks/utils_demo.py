@@ -129,7 +129,7 @@ def plot_job_signal(jobid=None):
     plt.title(f"timeserie for jobid = {jobid}")
     plt.show()
 
-def plot_detected_phases(jobid, merge=False, show_phases=False, ts=None, width=1200, height=600):
+def plot_detected_phases(jobid, merge=False, show_phases=False, ts=None, width=1200, height=600, log=False):
     if not ts:
         timestamps, read_signal, write_signal = get_job_timeseries_from_file_as_array(job_id=jobid)
     else:
@@ -153,7 +153,7 @@ def plot_detected_phases(jobid, merge=False, show_phases=False, ts=None, width=1
 
     fig.add_trace(go.Scatter(x=ab.flatten(), y=write_signal.flatten(),
                             mode='lines+markers', name='original bytesWritten signal from IOI', line_width=1.5,
-                            text=list(map(lambda x: "class="+str(x), write_labels))))
+                            text=list(map(lambda x: "class="+str(x), write_labels)), visible=True))
     # breakpoints
     if show_phases:
         for read_bkp in read_bkps + write_bkps:
@@ -161,17 +161,24 @@ def plot_detected_phases(jobid, merge=False, show_phases=False, ts=None, width=1
                                 mode='lines', line_color="black", line_dash='longdash',
                                 showlegend=False, line_width=0.5))
 
-    fig.add_trace(go.Scatter(x=ab.flatten(), y=rec_signal.flatten(), mode='lines', name='read signal slices with constant bw', line=dict(width=2, dash='dash')))
-    fig.add_trace(go.Scatter(x=ab.flatten(), y=rec_wsignal.flatten(), mode='lines', name='write signal slices with constant bw', line=dict(width=2, dash='dash')))
+    # fig.add_trace(go.Scatter(x=ab.flatten(), y=rec_signal.flatten(), mode='lines', name='read signal slices with constant bw', line=dict(width=2, dash='dash')))
+    # fig.add_trace(go.Scatter(x=ab.flatten(), y=rec_wsignal.flatten(), mode='lines', name='write signal slices with constant bw', line=dict(width=2, dash='dash')))
     # fig.add_trace(go.Scatter(x=ab.flatten(), y=rec_signal.flatten(), mode='lines', name='phase model preview for execution simulation', line_shape='vh', line_width=1))#line_dash='longdash'))
+    fig_type = "log" if log else "linear"
+    fig.update_yaxes(type=fig_type)
     fig.update_layout(
+        font=dict(size=14),  # General font size
+        xaxis=dict(tickfont=dict(size=12)),  # X-axis tick labels
+        yaxis=dict(tickfont=dict(size=12)),  # Y-axis tick labels
         width=width, height=height,
         title=  "IOI Signal decomposition",
-        legend=dict(orientation="h", yanchor="top"),
-        #xaxis_title="timestamps",
-        yaxis_title="volume conveyed by the application",
+        legend=dict(orientation="h", yanchor="top", font=dict(size=12)),
+        xaxis_title="Time units",
+        yaxis_title="Volume in MB",
         legend_title="Signals",
         )
+    fig.update_traces(line=dict(width=2))
+    fig.update_traces(marker=dict(size=8))
     return fig
 
 def plot_detected_phases_compare(jobid, merge=False, show_phases=False, ts=None, width=1200, height=600):

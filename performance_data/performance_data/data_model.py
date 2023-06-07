@@ -220,20 +220,30 @@ class TierModel(RegressionModel):
 
 
 class DataModel:
-    """
-    Class for preparing data from a CSV file and training multiple TierModel instances.
+    """Handles data loading, preprocessing, model training, and prediction.
+
+    Class is designed to work with data from a CSV file and can train
+    multiple `TierModel` instances.
 
     Attributes:
-        X: pandas DataFrame of shape (n_samples, n_features)
-            Input data.
-        y: pandas DataFrame of shape (n_samples, n_targets)
-            Target data.
+        X: pandas.DataFrame
+            Input data with shape (n_samples, n_features).
+        y: pandas.DataFrame
+            Target data with shape (n_samples, n_targets).
 
-    Methods:
-        load_data(file_path):
-            Loads data from a CSV file.
-        train_models():
-            Trains multiple TierModel instances, one per target column in the target data.
+    Args:
+        data_file: str
+            Path to the CSV data file. Defaults to `GENERATED_DATASET_FILE`.
+        cats: list
+            List of categories. Defaults to `DEFAULT_CATEGORIES`.
+        models: dict or list or None
+            Predefined models to train. If a dictionary is passed, keys must
+            match target columns. If a list is passed, it must match the number
+            of target columns. If None, default models are initialized.
+            Defaults to None.
+
+    Raises:
+        TypeError: If `models` is not a dictionary, a list, or None.
     """
     THRESHOLD = 1.7
 
