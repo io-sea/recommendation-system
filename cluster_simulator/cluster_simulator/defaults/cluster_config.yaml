@@ -27,6 +27,10 @@ tiers:
     capacity: 500.e+9
     bandwidth_model_path: "models/tier3_bandwidth.joblib"
 
+  - name: tier4
+    capacity: 500.e+9
+    max_bandwidth: 800
+
 ephemeral_tier:
   name: ephemeral
   capacity: 50.e+9

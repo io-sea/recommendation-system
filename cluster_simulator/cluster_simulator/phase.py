@@ -15,6 +15,7 @@ from loguru import logger
 import numpy as np
 import pandas as pd
 import math
+from enum import Enum
 # from cluster_simulator.cluster import Cluster, Tier, bandwidth_share_model, compute_share_model, get_tier, convert_size
 
 from cluster_simulator.utils import convert_size, get_tier, compute_share_model, BandwidthResource
@@ -63,7 +64,8 @@ class DelayPhase:
         """Executes the delay phase by running a simple timeout event.
 
         Args:
-            env (simpy.Environment): environment object where all simulation takes place.
+            env (simpy.Environment): environment object where all simulation
+            takes place.
             cluster (Cluster): the cluster on which the phase will run.
 
         Returns:
@@ -589,7 +591,7 @@ class IOPhase:
 
 
 class MixIOPhase():
-    """Class that allows to run a mix of I/O operations."""
+    """Class that allows to run a mix of I/O operations. It initializes the read and write phases and registers processing steps in the data store with logging. It also updates tier levels with the algebraic value of volume and following a volume move. Finally, it runs a read-write I/O operation."""
 
     def __init__(self, cores=1, read_volume=1e9, write_volume=1e9, read_pattern=1, write_pattern=1,
                  data=None, appname=None, read_bw=None, write_bw=None):
@@ -670,41 +672,6 @@ class MixIOPhase():
         self.read_io.update_tier_on_move(source_tier, target_tier, volume, erase)
         self.write_io.update_tier_on_move(source_tier, target_tier, volume, erase)
 
-    # def process_volume(self, step_duration, volume, available_bandwidth, cluster, tier,
-    #                    initial_levels=None):
-    #     """This method processes a small amount of I/O volume between two predictable events on a specific tier. If an event occurs in the meantime, I/O will be interrupted and bandwidth updated according.
-
-    #     Args:
-    #         step_duration (float): the expected duration between two predictable events.
-    #         volume (float): volume in bytes of the data to process.
-    #         cluster (Cluster): cluster facility where the I/O operation should take place.
-    #         available_bandwidth (float): available bandwidth in the step.
-    #         tier (Tier): storage tier concerned by the I/O operation. It could be reading from this tier or writing to it.
-    #     """
-    #     read_volume = self.read_io.process_volume(step_duration, volume, available_bandwidth, cluster, tier)
-
-    # def evaluate_tier_bandwidth(self, cluster, tier):
-    #     """Method to evaluate the bandwidth value for a given storage tier, and I/O operation including readwrite, and a given I/O pattern.
-
-    #     Args:
-    #         cluster (Cluster): cluster object for which the bw will be evaluated.
-    #         tier (Tier): the tier of the cluster storage system where the I/O will be executed.
-    #     """
-    #     assert isinstance(tier, Tier)
-    #     # # assign bandwidth resource if not already done
-    #     # self.env = env
-    #     # if not tier.bandwidth:
-    #     #     tier.bandwidth = BandwidthResource(IOPhase.current_ios, self.env, 10)
-    #     if self.read_bw and self.write_bw:
-    #         available_bandwidth = self.read_bw, self.write_bw
-    #     else:
-    #         read_max_bandwidth = cluster.get_max_bandwidth(tier, operation="read", pattern=self.read_pattern)
-    #         write_max_bandwidth = cluster.get_max_bandwidth(tier, operation="write", pattern=self.write_pattern)
-    #         self.bandwidth_concurrency = tier.bandwidth.count
-    #         available_bandwidth = read_max_bandwidth/self.bandwidth_concurrency, write_max_bandwidth/self.bandwidth_concurrency
-
-    #     return available_bandwidth
-
     def run(self, env, cluster, placement, use_bb=False, delay=0):
         """Run an RW I/O operation."""
         self.env = env
@@ -750,3 +717,135 @@ class MixIOPhase():
             ret = all([value for key, value in response.items()])
         logger.info(f"(App {self.appname}) - End RW I/O phase at {env.now}")
         return ret
+
+
+class Pattern(str, Enum):
+    SEQ = "seq"
+    RAND = "rand"
+    STRIDE = "stride"
+
+
+class Operation(str, Enum):
+    READ = "read"
+    WRITE = "write"
+
+
+class PhaseFeatures:
+    """
+    Class to encapsulate the features of an I/O phase. This class is used to generalize the parameters
+    of an I/O phase and make it easier to manage and manipulate these parameters.
+    """
+
+    def __init__(self, cores=1, operation=None, volume=None,
+                 read_volume=0, write_volume=0,
+                 pattern=None,
+                 read_pattern=Pattern.SEQ, write_pattern=Pattern.SEQ,
+                 read_io_size=4e3, write_io_size=4e3,
+                 data=None, appname=None, bw=None):
+        """
+        Initialize the PhaseFeatures class with the given parameters.
+
+        Args:
+            cores (int): Number of cores used for the I/O phase.
+            operation (str): Type of operation (read, write, or both).
+            pattern (Pattern): I/O pattern (sequential or random).
+            read_volume (float): Volume of read operations.
+            write_volume (float): Volume of write operations.
+            read_pattern (Pattern): Pattern of read operations.
+            write_pattern (Pattern): Pattern of write operations.
+            read_io_size (float): Size of read I/O operations.
+            write_io_size (float): Size of write I/O operations.
+        """
+        self.cores = cores
+        self.operation = operation
+        self.read_volume = read_volume
+        self.write_volume = write_volume
+        self.pattern = pattern
+        self.read_pattern = read_pattern
+        self.write_pattern = write_pattern
+        self.read_io_size = read_io_size
+        self.write_io_size = write_io_size
+        self.bw = bw*1e6 if bw else bw
+
+        # Determine the operation type based on the read and write volumes
+        if operation is None:
+            if self.read_volume > 0 and self.write_volume == 0:
+                self.operation = Operation.READ
+                
+            elif self.write_volume > 0 and self.read_volume == 0:
+                self.operation = Operation.WRITE
+            elif self.read_volume == 0 and self.write_volume == 0:
+                self.operation = None
+
+        if operation == Operation.READ:
+            if volume is not None:
+                self.read_volume = volume
+            else:
+                self.read_volume = read_volume
+            self.write_volume = 0
+            if pattern is not None:
+                self.read_pattern = pattern
+
+        if operation == Operation.WRITE:
+            if volume is not None:
+                self.write_volume = volume
+            else:
+                self.write_volume = write_volume
+            self.read_volume = 0
+            if pattern is not None:
+                self.write_pattern = pattern
+
+
+# def __init__(self, cores=1, operation='read', volume=1e9, pattern=1,
+#                  data=None, appname=None, bw=None):
+#         """Inits an instance of I/O phase."""
+#         self.cores = cores
+#         self.operation = operation
+#         assert self.operation in ['read', 'write']
+#         self.volume = volume
+#         self.pattern = pattern
+#         self.last_event = 0
+#         self.next_event = 0
+#         self.bandwidth_concurrency = 1
+#         self.data = data or None
+#         self.appname = appname or ''
+
+#         # Bytes to MB conversion
+#         # case where bandwidth is given for a reproducing a simulation
+#         self.bw = bw*1e6 if bw else bw
+#         # logger.info(self.__str__())
+
+# def process_volume(self, step_duration, volume, available_bandwidth, cluster, tier,
+    #                    initial_levels=None):
+    #     """This method processes a small amount of I/O volume between two predictable events on a specific tier. If an event occurs in the meantime, I/O will be interrupted and bandwidth updated according.
+
+    #     Args:
+    #         step_duration (float): the expected duration between two predictable events.
+    #         volume (float): volume in bytes of the data to process.
+    #         cluster (Cluster): cluster facility where the I/O operation should take place.
+    #         available_bandwidth (float): available bandwidth in the step.
+    #         tier (Tier): storage tier concerned by the I/O operation. It could be reading from this tier or writing to it.
+    #     """
+    #     read_volume = self.read_io.process_volume(step_duration, volume, available_bandwidth, cluster, tier)
+
+    # def evaluate_tier_bandwidth(self, cluster, tier):
+    #     """Method to evaluate the bandwidth value for a given storage tier, and I/O operation including readwrite, and a given I/O pattern.
+
+    #     Args:
+    #         cluster (Cluster): cluster object for which the bw will be evaluated.
+    #         tier (Tier): the tier of the cluster storage system where the I/O will be executed.
+    #     """
+    #     assert isinstance(tier, Tier)
+    #     # # assign bandwidth resource if not already done
+    #     # self.env = env
+    #     # if not tier.bandwidth:
+    #     #     tier.bandwidth = BandwidthResource(IOPhase.current_ios, self.env, 10)
+    #     if self.read_bw and self.write_bw:
+    #         available_bandwidth = self.read_bw, self.write_bw
+    #     else:
+    #         read_max_bandwidth = cluster.get_max_bandwidth(tier, operation="read", pattern=self.read_pattern)
+    #         write_max_bandwidth = cluster.get_max_bandwidth(tier, operation="write", pattern=self.write_pattern)
+    #         self.bandwidth_concurrency = tier.bandwidth.count
+    #         available_bandwidth = read_max_bandwidth/self.bandwidth_concurrency, write_max_bandwidth/self.bandwidth_concurrency
+
+    #     return available_bandwidth

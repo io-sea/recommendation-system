@@ -6,12 +6,35 @@ import pandas as pd
 import simpy
 from loguru import logger
 
-from cluster_simulator.cluster import Cluster, Tier, EphemeralTier, bandwidth_share_model, compute_share_model, get_tier, convert_size
+from cluster_simulator.cluster import Cluster, Tier, EphemeralTier, bandwidth_share_model, compute_share_model, get_tier, convert_size, PhaseFeatures, Operation, Pattern
 from cluster_simulator.phase import DelayPhase, ComputePhase, IOPhase
 from cluster_simulator.application import Application
 
 CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
 TEST_CONFIG_FILE = os.path.join(CURRENT_DIR, "test_data", "config.yaml")
+
+
+class TestPhaseFeatures(unittest.TestCase):
+    def test_phase_features(self):
+        # Test case where read_volume > 0 and write_volume == 0
+        phase_features = PhaseFeatures(read_volume=1e9, write_volume=0)
+        self.assertEqual(phase_features.operation, Operation.READ)
+
+        # Test case where write_volume > 0 and read_volume == 0
+        phase_features = PhaseFeatures(read_volume=0, write_volume=1e9)
+        self.assertEqual(phase_features.operation, Operation.WRITE)
+
+        # Test case where read_volume == 0 and write_volume == 0
+        phase_features = PhaseFeatures(read_volume=0, write_volume=0)
+        self.assertEqual(phase_features.operation, None)
+
+        # # Test case where pattern is not one of the allowed values
+        # with self.assertRaises(ValueError):
+        #     phase_features = PhaseFeatures(pattern="invalid")
+
+        # # Test case where operation is not one of the allowed values
+        # with self.assertRaises(ValueError):
+        #     phase_features = PhaseFeatures(read_pattern="invalid", write_pattern="invalid")
 
 
 class TestClusterConfigFile(unittest.TestCase):
