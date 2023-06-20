@@ -9,9 +9,14 @@ from loguru import logger
 from cluster_simulator.cluster import Cluster, Tier, EphemeralTier, bandwidth_share_model, compute_share_model, get_tier, convert_size, PhaseFeatures, Operation, Pattern
 from cluster_simulator.phase import DelayPhase, ComputePhase, IOPhase
 from cluster_simulator.application import Application
+from cluster_simulator.analytics import display_apps_dataflow
+
+import atexit
+import plotly.io as pio
 
 CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
 TEST_CONFIG_FILE = os.path.join(CURRENT_DIR, "test_data", "config.yaml")
+TEST_CONFIG_COMPLETE = os.path.join(CURRENT_DIR, "test_data", "config_complete.yaml")
 
 
 class TestPhaseFeatures(unittest.TestCase):
@@ -353,3 +358,66 @@ class TestClusterTierEviction(unittest.TestCase):
             self.hdd_tier.capacity.put(quantum)
             self.bb.dirty -= quantum
             self.bb.evict()
+            
+            
+class TestClusterTierPerformanceModel(unittest.TestCase):
+    def setUp(self):
+        representation = {'events': [0, 1, 8, 12, 44, 50, 54, 56],
+                          'node_count': 1,
+                          'read_bw': [0,
+                                      1730808132.0,
+                                      794387563.0,
+                                      1584492138.5,
+                                      3023280.0,
+                                      3527160.0,
+                                      2519400.0,
+                                      0],
+                          'read_operations': [0, 812, 1305, 909, 601, 1400, 500, 0],
+                          'read_pattern': ['Uncl', 'Seq', 'Seq', 'Seq', 'Seq', 'Seq', 'Seq', 'Uncl'],
+                          'read_volumes': [0,
+                                           1730808132,
+                                           1588775126,
+                                           3168984277,
+                                           3023280,
+                                           7054320,
+                                           2519400,
+                                           0],
+                          'write_bw': [0,
+                                       0,
+                                       1019392798.5,
+                                       1379672406.0,
+                                       1333699712.25,
+                                       1326288590.25,
+                                       1066959769.8,
+                                       0],
+                          'write_operations': [0, 0, 986, 2000, 1000, 995, 1000, 0],
+                          'write_pattern': ['Uncl', 'Uncl', 'Seq', 'Seq', 'Seq', 'Seq', 'Seq', 'Uncl'],
+                          'write_volumes': [0,
+                                            0,
+                                            2038785597,
+                                            4139017218,
+                                            5334798849,
+                                            5305154361,
+                                            5334798849,
+                                            0]}
+        self.representation = representation
+        self.env = simpy.Environment()
+        self.data = simpy.Store(self.env)
+        self.cluster = Cluster(self.env, config_path=TEST_CONFIG_COMPLETE)
+        
+    # def test_print_tiers(self):
+    #     """Test printing tiers
+    #     # TODO: when tier 3 (constant is chosen, last phase bw is wrong)
+    #     # """
+    #     app1 = Application(self.env, name=f"Hum", 
+    #                        compute=self.representation["events"],
+    #                        read=self.representation["read_volumes"],
+    #                        write=self.representation["write_volumes"],
+    #                        data=self.data)
+    #     self.env.process(app1.run(self.cluster,
+    #                               placement=[2]*(
+    #                                   len(self.representation["events"]))))
+    #     self.env.run()
+        
+    #     fig = display_apps_dataflow(self.data, self.cluster, width=800, height=600)
+    #     fig.show()
