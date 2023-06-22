@@ -15,48 +15,20 @@ import simpy
 import os
 from loguru import logger
 import numpy as np
+import pandas as pd
 import math
 import joblib
 import yaml
 import joblib
 from cluster_simulator.utils import convert_size, BandwidthResource
+from cluster_simulator.phase_features import PhaseFeatures
 from cluster_simulator import DEFAULT_CONFIG_PATH
 from performance_data.data_model import load_and_predict
 from dataclasses import dataclass, field
 from enum import Enum
 
 
-class Pattern(str, Enum):
-    SEQ = "seq"
-    RAND = "rand"
-    STRIDE = "stride"
-
-class Operation(str, Enum):
-    READ = "read"
-    WRITE = "write"
-      
-        
-@dataclass
-class PhaseFeatures:
-    cores: int = 1
-    operation: Operation = field(default=None, init=False)
-    pattern: Pattern = Pattern.SEQ
-    read_volume: float = 1e9
-    write_volume: float = 1e9
-    read_pattern: Pattern = Pattern.SEQ
-    write_pattern: Pattern = Pattern.SEQ
-    read_io_size: float = 4e3
-    write_io_size: float = 4e3
-
-    def __post_init__(self):
-        if self.read_volume > 0 and self.write_volume == 0:
-            self.operation = Operation.READ
-        elif self.write_volume > 0 and self.read_volume == 0:
-            self.operation = Operation.WRITE
-        elif self.read_volume == 0 and self.write_volume == 0:
-            self.operation = None
-    
-    
+ 
 def convert_size(size_bytes):
     """Function to display a data volume in human readable way (B, KB, MB,...) instead of 1e3, 1e6, 1e9 bytes.
 
@@ -265,13 +237,16 @@ class Cluster:
         
         if tier.bandwidth_model_path:
             if phase_features is None:
-                phase_features = PhaseFeatures(cores=cores, operation=operation,
+                phase_features = PhaseFeatures(cores=cores,
+                                               operation=operation,
                                                pattern=pattern)
                 
-                
+            logger.trace(f"features: {phase_features.get_attributes()}")
             predictions = load_and_predict(tier.bandwidth_model_path, 
-                                           phase_features.get_attributes(), 
+                                           pd.DataFrame(
+                                               phase_features.get_attributes()), 
                                            iops=True)
+            logger.trace(f"predictions: {predictions.values.flatten()[0]}")
             return predictions.values.flatten()[0]
 
         if isinstance(tier.max_bandwidth, dict):

@@ -315,12 +315,12 @@ class DataModel:
             pandas.DataFrame: The prepared input data.
         """
         data = data.copy()
-        logger.info(f"Preparing input data with columns: {list(data.columns)}")
+        logger.trace(f"Preparing input data with columns: {list(data.columns)}")
         # dropout targets
         target_columns = [col for col in data.columns if col.endswith('_bw')]
         if target_columns:
             data = data.drop(target_columns, axis=1)
-        logger.debug(f"Input data after dropping target columns: {data.columns.tolist()}")
+        logger.trace(f"Input data after dropping target columns: {data.columns.tolist()}")
         # calculate total volume
         total_volume = data['read_volume'] + data['write_volume']
         # divide read_volume and write_volume by total_volume
@@ -332,16 +332,16 @@ class DataModel:
         data["avg_io_size"] = (data["read_io_size"]*data["read_ratio"] + data["write_io_size"]*data["write_ratio"]).fillna(0)
         # remove unnecessary columns
         data = data.drop(columns=['read_volume', 'write_volume'], axis=1)
-        logger.debug(f"Input data after dropping unnecessary columns: {data.columns.tolist()}")
+        logger.trace(f"Input data after dropping unnecessary columns: {data.columns.tolist()}")
         # Apply preprocessing to X data
         categorical_cols = data.filter(regex='_io_pattern$').columns
-        logger.debug(f"Categorical columns: {categorical_cols.tolist()}")
+        logger.trace(f"Categorical columns: {categorical_cols.tolist()}")
 
         # Update category dictionary with new categories
         category_dict = {}
         for col in data.columns:
             if col.endswith("_io_pattern"):
-                categories = all_categories#self.cats
+                categories = all_categories #self.cats
                 if col in category_dict:
                     category_dict[col].update(categories)
                 else:
@@ -361,7 +361,7 @@ class DataModel:
         # transform X data and extract y data
         X = preprocessor.fit_transform(data)
         df = pd.DataFrame(X, columns=list(preprocessor.get_feature_names_out()))
-        logger.debug(f"Preprocessed input data: {df.columns.tolist()}")
+        logger.trace(f"Preprocessed input data: {df.columns.tolist()}")
 
         return df
 
@@ -401,7 +401,7 @@ class DataModel:
         target_columns = column if column and column in self.input_data.columns else [col for col in self.input_data.columns if col.endswith('_bw')]
 
         zero_factor = self.input_data.apply(lambda row: 0 if row["read_volume"] == 0 and row["write_volume"] == 0 else 1, axis=1)
-        logger.debug(f"Target columns: {target_columns}")
+        logger.trace(f"Target columns: {target_columns}")
         # extract features
         X = DataModel._prepare_input_data(self.input_data)
         y = self.input_data[target_columns].multiply(zero_factor, axis=0).div(X['remainder__avg_io_size'].replace(0, np.nan), axis=0).fillna(0)
@@ -411,7 +411,7 @@ class DataModel:
 
         # Normalize y by dividing each column with its respective maximum value
         #y_normalized = y.div(max_values, axis=1)
-        logger.debug(f"Features: {X.columns.tolist()}")
+        logger.trace(f"Features: {X.columns.tolist()}")
         #logger.info(f"Max values: {max_values}")
 
         return X, y
@@ -545,6 +545,7 @@ def load_and_predict(model_path, new_data, iops=False):
 
     # Make predictions
     model_predictions = pd.DataFrame(model.predict(X))
+    #print(f"Model: {model_path} | Input: {new_data} | Predictions: {model_predictions}")
     # Adjust predictions if iops is True
     if iops:
         predictions = model_predictions * X['remainder__avg_io_size'].values.reshape(-1, 1)

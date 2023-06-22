@@ -10,6 +10,27 @@ from cluster_simulator.phase_features import Pattern, Operation, PhaseFeatures
 
 class TestPhaseFeatures(unittest.TestCase):
     """Test phases that happens on tier of type Ephemeral when eviction policy is activated."""
+    
+    def test_init_phase_features(self):
+        # Test case where read_volume > 0 and write_volume == 0
+        phase_features = PhaseFeatures(read_volume=1e9, write_volume=0)
+        self.assertEqual(phase_features.operation, Operation.READ)
+
+        # Test case where write_volume > 0 and read_volume == 0
+        phase_features = PhaseFeatures(read_volume=0, write_volume=1e9)
+        self.assertEqual(phase_features.operation, Operation.WRITE)
+
+        # Test case where read_volume == 0 and write_volume == 0
+        phase_features = PhaseFeatures(read_volume=0, write_volume=0)
+        self.assertEqual(phase_features.operation, None)
+
+        # # Test case where pattern is not one of the allowed values
+        # with self.assertRaises(ValueError):
+        #     phase_features = PhaseFeatures(pattern="invalid")
+
+        # # Test case where operation is not one of the allowed values
+        # with self.assertRaises(ValueError):
+        #     phase_features = PhaseFeatures(read_pattern="invalid", write_pattern="invalid")
 
     def test_default_phase_features(self):
         # Test with only default arguments
@@ -17,8 +38,8 @@ class TestPhaseFeatures(unittest.TestCase):
         pf = PhaseFeatures()
         assert pf.cores == 1
         assert pf.operation is None
-        assert pf.read_volume == 0
-        assert pf.write_volume == 0
+        assert pf.read_volume is None
+        assert pf.write_volume is None
         assert pf.read_io_pattern == Pattern.SEQ
         assert pf.write_io_pattern == Pattern.SEQ
         assert pf.read_io_size == 4e3
@@ -124,7 +145,11 @@ class TestPhaseFeatures(unittest.TestCase):
         # This test checks if the bandwidth is correctly set when operation="read", a volume, and a bandwidth are provided.
         pf = PhaseFeatures(operation="read", volume=5e9, bw=100)
         assert pf.bw == 100e6        
-        
+
+
+class TestPhaseFeaturesAttributes(unittest.TestCase):
+    """Test phases that happens on tier of type Ephemeral when eviction policy is activated."""
+     
     def test_get_attributes(self):
         phase_features = PhaseFeatures(cores=1, read_io_size=8e6, 
                                        write_io_size=8e6, 
@@ -133,10 +158,36 @@ class TestPhaseFeatures(unittest.TestCase):
                                        read_io_pattern='stride', 
                                        write_io_pattern='seq')
         attribute_dict = phase_features.get_attributes()
-        expected_dict = {'cores': [1], 'read_io_size': [8e6], 'write_io_size': [8e6],
+        expected_dict = {'nodes': [1], 'read_io_size': [8e6], 
+                         'write_io_size': [8e6],
                          'read_volume': [169e6], 'write_volume': [330e6], 
-                         'read_io_pattern': ['stride'], 'write_io_pattern': ['seq']}
-        self.assertDictEqual(attribute_dict, expected_dict)       
+                         'read_io_pattern': ['stride'],
+                         'write_io_pattern': ['seq']}
+        self.assertDictEqual(attribute_dict, expected_dict) 
+        
+    def test_get_attributes_read_only(self):
+        phase_features = PhaseFeatures(cores=1,
+                                       operation="read")
+        
+        attribute_dict = phase_features.get_attributes()
+        expected_dict = {'nodes': [1], 'read_io_size': [4e3], 
+                         'write_io_size': [4e3],
+                         'read_volume': [1e9], 'write_volume': [0], 
+                         'read_io_pattern': ['seq'],
+                         'write_io_pattern': ['seq']}
+        self.assertDictEqual(attribute_dict, expected_dict) 
+        
+    def test_get_attributes_write_only(self):
+        phase_features = PhaseFeatures(cores=1,
+                                       operation="write")
+        
+        attribute_dict = phase_features.get_attributes()
+        expected_dict = {'nodes': [1], 'read_io_size': [4e3], 
+                         'write_io_size': [4e3],
+                         'read_volume': [0], 'write_volume': [1e9], 
+                         'read_io_pattern': ['seq'],
+                         'write_io_pattern': ['seq']}
+        self.assertDictEqual(attribute_dict, expected_dict)
 
 
   

@@ -400,11 +400,15 @@ class IOPhase:
         # self.env = env
         # if not tier.bandwidth:
         #     tier.bandwidth = BandwidthResource(IOPhase.current_ios, self.env, 10)
+        logger.trace(f"bandwidth hardcoded : {self.bw}")
+        logger.trace(f"operation: {self.operation} | pattern: {self.pattern}")
         if self.bw:
             available_bandwidth = self.bw
         else:
+            
             max_bandwidth = cluster.get_max_bandwidth(tier, operation=self.operation,
                                                       pattern=self.pattern)
+            logger.trace(f"max bandwidth: {max_bandwidth}")
             self.bandwidth_concurrency = tier.bandwidth.count
             available_bandwidth = max_bandwidth/self.bandwidth_concurrency
 
@@ -423,6 +427,7 @@ class IOPhase:
         """
 
         available_bandwidth = self.evaluate_tier_bandwidth(cluster, tier)
+        logger.trace(f"available bandwidth: {available_bandwidth}")
         # limit the volume to maximum available
         max_volume = min(volume, tier.capacity.capacity - tier.capacity.level)
         # take the smallest step, step_duration must be > 0

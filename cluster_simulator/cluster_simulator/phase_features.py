@@ -24,7 +24,7 @@ class PhaseFeatures:
     """
 
     def __init__(self, cores=1, operation=None, volume=None,
-                 read_volume=0, write_volume=0,
+                 read_volume=None, write_volume=None,
                  pattern=None,
                  read_io_pattern=Pattern.SEQ, write_io_pattern=Pattern.SEQ,
                  read_io_size=4e3, write_io_size=4e3,
@@ -45,6 +45,7 @@ class PhaseFeatures:
         """
         self.cores = cores
         self.operation = operation
+        self.volume = volume
         self.read_volume = read_volume
         self.write_volume = write_volume
         self.pattern = pattern
@@ -55,37 +56,41 @@ class PhaseFeatures:
         self.bw = bw*1e6 if bw else bw
 
         # Determine the operation type based on the read and write volumes
-        if operation is None:
-            if self.read_volume > 0 and self.write_volume == 0:
+        if operation is None :
+            if self.read_volume and not self.write_volume:
                 self.operation = Operation.READ                
-            elif self.write_volume > 0 and self.read_volume == 0:
+            elif self.write_volume and not self.read_volume:
                 self.operation = Operation.WRITE
             elif self.read_volume == 0 and self.write_volume == 0:
                 self.operation = None
 
-        if operation == Operation.READ:
-            if volume is not None:
-                self.read_volume = volume
-            else:
-                self.read_volume = read_volume
+        if operation == Operation.READ:            
+            # take read_volume from volume
+            self.read_volume = self.volume if self.volume else self.read_volume            
             self.write_volume = 0
+            
+            # if self.volume is None and self.read_volume is None:
+            #     self.read_volume = 1e9
             if pattern is not None:
                 if isinstance(pattern, str):
                     self.read_io_pattern = pattern
                 if isinstance(pattern, float):
                     self.read_io_pattern = "seq" if pattern > 0.5 else "rand"
+                    
+            if self.read_volume is None:
+                self.read_volume = 1e9
 
         if operation == Operation.WRITE:
-            if volume is not None:
-                self.write_volume = volume
-            else:
-                self.write_volume = write_volume
+            self.write_volume = self.volume if self.volume else self.write_volume  
             self.read_volume = 0
             if pattern is not None:
                 if isinstance(pattern, str):
                     self.write_io_pattern = pattern
                 if isinstance(pattern, float):
                     self.write_io_pattern = "seq" if pattern > 0.5 else "rand"
+                    
+            if self.write_volume is None:
+                self.write_volume = 1e9
 
     def get_attributes(self):
         """
@@ -95,10 +100,11 @@ class PhaseFeatures:
             dict: A dictionary of attribute names and values.
 
         """
-        attribute_list = ['cores', 'read_io_size', 'write_io_size', 
+        attribute_list = ['read_io_size', 'write_io_size', 
                           'read_volume', 'write_volume', 
                           'read_io_pattern', 'write_io_pattern']
-        attribute_dict = {}
+        # nodes instead of cores
+        attribute_dict = {"nodes": [getattr(self, "cores")]}
         for attribute_name in attribute_list:
             attribute_dict[attribute_name] = [getattr(self, attribute_name)]
         return attribute_dict
