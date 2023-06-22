@@ -47,7 +47,7 @@ class Application:
 
     def __init__(self, env, name=None, compute=None, read=None,
                  write=None, bw=None, read_bw=None, write_bw=None,
-                 data=None, delay=0):
+                 data=None, delay=0, phase_features=None):
         """Initialize the application and schedule the sequence of phases.
 
         Args:
@@ -74,6 +74,12 @@ class Application:
 
             delay:
                 time in seconds to wait in order to start the application.
+
+            phase_features:
+                list of dicts containing the features of each phase. Each dict contains the following keys: 'nodes', 'read_io_size', 'write_io_size',
+                                'read_volume', 'write_volume', 'read_io_pattern'
+                                'write_io_pattern'
+                if provided, the values of the dict will be used to create only MixIOPhases.
         """
         self.env = env
         self.name = name or name_app()
@@ -85,9 +91,9 @@ class Application:
         # ensure format is valid, all list are length equal
         assert all([len(lst) == len(self.compute) for lst in [self.read, self.write]])
         self.data = data or None
-        self.bw = bw or None
-        self.read_bw = read_bw or None
-        self.write_bw = write_bw or None
+        self.bw = bw if bw else None
+        self.read_bw = read_bw if read_bw else None
+        self.write_bw = write_bw if write_bw else None
         self.status = None
         # schedule all events
         self.cores_request = []
@@ -179,6 +185,7 @@ class Application:
         elif operation == "write":
             operation_bw = self.write_bw
 
+        phase_bw = None
         if self.bw is None and operation_bw is None:
             phase_bw = None
         elif self.bw is None:

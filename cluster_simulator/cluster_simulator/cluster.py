@@ -12,15 +12,23 @@ Please contact Bull S. A. S. for details about its license.
 """
 
 import simpy
+import os
 from loguru import logger
 import numpy as np
+import pandas as pd
 import math
+import joblib
 import yaml
 import joblib
 from cluster_simulator.utils import convert_size, BandwidthResource
+from cluster_simulator.phase_features import PhaseFeatures
 from cluster_simulator import DEFAULT_CONFIG_PATH
+from performance_data.data_model import load_and_predict
+from dataclasses import dataclass, field
+from enum import Enum
 
 
+ 
 def convert_size(size_bytes):
     """Function to display a data volume in human readable way (B, KB, MB,...) instead of 1e3, 1e6, 1e9 bytes.
 
@@ -53,6 +61,19 @@ def monitor_step(data, lst):
     logger.debug(state)
     if isinstance(data, simpy.Store):
         data.put(lst)
+
+def read_yaml(input_data):
+    # Check if the input is a file path
+    if isinstance(input_data, str) and os.path.isfile(input_data):
+        with open(input_data, 'r') as file:
+            data = yaml.safe_load(file)
+    # Check if the input is a YAML data string
+    elif isinstance(input_data, str):
+        data = yaml.safe_load(input_data)
+    else:
+        raise ValueError("Invalid input. Please provide a YAML file path or a YAML data string.")
+
+    return data
 
 
 class Cluster:
@@ -122,20 +143,19 @@ class Cluster:
 
         if config_path:
             logger.debug(f"Loading configuration from {config_path}")
-            with open(config_path) as f:
-                # config = yaml.load(f, Loader=yaml.FullLoader)
-                config = yaml.safe_load(f)
+            # with open(config_path) as f:
+            #     config = yaml.safe_load(f)
+            config = read_yaml(config_path)
 
-            # if 'compute_nodes' in config['defaults']:
-            #     self.compute_nodes = compute_nodes or config['defaults']['compute_nodes']
-            # if 'cores_per_node' in config['defaults']:
-            #     self.compute_cores = cores_per_node or config['defaults']['cores_per_node'] * self.compute_nodes
             # Override default values if provided in YAML file
             default_config = config.get('defaults')
             if default_config:
-                self.compute_nodes = simpy.Resource(env, capacity=compute_nodes or default_config.get('compute_nodes'))
-                self.cores_per_node = simpy.Resource(env, capacity=cores_per_node or default_config.get('cores_per_node'))
+                compute_nodes = compute_nodes or default_config.get('compute_nodes')
+                cores_per_node = cores_per_node or default_config.get('cores_per_node')
+                self.compute_nodes = simpy.Resource(env, capacity=compute_nodes)
+                self.cores_per_node = simpy.Resource(env, capacity=cores_per_node*compute_nodes)
 
+            # Create tiers from configuration
             if tiers is None:
                 logger.debug("Creating tiers from configuration")
                 self.tiers = []
@@ -144,7 +164,10 @@ class Cluster:
                     tier_capacity = int(tier_cfg['capacity'])
                     tier_max_bandwidth = tier_cfg.get('max_bandwidth')
                     tier_bandwidth_model_path = tier_cfg.get('bandwidth_model_path')
-                    # (self, env, name, max_bandwidth=None, bandwidth_model_path=None, capacity=100e9)
+
+                    if tier_max_bandwidth is None and tier_bandwidth_model_path is None:
+                        raise ValueError('Either max_bandwidth or model_path is mandatory')
+
                     logger.debug(f"[Yaml Parsing] tier: {tier_name} | capacity: {tier_capacity} | tier bandwidth: {tier_max_bandwidth} | tier model: {tier_bandwidth_model_path}")
                     tier = Tier(env=self.env, name=tier_name,
                                 max_bandwidth=tier_max_bandwidth, bandwidth_model_path=tier_bandwidth_model_path, capacity=tier_capacity)
@@ -154,16 +177,16 @@ class Cluster:
                 self.tiers = tiers
 
             if ephemeral_tier is None:
-                logger.debug("ephemeral_tier is None")
                 ephemeral_cfg = config.get('ephemeral_tier')
                 if ephemeral_cfg:
-                    logger.debug("Creating ephemeral tier")
+                    logger.debug("Ephemeral tier")
                     # (self, env, name, persistent_tier, max_bandwidth, capacity=80e9
                     ephemeral_tier = EphemeralTier(self.env,
                                                    ephemeral_cfg['name'],
                                                    persistent_tier=ephemeral_cfg['persistent_tier'],
                                                    max_bandwidth=ephemeral_cfg['max_bandwidth'],
                                                    capacity=ephemeral_cfg['capacity'])
+                    logger.debug(f"[Yaml Parsing] tier: {ephemeral_tier.name} | capacity: {ephemeral_tier.capacity.capacity} | tier bandwidth: {ephemeral_tier.max_bandwidth} | tier model: {ephemeral_tier.bandwidth_model_path}")
                     self.ephemeral_tier = ephemeral_tier
             else:
                 logger.debug("Overriding ephemeral_tier with provided values")
@@ -196,7 +219,8 @@ class Cluster:
             levels[self.ephemeral_tier.name] = self.ephemeral_tier.capacity.level
         return levels
 
-    def get_max_bandwidth(self, tier, cores=1, operation='read', pattern=1):
+    def get_max_bandwidth(self, tier, cores=1, operation='read', pattern=1, 
+                          phase_features=None):
         """Get the maximum bandwidth for a given tier, number of cores dedicated to the operation, a type of operation. Sequential pattern are assumed during copy/move as well as an important blocksize.
 
         Args:
@@ -210,58 +234,46 @@ class Cluster:
         """
         if not isinstance(tier, Tier):
             tier = get_tier(self, tier)
-        return (tier.max_bandwidth[operation]['seq'] * pattern +
-                tier.max_bandwidth[operation]['rand'] * (1-pattern)) * cores * 1e6
+        
+        if tier.bandwidth_model_path:
+            if phase_features is None:
+                phase_features = PhaseFeatures(cores=cores,
+                                               operation=operation,
+                                               pattern=pattern)
+                
+            logger.trace(f"features: {phase_features.get_attributes()}")
+            predictions = load_and_predict(tier.bandwidth_model_path, 
+                                           pd.DataFrame(
+                                               phase_features.get_attributes()), 
+                                           iops=True)
+            logger.trace(f"predictions: {predictions.values.flatten()[0]}")
+            return predictions.values.flatten()[0]
+
+        if isinstance(tier.max_bandwidth, dict):
+            return (tier.max_bandwidth[operation]['seq'] * pattern +
+                    tier.max_bandwidth[operation]['rand'] * (1-pattern)) * cores * 1e6
+
+        
+        if isinstance(tier.max_bandwidth, (int, float)):
+            return tier.max_bandwidth * cores 
+        else:
+            # Try to cast max_bandwidth to a float
+            try:
+                max_bandwidth = float(tier.max_bandwidth) * cores 
+            except ValueError:
+                # Handle the case where max_bandwidth cannot be cast to a float
+                raise TypeError('max_bandwidth must be an int or float')
+
+        return max_bandwidth * cores 
+        # elif isinstance(self.max_bandwidth, (int, float)):
+        #     return self.max_bandwidth
+
+        # else:
+        #     tier_model = joblib.load(self.bandwidth_model_path)
+        #     return self.max_bandwidth.predict([[cores, pattern]])[0]
 
 
-# class Tier:
-#     """Model a tier storage service with a focus on a limited bandwidth resource as well as a limited capacity. In this model we expect a bandwidth value at its asymptotic state, so blocksize is still not a parameter. Only the asymptotic part of the throughput curve is considered. Other considered variables are read/write variables and sequential/random variables.
-#     Output is a scalar value in MB/s.
-#     Typically we access the bandwidth value as in dictionary: b['read']['seq'] = 200MB/s.
-#     # TODO: extend this to a NN as function approximator to allow:
-#         averaging over variables
-#         interpolation when data entry is absent, i.e. b['seq'] gives a value
 
-#     """
-
-#     def __init__(self, env, name, capacity=100e9, max_bandwidth=None,  bandwidth_model_path=None):
-#         """Inits a tier instance with some storage service specifications.
-
-#         Args:
-#             env (simpy.Environment): the simpy environment where all simulations happens.s
-#             name (string): a name to make analytics readable and to assign a unique ID to a tier.
-#             bandwidth (simpy.Resource): bandwidth as limited number of slots that can be consumed.  Default capacity is up to 10 concurrent I/O sharing the maximum value of the bandwidth.
-#             capacity (simpy.Container, optional): storage capacity of the tier. Defaults to 100e9 (100GB).
-#             max_bandwidth (dict): which contains operation and pattern dependant max bandwidths.
-#             Example:
-#                 ssd_bandwidth = {'read':  {'seq': 210, 'rand': 190},
-#                          'write': {'seq': 100, 'rand': 100}}
-#         """
-#         self.env = env
-#         self.name = name
-#         self.capacity = simpy.Container(self.env, init=0, capacity=capacity)
-#         self.max_bandwidth = max_bandwidth
-
-#     def get_max_bandwidth(self, cores=1, operation='read', pattern=1):
-#         if isinstance(self.max_bandwidth, dict):
-#             return (self.max_bandwidth[operation]['seq'] * pattern +
-#                     self.max_bandwidth[operation]['rand'] * (1-pattern)) * cores * 1e6
-#         else:
-#             return self.max_bandwidth.predict([[cores, pattern]])[0] * 1e6
-
-#     def __str__(self):
-#         """Prints cluster related information in a human readable fashion.
-
-#         Returns:
-#             string: properties and state of the cluster.
-#         """
-#         description = "\n-------------------\n"
-#         description += (f"Tier: {self.name} with capacity = {convert_size(self.capacity.capacity)}\n")
-#         description += ("{:<12} {:<12} {:<12}".format('Operation', 'Pattern', 'Bandwidth MB/s')+"\n")
-#         for op, inner_dict in self.max_bandwidth.items():
-#             for pattern, value in inner_dict.items():
-#                 description += ("{:<12} {:<12} {:<12}".format(op, pattern, value)+"\n")
-#         return description
 
 
 class Tier:
@@ -298,8 +310,12 @@ class Tier:
         self.name = name
         self.capacity = simpy.Container(self.env, init=0, capacity=capacity)
         self.max_bandwidth = max_bandwidth
+        self.bandwidth_model_path = bandwidth_model_path
         self.bandwidth = None
         self.bandwidth_concurrency = dict()
+
+        # load the joblib model
+        # if self.bandwidth_model_path:
 
         # if isinstance(max_bandwidth, str):
         #     if not bandwidth_model_path:
@@ -308,7 +324,7 @@ class Tier:
         #         bandwidth_model = pickle.load(f)
         #     self.max_bandwidth = bandwidth_model
 
-    def get_max_bandwidth(self, cores=1, operation='read', pattern=1):
+    def get_max_bandwidth(self, cores=1, operation='read', pattern=1, new_data=None):
         """
         Returns the maximum bandwidth of the tier for the given parameters.
 
@@ -321,11 +337,16 @@ class Tier:
             float: The maximum bandwidth in bytes/sec.
 
         """
+        if self.bandwidth_model_path:
+            assert new_data is not None, "provide new data for bandwidth prediction"
+            predictions = load_and_predict(self.bandwidth_model_path, new_data, iops=True)
+            return predictions.values.flatten()
+
         if isinstance(self.max_bandwidth, dict):
             return (self.max_bandwidth[operation]['seq'] * pattern +
                     self.max_bandwidth[operation]['rand'] * (1-pattern)) * cores
-        else:
-            return self.max_bandwidth.predict([[cores, pattern]])[0]
+        elif isinstance(self.max_bandwidth, (int, float)):
+            return self.max_bandwidth
 
     def __str__(self):
         """
@@ -336,13 +357,16 @@ class Tier:
 
         """
         description = "\n-------------------\n"
-        description += (f"Tier: {self.name} with capacity = {convert_size(self.capacity.capacity)}\n")
+        description += (f"Tier:({type(self).__name__}) {self.name} with capacity = {convert_size(self.capacity.capacity)}\n")
         description += ("{:<12} {:<12} {:<12}".format('Operation', 'Pattern', 'Bandwidth MB/s')+"\n")
         if isinstance(self.max_bandwidth, dict):
             for op, inner_dict in self.max_bandwidth.items():
                 for pattern, value in inner_dict.items():
                     description += ("{:<12} {:<12} {:<12}".format(op, pattern, value)+"\n")
-        else:
+
+        if isinstance(self.max_bandwidth, (int, float)):
+            description += ("{:<12} {:<12} {:<12}".format("any", "any", float(self.max_bandwidth))+"\n")
+        if self.bandwidth_model_path:
             description += f"Bandwidth model path: {self.bandwidth_model_path}\n"
         return description
 
@@ -460,3 +484,53 @@ def get_tier(cluster, tier_reference, use_bb=False):
         return find_tier(cluster, tier_reference)
     if use_bb:
         return cluster.ephemeral_tier
+
+
+# class Tier:
+#     """Model a tier storage service with a focus on a limited bandwidth resource as well as a limited capacity. In this model we expect a bandwidth value at its asymptotic state, so blocksize is still not a parameter. Only the asymptotic part of the throughput curve is considered. Other considered variables are read/write variables and sequential/random variables.
+#     Output is a scalar value in MB/s.
+#     Typically we access the bandwidth value as in dictionary: b['read']['seq'] = 200MB/s.
+#     # TODO: extend this to a NN as function approximator to allow:
+#         averaging over variables
+#         interpolation when data entry is absent, i.e. b['seq'] gives a value
+
+#     """
+
+#     def __init__(self, env, name, capacity=100e9, max_bandwidth=None,  bandwidth_model_path=None):
+#         """Inits a tier instance with some storage service specifications.
+
+#         Args:
+#             env (simpy.Environment): the simpy environment where all simulations happens.s
+#             name (string): a name to make analytics readable and to assign a unique ID to a tier.
+#             bandwidth (simpy.Resource): bandwidth as limited number of slots that can be consumed.  Default capacity is up to 10 concurrent I/O sharing the maximum value of the bandwidth.
+#             capacity (simpy.Container, optional): storage capacity of the tier. Defaults to 100e9 (100GB).
+#             max_bandwidth (dict): which contains operation and pattern dependant max bandwidths.
+#             Example:
+#                 ssd_bandwidth = {'read':  {'seq': 210, 'rand': 190},
+#                          'write': {'seq': 100, 'rand': 100}}
+#         """
+#         self.env = env
+#         self.name = name
+#         self.capacity = simpy.Container(self.env, init=0, capacity=capacity)
+#         self.max_bandwidth = max_bandwidth
+
+#     def get_max_bandwidth(self, cores=1, operation='read', pattern=1):
+#         if isinstance(self.max_bandwidth, dict):
+#             return (self.max_bandwidth[operation]['seq'] * pattern +
+#                     self.max_bandwidth[operation]['rand'] * (1-pattern)) * cores * 1e6
+#         else:
+#             return self.max_bandwidth.predict([[cores, pattern]])[0] * 1e6
+
+#     def __str__(self):
+#         """Prints cluster related information in a human readable fashion.
+
+#         Returns:
+#             string: properties and state of the cluster.
+#         """
+#         description = "\n-------------------\n"
+#         description += (f"Tier: {self.name} with capacity = {convert_size(self.capacity.capacity)}\n")
+#         description += ("{:<12} {:<12} {:<12}".format('Operation', 'Pattern', 'Bandwidth MB/s')+"\n")
+#         for op, inner_dict in self.max_bandwidth.items():
+#             for pattern, value in inner_dict.items():
+#                 description += ("{:<12} {:<12} {:<12}".format(op, pattern, value)+"\n")
+#         return description

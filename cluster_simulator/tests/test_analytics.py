@@ -86,6 +86,27 @@ class TestAnalytics(unittest.TestCase):
         fig = display_run(self.data, self.cluster, width=800, height=900)
         fig.show()
 
+    def test_rw_mix_apps_only(self):
+        """Tests the display analytics for an application mixing read and write phases"""
+        # Simple app: read 1GB -> compute 10s -> write 5GB
+        read = [3e9, 2e9]
+        compute = [0,  15]
+        write = [0, 5e9]
+        # placement
+        placement = [0, 0]
+        use_bb = [False, False]
+        # simulate the app execution
+
+        app1 = Application(self.env, name="app1",
+                           compute=compute, read=read, write=write,
+                           data=self.data)
+        self.env.process(app1.run(self.cluster, placement=placement, use_bb=use_bb))
+        self.env.run()
+        print(f"application duration = {app1.get_fitness()}")
+
+        fig = display_apps_dataflow(self.data, self.cluster, width=800, height=400)
+        fig.show()
+
     def test_rw_mix_with_bb(self):
         """Tests the display analytics for an application mixing read and write phases with burst buffering"""
         # Simple app: read 1GB -> compute 10s -> write 5GB
@@ -128,6 +149,29 @@ class TestAnalytics(unittest.TestCase):
         print(f"application duration = {app1.get_fitness()}")
 
         fig = display_run(self.data, self.cluster, width=800, height=900)
+        fig.show()
+
+    def test_rw_mix_with_two_apps_dataflow(self):
+        """Tests the display analytics for two applications mixing read and write phases"""
+
+        # placement
+        placement = [0, 0]
+        use_bb = [False, False]
+        # simulate the app execution
+
+        app1 = Application(self.env, name="app#1",
+                           compute=[0, 10], read=[1e9, 0], write=[0, 5e9],
+                           data=self.data)
+        app2 = Application(self.env, name="app#2",
+                           compute=[0, 25],  read=[2e9, 0], write=[7e9, 0],
+                           data=self.data)
+
+        self.env.process(app1.run(self.cluster, placement=placement, use_bb=use_bb))
+        self.env.process(app2.run(self.cluster, placement=placement, use_bb=use_bb))
+        self.env.run()
+        print(f"application duration = {app1.get_fitness()}")
+
+        fig = display_apps_dataflow(self.data, self.cluster, width=800, height=600)
         fig.show()
 
     def test_rw_mix_with_many_apps_with_bb(self):

@@ -1,0 +1,44 @@
+defaults:
+  compute_nodes: 1
+  cores_per_node: 2
+
+tiers:
+  - name: tier1
+    capacity: 100.0e+9
+    max_bandwidth:
+      read:
+        seq: 200
+        rand: 100
+      write:
+        seq: 100
+        rand: 50
+
+  - name: tier2
+    capacity: 500.e+9
+    max_bandwidth:
+      read:
+        seq: 500
+        rand: 300
+      write:
+        seq: 200
+        rand: 150
+
+  - name: tier3
+    capacity: 500.e+9
+    bandwidth_model_path: /home_nfs/mimounis/iosea-wp3-recommandation-system/cluster_simulator/tests/test_data/gradient_boosting_regressor_lfs_bw.joblib
+
+  - name: tier4
+    capacity: 500.e+9
+    max_bandwidth: 300e6
+
+ephemeral_tier:
+  name: ephemeral
+  persistent_tier: tier1
+  capacity: 1.e+9
+  max_bandwidth: 
+    read:
+      seq: 500
+      rand: 300
+    write:
+      seq: 200
+      rand: 150

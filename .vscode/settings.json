@@ -2,7 +2,7 @@
   "python.testing.unittestArgs": [
     "-v",
     "-s",
-    "./performance_data",
+    "./cluster_simulator",
     "-p",
     "test_*.py"
   ],
@@ -25,5 +25,11 @@
     ],
     "compounds": []
   },
-  "editor.fontSize": 15
+  "editor.fontSize": 15,
+  "editor.wordWrap": "bounded",
+  "editor.wordWrapColumn": 99,
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.autopep8"
+  },
+  "python.formatting.provider": "none"
 }

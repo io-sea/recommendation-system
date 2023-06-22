@@ -2,15 +2,23 @@ import os
 import unittest
 import time
 import numpy as np
+import pandas as pd
 import simpy
 from loguru import logger
 
-from cluster_simulator.cluster import Cluster, Tier, EphemeralTier, bandwidth_share_model, compute_share_model, get_tier, convert_size
+from cluster_simulator.cluster import (Cluster, Tier, EphemeralTier, 
+                                       bandwidth_share_model, compute_share_model, get_tier, convert_size) 
 from cluster_simulator.phase import DelayPhase, ComputePhase, IOPhase
 
+from cluster_simulator.application import Application
+from cluster_simulator.analytics import display_apps_dataflow
+
+import atexit
+import plotly.io as pio
 
 CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
 TEST_CONFIG_FILE = os.path.join(CURRENT_DIR, "test_data", "config.yaml")
+TEST_CONFIG_COMPLETE = os.path.join(CURRENT_DIR, "test_data", "config_complete.yaml")
 
 
 class TestClusterConfigFile(unittest.TestCase):
@@ -74,6 +82,93 @@ class TestClusterConfigFile(unittest.TestCase):
         self.assertEqual(cluster.compute_cores.capacity, compute_nodes * cores_per_node)
         self.assertEqual(len(cluster.tiers), 2)
         self.assertEqual(cluster.ephemeral_tier.name, 'my_ephemeral')
+
+
+class TestClusterConfigFileBandwidth(unittest.TestCase):
+
+    def setUp(self):
+        self.env = simpy.Environment()
+        TEST_CONFIG_FILE_WITH_MODEL = os.path.join(CURRENT_DIR, "test_data", "config_with_model.yaml")
+        self.cluster = Cluster(self.env, config_path=TEST_CONFIG_FILE_WITH_MODEL)
+
+    def test_config_path_with_model(self):
+        # Test that the cluster is initialized correctly using a YAML config file
+        self.assertEqual(self.cluster.tiers[0].capacity.capacity, 100e9)
+        self.assertEqual(self.cluster.tiers[1].capacity.capacity, 500e9)
+        self.assertEqual(self.cluster.tiers[2].capacity.capacity, 500e9)
+        self.assertEqual(self.cluster.tiers[3].capacity.capacity, 500e9)
+        self.assertEqual(self.cluster.ephemeral_tier.capacity.capacity, 50e9)
+
+    def test_get_max_bandwidth(self):
+        self.assertEqual(self.cluster.tiers[0].get_max_bandwidth(operation='read', pattern=1), 5)
+        self.assertEqual(self.cluster.tiers[0].get_max_bandwidth(operation='write', pattern=0), 10)
+        self.assertEqual(self.cluster.tiers[3].get_max_bandwidth(), 40)
+        self.assertEqual(self.cluster.tiers[3].get_max_bandwidth(operation='write'), 40)
+        self.assertEqual(self.cluster.tiers[3].get_max_bandwidth(pattern=0), 40)
+
+    def test_get_max_bandwidth_with_model(self):
+        new_data = pd.DataFrame({
+            'nodes': [1, 1],
+            'read_io_size': [8e6, 6e6],
+            'write_io_size': [8e6, 6e6],
+            'read_volume': [169e6, 200e6],
+            'write_volume': [330e6, 200e6],
+            'read_io_pattern': ['stride', 'seq'],
+            'write_io_pattern': ['stride', 'seq'],
+        })
+        max_bandwidth = self.cluster.tiers[1].get_max_bandwidth(new_data=new_data)
+        expected_values = [5.03018109e+08, 3.89502183e+08]
+        self.assertIsInstance(self.cluster.tiers[1].get_max_bandwidth(new_data=new_data), np.ndarray)        
+        self.assertAlmostEquals(max_bandwidth[0], expected_values[0], places=-3)
+
+    def test_get_max_bandwidth_with_model_pure_read_write(self):
+        new_data = pd.DataFrame({ 
+            'nodes': [1, 1],
+            'read_io_size': [8e6, 6e6],
+            'write_io_size': [8e6, 6e6],
+            'read_volume': [169e6, 0],
+            'write_volume': [0, 200e6],
+            'read_io_pattern': ['stride', 'seq'],
+            'write_io_pattern': ['stride', 'seq'],
+        })
+        max_bandwidth = self.cluster.tiers[1].get_max_bandwidth(new_data=new_data)
+        print(max_bandwidth)
+        expected_values = [1.18203310e+09, 8.48493401e+08]
+        self.assertIsInstance(self.cluster.tiers[1].get_max_bandwidth(new_data=new_data), np.ndarray)
+        
+    def test_get_max_bandwidth_with_model_0_read_write(self):
+        new_data = pd.DataFrame({ 
+            'nodes': [1],
+            'read_io_size': [4e3],
+            'write_io_size': [4e3],
+            'read_volume': [0],
+            'write_volume': [0],
+            'read_io_pattern': ['stride'],
+            'write_io_pattern': ['seq'],
+        })
+        
+        self.assertIsInstance(self.cluster.tiers[1].get_max_bandwidth(new_data=new_data), np.ndarray)
+        self.assertEqual(self.cluster.tiers[1].get_max_bandwidth(new_data=new_data), 0)
+
+
+class TestClusterConfigFileBandwidthApplication(unittest.TestCase):
+
+    def setUp(self):
+        self.env = simpy.Environment()
+        TEST_CONFIG_FILE_WITH_MODEL = os.path.join(CURRENT_DIR, "test_data", "config_with_model.yaml")
+        self.cluster = Cluster(self.env, config_path=TEST_CONFIG_FILE_WITH_MODEL)
+    def test_get_max_bandwidth_with_model_with_application(self):
+        data = simpy.Store(self.env)
+        compute = [0,  10]
+        read = [1e9, 0]
+        write = [1e9, 5e9]
+        tiers = [1, 0]
+        app = Application(self.env,
+                          compute=compute,
+                          read=read,
+                          write=write)
+        self.env.process(app.run(self.cluster, placement=[1, 0]))
+        self.env.run()
 
 
 class TestClusterTiers(unittest.TestCase):
@@ -264,3 +359,67 @@ class TestClusterTierEviction(unittest.TestCase):
             self.hdd_tier.capacity.put(quantum)
             self.bb.dirty -= quantum
             self.bb.evict()
+            
+            
+class TestClusterTierPerformanceModel(unittest.TestCase):
+    def setUp(self):
+        representation = {'events': [0, 1, 8, 12, 44, 50, 54, 56],
+                          'node_count': 1,
+                          'read_bw': [0,
+                                      1730808132.0,
+                                      794387563.0,
+                                      1584492138.5,
+                                      3023280.0,
+                                      3527160.0,
+                                      2519400.0,
+                                      0],
+                          'read_operations': [0, 812, 1305, 909, 601, 1400, 500, 0],
+                          'read_pattern': ['Uncl', 'Seq', 'Seq', 'Seq', 'Seq', 'Seq', 'Seq', 'Uncl'],
+                          'read_volumes': [0,
+                                           1730808132,
+                                           1588775126,
+                                           3168984277,
+                                           3023280,
+                                           7054320,
+                                           2519400,
+                                           0],
+                          'write_bw': [0,
+                                       0,
+                                       1019392798.5,
+                                       1379672406.0,
+                                       1333699712.25,
+                                       1326288590.25,
+                                       1066959769.8,
+                                       0],
+                          'write_operations': [0, 0, 986, 2000, 1000, 995, 1000, 0],
+                          'write_pattern': ['Uncl', 'Uncl', 'Seq', 'Seq', 'Seq', 'Seq', 'Seq', 'Uncl'],
+                          'write_volumes': [0,
+                                            0,
+                                            2038785597,
+                                            4139017218,
+                                            5334798849,
+                                            5305154361,
+                                            5334798849,
+                                            0]}
+        self.representation = representation
+        self.env = simpy.Environment()
+        self.data = simpy.Store(self.env)
+        self.cluster = Cluster(self.env, config_path=TEST_CONFIG_COMPLETE)
+        
+    def test_tier_performance_model(self):
+        """Test printing tiers
+        # TODO: when tier 3 (constant is chosen, last phase bw is wrong)
+        # """
+        
+        app1 = Application(self.env, name=f"Hum", 
+                           compute=self.representation["events"],
+                           read=self.representation["read_volumes"],
+                           write=self.representation["write_volumes"],
+                           data=self.data)
+        self.env.process(app1.run(self.cluster,
+                                  placement=[2]*(
+                                      len(self.representation["events"]))))
+        self.env.run()
+        
+        fig = display_apps_dataflow(self.data, self.cluster, width=800, height=600)
+        fig.show()
