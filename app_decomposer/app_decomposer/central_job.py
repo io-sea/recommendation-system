@@ -7,6 +7,7 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from scipy.stats import zscore
 from numpy import pad
 
+
 class WorkflowSynthesizer:
     """
     Class for synthesizing a workflow from a list of jobs. The jobs and the 
@@ -70,57 +71,89 @@ class CentralJob:
         features: The features extracted from the jobs. 
     """
 
-    def __init__(self, jobs, n_dft_coeff=20, normalization_type='zscore'):
+    def __init__(self, jobs, n_components=20, normalization_type='minmax'):
         """
         Initialize CentralJob instance.
 
         Args:
             jobs (list): List of jobs data.
-            n_dft_coeff (int): Number of DFT coefficients to extract from the job.
+            n_components (int): Number of DFT coefficients to extract from the job.
             normalization_type (str): The type of normalization to apply to the features.
         """
         self.jobs = jobs
-        self.n_dft_coeff = n_dft_coeff
+        self.n_components = n_components
         self.normalization_type = normalization_type
         self.features = None
-
-    def extract_features(self):
+    
+    def fft_features(self, signal, fixed_length=None):
         """
-        Extracts features (min, max, mean, DFT components) from jobs data.
+        Combines real and complex coefficients to give the norm, also called energy
+        of a signal, by using the fast numpy.fft implementation.
+        It operates on row-wise stacked vectors.
+
+        Args:
+            signal (list): row-wise signal stacked vertically.
+            fixed_length (int): final length (axis=1 size) of the signal before fft is applied. It pads
+                signal from its original length to a fixed_length with zeros. Default, None.
+
+        Returns:
+            numpy array: signal energy on N points.
+        """
+        # Convert signal to numpy array
+        signal = np.array(signal)[np.newaxis, :]
+        signal_length = signal.shape[1]
+        if fixed_length:
+            fixed_length = max(fixed_length - signal_length, 0)
+            signal = np.pad(signal, ((0, 0), (0, fixed_length)), mode='constant', constant_values=0)
+        fft_data = np.fft.fft(signal, n=self.n_components, axis=1)
+        fft_data = (2/signal_length) * np.abs(fft_data)[:, 0:self.n_components]
+        return fft_data
+
+    def process(self):
+        """
+        Perform frequency based feature extraction for each job.
+        Extracts features (min, max, mean, FFT components) from jobs data.
+
+        Returns:
+            list: list of extracted features.
         """
         self.features = []
         for job in self.jobs:
-            min_br = np.min(job['bytesRead'])
-            max_br = np.max(job['bytesRead'])
-            mean_br = np.mean(job['bytesRead'])
-            
-            min_bw = np.min(job['bytesWritten'])
-            max_bw = np.max(job['bytesWritten'])
-            mean_bw = np.mean(job['bytesWritten'])
+            feature_set = []
+            for key in ["bytesRead", "bytesWritten"]:
+                ts_data = job[key]
+                min_val = np.min(ts_data)
+                max_val = np.max(ts_data)
+                mean_val = np.mean(ts_data)
 
-            # DFT components
-            dft_br = fft(job['bytesRead'])[:self.n_dft_coeff]
-            dft_bw = fft(job['bytesWritten'])[:self.n_dft_coeff]
+                # DFT components
+                dft_val = self.fft_features(ts_data).ravel().tolist()
 
-            self.features.append([min_br, max_br, mean_br, min_bw, max_bw, 
-                                  mean_bw, *dft_br, *dft_bw])
+                # Append all features to the single list
+                feature_set.extend([min_val, max_val, mean_val])
+                feature_set.extend(dft_val)
+
+            self.features.append(feature_set)
+
+        return self.features
 
     def scale_features(self):
         """
         Apply z-score or minmax scaling on the features.
         """
+        features_df = pd.DataFrame(self.features)
         if self.normalization_type == 'zscore':
-            self.features = zscore(self.features, axis=0)
+            self.features = zscore(features_df, axis=0)
         elif self.normalization_type == 'minmax':
             scaler = MinMaxScaler()
-            self.features = scaler.fit_transform(self.features)
+            self.features = scaler.fit_transform(features_df)
 
     def find_central_job(self):
         """
         Finds the job closest to the centroid based on Euclidean distance. 
         Returns the index of the closest job in the jobs list.
         """
-        self.extract_features()
+        self.process()
         self.scale_features()
         centroid = np.mean(self.features, axis=0)
         distances = euclidean_distances(self.features, [centroid])

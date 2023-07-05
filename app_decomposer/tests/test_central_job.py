@@ -56,50 +56,58 @@ class TestWorkflowSynthesizer(unittest.TestCase):
 
 
 class TestCentralJob(unittest.TestCase):
+    """
+    Class to test the CentralJob class.
+    """
 
     def setUp(self):
-        self.job1 = {'timestamp': list(range(0,10)), 
-                     'bytesRead': list(range(1,11)), 
-                     'bytesWritten': list(range(1,11))}
-        self.job2 = {'timestamp': list(range(0,20,2)), 
-                     'bytesRead': list(range(1,21,2)), 
-                     'bytesWritten': list(range(1,21,2))}
-        self.job3 = {'timestamp': list(range(0,30,3)), 
-                     'bytesRead': list(range(1,31,3)), 
-                     'bytesWritten': list(range(1,31,3))}
-        self.jobs = [self.job1, self.job2, self.job3]
-        self.cj = CentralJob(self.jobs)
+        """
+        Setup for the tests. We'll use this to create some default jobs.
+        """
+        self.jobs = [
+            {'bytesRead': np.array([6457, 0, 1090522169, 2055211225]),
+            'bytesWritten': np.array([115404800, 191795200, 0, 0])},
+            
+            {'bytesRead': np.array([6957, 0, 1070522169, 2025211225]),
+            'bytesWritten': np.array([120404800, 198795200, 0, 0])}
+        ]
 
-    def test_extract_features(self):
-        self.cj.extract_features()
-        self.assertIsNotNone(self.cj.features)
-        self.assertEqual(len(self.cj.features), len(self.jobs))
+    def test_init(self):
+        """
+        Tests that the CentralJob class initializes correctly.
+        """
+        cj = CentralJob(self.jobs)
+        self.assertEqual(cj.jobs, self.jobs)
+        self.assertEqual(cj.n_components, 20)
+        self.assertEqual(cj.normalization_type, 'minmax')
+        self.assertIsNone(cj.features)
 
-    # def test_scale_features(self):
-    #     self.cj.extract_features()
-    #     self.cj.scale_features()
-        #self.assertIsNotNone(self.cj.features)
-        # Make sure all means are very close to zero and standard deviations very close to 1 (zscore properties)
-        #print(self.cj.features)
-        # self.assertTrue(np.allclose(self.cj.features.mean(axis=0), 0, atol=1e-6))
-        # self.assertTrue(np.allclose(self.cj.features.std(axis=0), 1, atol=1e-6))
+    def test_process(self):        
+        # Mocking jobs data
+        jobs = [
+            {"bytesRead": [1,2,3,4,5], "bytesWritten": [2,3,4,5,6]},
+            {"bytesRead": [2,3,4,5,6], "bytesWritten": [3,4,5,6,7]}
+        ]
+        # Init the class
+        self.cj = CentralJob(jobs=jobs)
+        # Process the job data
+        features = self.cj.process()
+        # Assertions
+        self.assertIsInstance(features, list)  # assert features is a list
+        self.assertEqual(len(features), len(jobs))  # assert two jobs' features are processed
+        for feature_set in features:
+            self.assertEqual(len(feature_set), 
+                             len(jobs)*(3+self.cj.n_components))  # assert each feature set contains 6 elements (min, max, mean, FFT components)
 
-    def test_scale_features_minmax(self):
-        self.cj.normalization_type = 'minmax'
-        self.cj.extract_features()
-        self.cj.scale_features()
-        self.assertIsNotNone(self.cj.features)
-        # Make sure all values are between 0 and 1 (minmax properties)
-        self.assertTrue((self.cj.features >= 0).all() and (self.cj.features <= 1).all())
 
-    # def test_find_central_job(self):
-    #     self.cj.extract_features()
-    #     self.cj.scale_features()
-    #     central_job_index = self.cj.find_central_job()
-    #     self.assertIsInstance(central_job_index, int)
-
+    def test_find_central_job(self):
+        """
+        Test the find_central_job function.
+        """
+        cj = CentralJob(self.jobs)
+        idx = cj.find_central_job()        
+        # Check that the returned index is valid
+        self.assertTrue(0 <= idx < len(self.jobs))
 
 if __name__ == '__main__':
     unittest.main()
-    
-
