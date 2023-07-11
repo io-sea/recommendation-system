@@ -33,6 +33,8 @@ def get_keycloak_token():
     cmd += ['--request', 'POST', '--data', 'username=ioi-admin', '--data', 'password=password',
             '--data', 'grant_type=password', '--data', 'client_id=io-instrumentation']
     cmd += [ioi_backend_url]
+    print(f"ioi_backend_rul: {ioi_backend_url}")
+    print(f"command: {cmd}")
     rc = subprocess.run(cmd, stdout=subprocess.PIPE, shell=False, check=True)
     print(f"Output: {rc.stdout}") 
     conf = json.loads(rc.stdout)

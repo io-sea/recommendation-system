@@ -65,7 +65,7 @@ class Configuration:
                 '--data', 'grant_type=password', '--data', f'client_id={self.parse()["keycloak"]["client"]}']
 
         cmd += [ioi_backend_url]
-        print(cmd)
+        print(f"CMD = {cmd}")
         rc = subprocess.run(cmd, stdout=subprocess.PIPE, shell=False, check=True)
         conf = json.loads(rc.stdout)
         assert('access_token' in conf)
@@ -74,11 +74,31 @@ class Configuration:
         #     token = "Bearer " + conf["access_token"]
         return conf["access_token"]
     
-    def get_kc_token_v5(self, username='smchpcadmin', password='smchpcadmin'):
+    def get_kc_token_docker(self):
+        """Get a keycloak valid token."""
+        ioi_backend_url = f"{self.get_kc_hostname()}:{self.get_kc_port()}"\
+            f"/auth/realms/{self.get_kc_realm()}/protocol/openid-connect/token"            
+        cmd = ['curl', '--silent', '--insecure']
+        cmd += ['--header', 'Content-Type: application/x-www-form-urlencoded']
+        cmd += ['--request', 'POST', '--data', 'username=bird_admin', '--data', 'password=bird_admin',
+                '--data', 'grant_type=password', '--data', f'client_id={self.parse()["keycloak"]["client"]}']
+
+        cmd += [ioi_backend_url]
+        rc = subprocess.run(cmd, stdout=subprocess.PIPE, shell=False, check=True)
+        conf = json.loads(rc.stdout)
+        assert('access_token' in conf)
+
+        # if "Bearer " not in conf['access_token']:
+        #     token = "Bearer " + conf["access_token"]
+        return conf["access_token"]
+    
+    def get_kc_token_v5(self, username='smchpcadmin', 
+                        password='smchpcadmin'):
         """Get a keycloak valid token."""
         ioi_backend_url = f"{self.get_kc_hostname()}:{self.get_kc_port()}"\
             f"/auth/realms/{self.get_kc_realm()}/protocol/openid-connect/token"
-        cmd = ['curl', '--silent', '--insecure']
+        #cmd = ['curl', '--silent', '--insecure']
+        cmd = ['curl', '--location', '--request']
         cmd += ['--header', 'Content-Type: application/x-www-form-urlencoded']
         cmd += ['--request', 'POST', '--data', f"username={username}", '--data',
                 f"password={password}",
@@ -87,6 +107,7 @@ class Configuration:
         cmd += [ioi_backend_url]
         print(f"ioi_backend_url: {ioi_backend_url}")
         rc = subprocess.run(cmd, stdout=subprocess.PIPE, shell=False, check=True)
+        # print(f"rc.stdout: {rc.stdout}")
         conf = json.loads(rc.stdout)
         assert('access_token' in conf)
 

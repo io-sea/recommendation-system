@@ -164,7 +164,7 @@ class APIConnector:
             Response: the response of the sent request
         """
         try:
-            logger.debug("Sending %s request to endpoint %s", method, endpoint)
+            logger.debug("Sending {} request to endpoint {}".format(method, endpoint))
             prepared_request = self._prepare_request(method,
                                                      endpoint,
                                                      params,

@@ -20,6 +20,6 @@ api:
 
 keycloak:
     uri: http://kiwi0.atos.local
-    port:  81
+    port:  80
     realm: bird
     client: ioi-gui-api
