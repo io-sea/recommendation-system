@@ -1,0 +1,9 @@
+api:
+  uri: http://localhost
+  port: 80
+
+keycloak:
+    uri: http://localhost
+    port: 8080
+    realm: bird
+    client: io-instrumentation
