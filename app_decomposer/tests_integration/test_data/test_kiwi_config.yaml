@@ -3,12 +3,23 @@
 #   realm: atos-data-management
 #   client: io-instrumentation
 
+# api:
+#     uri: http://kiwi0
+#     port: 8090
+
+# keycloak:
+#     uri: http://kiwi0
+#     port: 8080
+#     realm: atos-data-management
+#     client: io-instrumentation
+
+
 api:
-    uri: http://kiwi0
-    port: 8090
+    uri: http://kiwi0.atos.local/ioi/gui
+    port: 80
 
 keycloak:
-    uri: http://kiwi0
-    port: 8080
-    realm: atos-data-management
-    client: io-instrumentation
+    uri: http://kiwi0.atos.local
+    port:  80
+    realm: bird
+    client: ioi-gui-api

@@ -42,11 +42,12 @@ class TestKeycloakToken(unittest.TestCase):
     def test_get_token(self):
         """Test that keycloak_connector.get_kc_token returns a valid token."""
         keycloak_token = self.config.get_kc_token()
+        print(keycloak_token)
         #self.assertIn('Bearer ', keycloak_token)
         # test to call an api with the token
         api_uri = f"{self.config.get_api_uri()}:{self.config.get_api_port()}" \
             "/backend/api/user/settings"
-
+        print(api_uri)
         rqst = request_delegator(requests.get,
                                  api_uri,
                                  headers={'Authorization': "Bearer "+ keycloak_token})
@@ -55,11 +56,11 @@ class TestKeycloakToken(unittest.TestCase):
         self.assertIn('username', resp)
         self.assertEqual(resp['username'], "ioi-admin")
 
-    @unittest.skipIf(os.name=='nt', "Skip this test because it is not working on windows")
-    @unittest.skipUnless(TEST_CONFIG == KIWI_CONFIG, "Skip this test because kiwi0 is not up")
-    def test_on_kiwi0(self):
-        """test if unittest activates on condition"""
-        self.assertEqual(TEST_CONFIG, KIWI_CONFIG)
+    # @unittest.skipIf(os.name=='nt', "Skip this test because it is not working on windows")
+    # @unittest.skipUnless(TEST_CONFIG == KIWI_CONFIG, "Skip this test because kiwi0 is not up")
+    # def test_on_kiwi0(self):
+    #     """test if unittest activates on condition"""
+    #     self.assertEqual(TEST_CONFIG, KIWI_CONFIG)
 
     @unittest.skipIf(os.name=='nt', "Skip this test because it is not working on windows")
     @unittest.skipUnless(TEST_CONFIG == KIWI_CONFIG, "Skip this test because kiwi0 is not up")

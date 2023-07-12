@@ -45,7 +45,7 @@ TEST_CONFIG = os.path.join(CURRENT_DIR, "test_data", "test_config.yaml")
 
 class TestFunctions(unittest.TestCase):
     """TestCase to test the functions of the module."""
-    @unittest.skip("no integration platform yet")
+    #@unittest.skip("no integration platform yet")
     def setUp(self):
         """Prepare the test suite."""
         self.keycloakToken = get_keycloak_token()
@@ -53,12 +53,12 @@ class TestFunctions(unittest.TestCase):
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
-    @unittest.skip("no integration platform yet")
+    #@unittest.skip("no integration platform yet")
     def test_request_delegator(self):
 
         """Test the 'request_delegator' standard behavior."""
-
-        api_uri = f"https://{get_backend_hostname()}:{get_backend_ipv4_port()}/backend/api/admin/db/stats"
+        print(f"https://{get_backend_hostname()}:{get_backend_ipv4_port()}")
+        api_uri = f"http://{get_backend_hostname()}:{get_backend_ipv4_port()}/backend/api/admin/db/stats"
 
         rqst = request_delegator(requests.get,
 
@@ -79,8 +79,7 @@ class TestFunctions(unittest.TestCase):
     @unittest.skip("no integration platform yet")
     def test_request_delegator_exception(self):
 
-        """Test the 'request_delegator' error management."""
-
+        """Test the 'request_delegator' error management."""        
         api_uri = f"https://{get_backend_hostname()}:{get_backend_ipv4_port()}/backend/api/admin/db/stats"
 
 
