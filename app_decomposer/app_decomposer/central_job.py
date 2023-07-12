@@ -1,11 +1,13 @@
 import numpy as np
 import pandas as pd
+from loguru import logger
 from scipy.stats import zscore
 from sklearn.metrics.pairwise import euclidean_distances
 from scipy.fftpack import fft
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from scipy.stats import zscore
-from numpy import pad
+import plotly.graph_objs as go
+from sklearn.decomposition import PCA
 
 
 class WorkflowSynthesizer:
@@ -58,6 +60,56 @@ class WorkflowSynthesizer:
         return output
 
 
+class WorkflowSearcher:
+    def __init__(self, connector):
+        self.connector = connector
+
+    def search_workflows(self, workflow_name):
+        # Set the endpoint for the request
+        endpoint = "/ioi/workflows/"
+
+        # Set the parameters for the request
+        params = {
+            "filtering": [
+                {
+                    "field": "name",
+                    "comparator": "equals",
+                    "comparison_value": workflow_name
+                }
+            ],
+            "order": "asc",
+            "sorting_field": "startTime",
+            "limit": 50,
+            "offset": 0
+        }
+
+        # Use the request_delegator method to make the POST request
+        response = self.connector.request_delegator("POST", endpoint,
+                                                    input_json=params)
+
+        # Extract the list of workflow IDs
+        workflow_data = response.json()['data']
+        df = pd.DataFrame(workflow_data)
+        return df
+
+    def extract_workflow_data(self, workflow_id):
+        # Set the endpoint and parameters for the request
+        endpoint = f"/ioi/series/workflow/{workflow_id}"
+        params = {"metrics_group": "volume"}
+
+        # Use the request_delegator method to make the GET request
+        response = self.connector.request_delegator("GET", endpoint, params=params)
+
+        data = response.json()
+        converted_data = {
+            "bytesRead": [item["bytesRead"] for item in data],
+            "bytesWritten": [item["bytesWritten"] for item in data],
+            "timestamp": [item["timestamp"] for item in data],
+        }
+        
+        return converted_data
+
+
 class CentralJob:
     """
     This class is used to identify the job closest to the centroid from a set of jobs. 
@@ -80,11 +132,12 @@ class CentralJob:
             n_components (int): Number of DFT coefficients to extract from the job.
             normalization_type (str): The type of normalization to apply to the features.
         """
+        logger.info("Initializing CentralJob instance")
         self.jobs = jobs
         self.n_components = n_components
         self.normalization_type = normalization_type
         self.features = None
-    
+
     def fft_features(self, signal, fixed_length=None):
         """
         Combines real and complex coefficients to give the norm, also called energy
@@ -99,7 +152,7 @@ class CentralJob:
         Returns:
             numpy array: signal energy on N points.
         """
-        # Convert signal to numpy array
+        logger.info("Calculating FFT features")
         signal = np.array(signal)[np.newaxis, :]
         signal_length = signal.shape[1]
         if fixed_length:
@@ -117,6 +170,7 @@ class CentralJob:
         Returns:
             list: list of extracted features.
         """
+        logger.info("Processing jobs data")
         self.features = []
         for job in self.jobs:
             feature_set = []
@@ -126,10 +180,7 @@ class CentralJob:
                 max_val = np.max(ts_data)
                 mean_val = np.mean(ts_data)
 
-                # DFT components
                 dft_val = self.fft_features(ts_data).ravel().tolist()
-
-                # Append all features to the single list
                 feature_set.extend([min_val, max_val, mean_val])
                 feature_set.extend(dft_val)
 
@@ -141,6 +192,7 @@ class CentralJob:
         """
         Apply z-score or minmax scaling on the features.
         """
+        logger.info("Scaling features")
         features_df = pd.DataFrame(self.features)
         if self.normalization_type == 'zscore':
             self.features = zscore(features_df, axis=0)
@@ -153,8 +205,75 @@ class CentralJob:
         Finds the job closest to the centroid based on Euclidean distance. 
         Returns the index of the closest job in the jobs list.
         """
+        logger.info("Finding central job")
         self.process()
         self.scale_features()
         centroid = np.mean(self.features, axis=0)
         distances = euclidean_distances(self.features, [centroid])
-        return np.argmin(distances)
+        central_job_idx = np.argmin(distances)
+        logger.info(f"Central job found at index {central_job_idx}")
+        return central_job_idx
+    
+
+def display_features_3d(features):
+    """
+    Display the features in 3D using PCA and Plotly. The closest job to the centroid is highlighted.
+    """
+    # Perform PCA on the features
+    pca = PCA(n_components=3)
+    reduced_features = pca.fit_transform(features)
+
+    # Calculate the variance explained by each principal component
+    explained_variance = pca.explained_variance_ratio_
+
+    # Calculate the centroid
+    centroid = np.mean(reduced_features, axis=0)
+
+    # Find the index of the central job
+    distances = euclidean_distances(reduced_features, [centroid])
+    central_idx = np.argmin(distances)
+
+    # Create a Plotly figure
+    fig = go.Figure()
+
+    # Add each job's features to the figure as a scatter plot
+    for i, feature in enumerate(reduced_features):
+        color = 'blue'
+        size = 6
+        if i == central_idx:
+            # Highlight the central job
+            color = 'red'
+            size = 8
+        fig.add_trace(go.Scatter3d(
+            x=[feature[0]],
+            y=[feature[1]],
+            z=[feature[2]],
+            mode='markers+text',
+            marker=dict(
+                size=size,
+                color=color,
+            ),
+            text=[f'Job {i}'],
+            name=f'Job {i}'
+        ))
+
+    # Add the centroid to the figure
+    fig.add_trace(go.Scatter3d(
+        x=[centroid[0]],
+        y=[centroid[1]],
+        z=[centroid[2]],
+        mode='markers',
+        marker=dict(
+            size=8,
+            color='black',
+        ),
+        name='Centroid'
+    ))
+
+    # Add the variance explained by each principal component to the figure's title
+    fig.update_layout(
+        title=f"3D plot of features (PCA~: {np.sum(explained_variance)})"
+    )
+
+    # Return the figure
+    return fig

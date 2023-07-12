@@ -1,7 +1,8 @@
 import unittest
 import numpy as np
 import pandas as pd
-from app_decomposer.central_job import WorkflowSynthesizer, CentralJob
+from unittest.mock import MagicMock
+from app_decomposer.central_job import WorkflowSynthesizer, CentralJob, WorkflowSearcher
 
 
 class TestWorkflowSynthesizer(unittest.TestCase):
@@ -52,6 +53,69 @@ class TestWorkflowSynthesizer(unittest.TestCase):
                              self.ws.workflow['sumBytesRead'].tolist())
         self.assertListEqual(result['bytesWritten'], 
                              self.ws.workflow['sumBytesWritten'].tolist())
+
+
+
+class TestWorkflowSearcher(unittest.TestCase):
+    def setUp(self):
+        # Mock APIConnector object
+        self.mock_connector = MagicMock()
+        self.searcher = WorkflowSearcher(self.mock_connector)
+
+    def test_search_workflows(self):
+        # Mock the response from the connector
+        self.mock_connector.request_delegator.return_value.json.return_value = {
+            'data': [
+                {'id': '1', 'name': 'Workflow1'},
+                {'id': '2', 'name': 'Workflow2'}
+            ]
+        }
+
+        df = self.searcher.search_workflows('Workflow1')
+
+        # Check that request_delegator was called with the right arguments
+        self.mock_connector.request_delegator.assert_called_with(
+            "POST",
+            "/ioi/workflows/",
+            input_json={
+                "filtering": [
+                    {
+                        "field": "name",
+                        "comparator": "equals",
+                        "comparison_value": 'Workflow1'
+                    }
+                ],
+                "order": "asc",
+                "sorting_field": "startTime",
+                "limit": 50,
+                "offset": 0
+            }
+        )
+
+        # Check that the result is a DataFrame with the correct columns
+        self.assertEqual(list(df.columns), ['id', 'name'])
+
+    def test_extract_workflow_data(self):
+        # Mock the response from the connector
+        self.mock_connector.request_delegator.return_value.json.return_value = [
+            {"bytesRead": 100, "bytesWritten": 200, "timestamp": 1234567890}
+        ]
+
+        data = self.searcher.extract_workflow_data('1')
+
+        # Check that request_delegator was called with the right arguments
+        self.mock_connector.request_delegator.assert_called_with(
+            "GET",
+            "/ioi/series/workflow/1",
+            params={"metrics_group": "volume"}
+        )
+
+        # Check that the result is a dict with the correct keys and values
+        self.assertEqual(data, {
+            "bytesRead": [100],
+            "bytesWritten": [200],
+            "timestamp": [1234567890],
+        })
 
 
 
