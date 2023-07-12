@@ -3,7 +3,7 @@
 This module define configuration parameters of the iopa-integration test platform.
 """
 from __future__ import division, absolute_import, generators, print_function, unicode_literals,\
-                       with_statement, nested_scopes # ensure python2.x compatibility
+    with_statement, nested_scopes  # ensure python2.x compatibility
 
 __copyright__ = """
 Copyright(C) 2022 Bull S. A. S. - All rights reserved
@@ -27,16 +27,18 @@ def get_keycloak_token():
     """ Return the authentification keycloak token """
 
     ioi_backend_url = f"https://{get_keycloak_hostname()}:{get_keycloak_ipv4_port()}" \
-                       "/auth/realms/atos-data-management/protocol/openid-connect/token"
+        "/auth/realms/atos-data-management/protocol/openid-connect/token"
     cmd = ['curl', '--silent', '--insecure']
     cmd += ['--header', 'Content-Type: application/x-www-form-urlencoded']
     cmd += ['--request', 'POST', '--data', 'username=ioi-admin', '--data', 'password=password',
             '--data', 'grant_type=password', '--data', 'client_id=io-instrumentation']
     cmd += [ioi_backend_url]
-
+    print(f"ioi_backend_rul: {ioi_backend_url}")
+    print(f"command: {cmd}")
     rc = subprocess.run(cmd, stdout=subprocess.PIPE, shell=False, check=True)
+    print(f"Output: {rc.stdout}") 
     conf = json.loads(rc.stdout)
-    assert('access_token' in conf)
+    assert ('access_token' in conf)
 
     return conf['access_token']
 
@@ -84,6 +86,7 @@ def get_mongo_ipv4_port():
 
 class MongoDB:
     """This class builds a Mongo connection to the selected database."""
+
     def __init__(self, host='localhost', port=27017, database='cmdb_database'):
         """Builds a Mongo connection to a database using the hostname and the port of the mongo
         host.
