@@ -128,13 +128,16 @@ class TestCentralJob(unittest.TestCase):
         """
         Setup for the tests. We'll use this to create some default jobs.
         """
-        self.jobs = [
-            {'bytesRead': np.array([6457, 0, 1090522169, 2055211225]),
-            'bytesWritten': np.array([115404800, 191795200, 0, 0])},
-            
-            {'bytesRead': np.array([6957, 0, 1070522169, 2025211225]),
-            'bytesWritten': np.array([120404800, 198795200, 0, 0])}
-        ]
+        self.jobs = {
+            "job_1": {
+                'bytesRead': np.array([6457, 0, 1090522169, 2055211225]),
+                'bytesWritten': np.array([115404800, 191795200, 0, 0])
+            },
+            "job_2": {
+                'bytesRead': np.array([6957, 0, 1070522169, 2025211225]),
+                'bytesWritten': np.array([120404800, 198795200, 0, 0])
+            }
+        }
 
     def test_init(self):
         """
@@ -148,10 +151,10 @@ class TestCentralJob(unittest.TestCase):
 
     def test_process(self):        
         # Mocking jobs data
-        jobs = [
-            {"bytesRead": [1,2,3,4,5], "bytesWritten": [2,3,4,5,6]},
-            {"bytesRead": [2,3,4,5,6], "bytesWritten": [3,4,5,6,7]}
-        ]
+        jobs = {
+            "job_1": {"bytesRead": np.array([1,2,3,4,5]), "bytesWritten": np.array([2,3,4,5,6])},
+            "job_2": {"bytesRead": np.array([2,3,4,5,6]), "bytesWritten": np.array([3,4,5,6,7])}
+        }
         # Init the class
         self.cj = CentralJob(jobs=jobs)
         # Process the job data
@@ -161,8 +164,7 @@ class TestCentralJob(unittest.TestCase):
         self.assertEqual(len(features), len(jobs))  # assert two jobs' features are processed
         for feature_set in features:
             self.assertEqual(len(feature_set), 
-                             len(jobs)*(3+self.cj.n_components))  # assert each feature set contains 6 elements (min, max, mean, FFT components)
-
+                             2*(3+self.cj.n_components))  # assert each feature set contains correct number of elements
 
     def test_find_central_job(self):
         """

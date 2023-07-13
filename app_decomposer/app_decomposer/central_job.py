@@ -102,9 +102,11 @@ class WorkflowSearcher:
 
         data = response.json()
         converted_data = {
-            "bytesRead": [item["bytesRead"] for item in data],
-            "bytesWritten": [item["bytesWritten"] for item in data],
-            "timestamp": [item["timestamp"] for item in data],
+            workflow_id: {
+                "bytesRead": np.array([item["bytesRead"] for item in data]),
+                "bytesWritten": np.array([item["bytesWritten"] for item in data]),
+                "timestamp": np.array([item["timestamp"] for item in data]),
+            }
         }
         
         return converted_data
@@ -172,7 +174,7 @@ class CentralJob:
         """
         logger.info("Processing jobs data")
         self.features = []
-        for job in self.jobs:
+        for job_id, job in self.jobs.items():
             feature_set = []
             for key in ["bytesRead", "bytesWritten"]:
                 ts_data = job[key]

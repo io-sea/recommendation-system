@@ -167,7 +167,6 @@ class TestDockerConnector(unittest.TestCase):
                         '633313fcac213a8b852232db']
         self.assertListEqual(workflow_ids, expected_list)
 
-
 class TestWorkflowSearcher(unittest.TestCase):
     def setUp(self):
         """ Prepare the test suite with self.config.
@@ -206,12 +205,15 @@ class TestWorkflowSearcher(unittest.TestCase):
         data = self.searcher.extract_workflow_data(workflow_id)
 
         # Check that the result is a dict with the correct keys
-        self.assertEqual(set(data.keys()), {"bytesRead", "bytesWritten", "timestamp"})
+        self.assertEqual(set(data.keys()), {workflow_id})
 
-        # Check that the values are lists
-        self.assertIsInstance(data["bytesRead"], list)
-        self.assertIsInstance(data["bytesWritten"], list)
-        self.assertIsInstance(data["timestamp"], list)
+        # Check that the values are dicts with the correct keys
+        self.assertEqual(set(data[workflow_id].keys()), {"bytesRead", "bytesWritten", "timestamp"})
+
+        # Check that the values are numpy arrays
+        self.assertIsInstance(data[workflow_id]["bytesRead"], np.ndarray)
+        self.assertIsInstance(data[workflow_id]["bytesWritten"], np.ndarray)
+        self.assertIsInstance(data[workflow_id]["timestamp"], np.ndarray)
 
 
 
