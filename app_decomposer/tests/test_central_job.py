@@ -9,27 +9,28 @@ class TestWorkflowSynthesizer(unittest.TestCase):
 
     def setUp(self):
         self.ws = WorkflowSynthesizer()
-
         self.job1 = {
-            'bytesRead': np.array([6457, 0, 1090522169, 2055211225]),
-            'bytesWritten': np.array([115404800, 191795200, 0, 0]),
+            'bytesRead': np.array([6457, 0, 1090522169, 2055211225], dtype=np.int64),
+            'bytesWritten': np.array([115404800, 191795200, 0, 0], dtype=np.int64),
             'timestamp': np.array([1581607510, 1581607515, 1581607520, 1581607525])
         }
 
         self.job2 = {
-            'bytesRead': np.array([2457, 8000, 0, 0]),
-            'bytesWritten': np.array([15404800, 91795200, 0, 0]),
+            'bytesRead': np.array([2457, 8000, 0, 0], dtype=np.int64),
+            'bytesWritten': np.array([15404800, 91795200, 0, 0], dtype=np.int64),
             'timestamp': np.array([1581607520, 1581607525, 1581607530, 1581607535])
         }
 
         self.job3 = {
-            'bytesRead': np.array([6457, 0, 1090522169, 2055211225]),
-            'bytesWritten': np.array([115404800, 191795200, 0, 0]),
+            'bytesRead': np.array([6457, 0, 1090522169, 2055211225], dtype=np.int64),
+            'bytesWritten': np.array([115404800, 191795200, 0, 0], dtype=np.int64),
             'timestamp': np.array([1581607530, 1581607535, 1581607540, 1581607545])
         }
 
     def test_synthetize(self):
         self.ws.synthetize([self.job1, self.job2, self.job3])
+        print(self.ws.workflow)
+        print(f"job1 read total = {self.job1['bytesRead'].sum()}")
         self.assertIsInstance(self.ws.workflow, pd.DataFrame)
         self.assertEqual(len(self.ws.workflow), 8)
         self.assertEqual(self.ws.workflow['sumBytesRead'].sum(),
@@ -111,13 +112,9 @@ class TestWorkflowSearcher(unittest.TestCase):
         )
 
         # Check that the result is a dict with the correct keys and values
-        self.assertEqual(data, {
-            "bytesRead": [100],
-            "bytesWritten": [200],
-            "timestamp": [1234567890],
-        })
-
-
+        self.assertEqual(data, {'1': {'bytesRead': np.array([100]),
+                                      'bytesWritten': np.array([200]),
+                                      'timestamp': np.array([1234567890])}})
 
 class TestCentralJob(unittest.TestCase):
     """
@@ -147,7 +144,7 @@ class TestCentralJob(unittest.TestCase):
         self.assertEqual(cj.jobs, self.jobs)
         self.assertEqual(cj.n_components, 20)
         self.assertEqual(cj.normalization_type, 'minmax')
-        self.assertIsNone(cj.features)
+        self.assertIsNone(cj._features)
 
     def test_process(self):        
         # Mocking jobs data
@@ -158,22 +155,25 @@ class TestCentralJob(unittest.TestCase):
         # Init the class
         self.cj = CentralJob(jobs=jobs)
         # Process the job data
-        features = self.cj.process()
+        self.cj.process()
+        features = self.cj._features
         # Assertions
-        self.assertIsInstance(features, list)  # assert features is a list
+        self.assertIsInstance(features, pd.DataFrame)  # assert features is a DataFrame
         self.assertEqual(len(features), len(jobs))  # assert two jobs' features are processed
-        for feature_set in features:
-            self.assertEqual(len(feature_set), 
+        for _, row in features.iterrows():
+            self.assertEqual(len(row), 
                              2*(3+self.cj.n_components))  # assert each feature set contains correct number of elements
+
 
     def test_find_central_job(self):
         """
         Test the find_central_job function.
         """
         cj = CentralJob(self.jobs)
-        idx = cj.find_central_job()        
-        # Check that the returned index is valid
-        self.assertTrue(0 <= idx < len(self.jobs))
+        job_id = cj.find_central_job()        
+        # Check that the returned job_id is valid
+        self.assertTrue(job_id in self.jobs)
+
 
 if __name__ == '__main__':
     unittest.main()
