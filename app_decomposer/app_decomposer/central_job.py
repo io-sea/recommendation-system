@@ -8,6 +8,12 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from scipy.stats import zscore
 import plotly.graph_objs as go
 from sklearn.decomposition import PCA
+import plotly.subplots as sp
+import math
+from sklearn.manifold import TSNE
+import umap
+
+
 
 
 class WorkflowSynthesizer:
@@ -34,16 +40,14 @@ class WorkflowSynthesizer:
         for i, job in enumerate(jobs):
             df = pd.DataFrame({
                 f'timestamp_{i+1}': job['timestamp'],
-                f'bytesRead_{i+1}': job['bytesRead'],
-                f'bytesWritten_{i+1}': job['bytesWritten']
+                f'bytesRead_{i+1}': np.array(job['bytesRead'], dtype=np.int64),
+                f'bytesWritten_{i+1}': np.array(job['bytesWritten'], dtype=np.int64)
             })
             df = df.set_index(f'timestamp_{i+1}')
             dfs.append(df)
         self.workflow = pd.concat(dfs, axis=1).fillna(0)
-        self.workflow['sumBytesRead'] = self.workflow.filter(
-            regex=("bytesRead_")).sum(axis=1)
-        self.workflow['sumBytesWritten'] = self.workflow.filter(
-            regex=("bytesWritten_")).sum(axis=1)
+        self.workflow['sumBytesRead'] = self.workflow.filter(regex=("bytesRead_")).sum(axis=1)
+        self.workflow['sumBytesWritten'] = self.workflow.filter(regex=("bytesWritten_")).sum(axis=1)
         self.workflow.reset_index(inplace=True)
 
     def to_dict(self):
@@ -130,7 +134,7 @@ class CentralJob:
         Initialize CentralJob instance.
 
         Args:
-            jobs (list): List of jobs data.
+            jobs (dict): Dictionary of jobs data where keys are job IDs and values are job data.
             n_components (int): Number of DFT coefficients to extract from the job.
             normalization_type (str): The type of normalization to apply to the features.
         """
@@ -138,7 +142,7 @@ class CentralJob:
         self.jobs = jobs
         self.n_components = n_components
         self.normalization_type = normalization_type
-        self.features = None
+        self._features = None
 
     def fft_features(self, signal, fixed_length=None):
         """
@@ -163,6 +167,13 @@ class CentralJob:
         fft_data = np.fft.fft(signal, n=self.n_components, axis=1)
         fft_data = (2/signal_length) * np.abs(fft_data)[:, 0:self.n_components]
         return fft_data
+    
+    @property
+    def features(self):
+        """
+        Returns the features DataFrame, excluding the job_id column used for plotting.
+        """
+        return self._features.drop(columns=["job_id"])
 
     def process(self):
         """
@@ -170,12 +181,12 @@ class CentralJob:
         Extracts features (min, max, mean, FFT components) from jobs data.
 
         Returns:
-            list: list of extracted features.
+            DataFrame: DataFrame of extracted features, indexed by job_id.
         """
         logger.info("Processing jobs data")
-        self.features = []
+        features = []
         for job_id, job in self.jobs.items():
-            feature_set = []
+            feature_set = {'job_id': job_id}
             for key in ["bytesRead", "bytesWritten"]:
                 ts_data = job[key]
                 min_val = np.min(ts_data)
@@ -183,50 +194,59 @@ class CentralJob:
                 mean_val = np.mean(ts_data)
 
                 dft_val = self.fft_features(ts_data).ravel().tolist()
-                feature_set.extend([min_val, max_val, mean_val])
-                feature_set.extend(dft_val)
+                feature_set.update({f'{key}_{stat}': stat_val for stat, stat_val in zip(['min', 'max', 'mean'], [min_val, max_val, mean_val])})
+                feature_set.update({f'{key}_dft_{i}': val for i, val in enumerate(dft_val)})
 
-            self.features.append(feature_set)
+            features.append(feature_set)
 
-        return self.features
+        self._features = pd.DataFrame(features).set_index("job_id")
 
     def scale_features(self):
         """
         Apply z-score or minmax scaling on the features.
         """
         logger.info("Scaling features")
-        features_df = pd.DataFrame(self.features)
         if self.normalization_type == 'zscore':
-            self.features = zscore(features_df, axis=0)
+            self._features = self._features.apply(zscore)
         elif self.normalization_type == 'minmax':
             scaler = MinMaxScaler()
-            self.features = scaler.fit_transform(features_df)
+            self._features = pd.DataFrame(scaler.fit_transform(self._features), columns=self._features.columns, index=self._features.index)
 
     def find_central_job(self):
-        """
+        """        
         Finds the job closest to the centroid based on Euclidean distance. 
-        Returns the index of the closest job in the jobs list.
+        Returns the job_id of the closest job.
         """
         logger.info("Finding central job")
         self.process()
         self.scale_features()
-        centroid = np.mean(self.features, axis=0)
-        distances = euclidean_distances(self.features, [centroid])
-        central_job_idx = np.argmin(distances)
-        logger.info(f"Central job found at index {central_job_idx}")
-        return central_job_idx
-    
+        centroid = self._features.mean(axis=0)
+        distances = euclidean_distances(self._features, [centroid])
+        central_job_id = self._features.index[np.argmin(distances)]
+        logger.info(f"Central job found with ID {central_job_id}")
+        return central_job_id
+  
 
-def display_features_3d(features):
-    """
-    Display the features in 3D using PCA and Plotly. The closest job to the centroid is highlighted.
-    """
-    # Perform PCA on the features
-    pca = PCA(n_components=3)
-    reduced_features = pca.fit_transform(features)
 
-    # Calculate the variance explained by each principal component
-    explained_variance = pca.explained_variance_ratio_
+  
+def display_features_3d(features, dim_reduction='pca', seed=42):
+    """
+    Display the features in 3D using PCA, t-SNE or UMAP and Plotly. The closest job to the centroid is highlighted.
+    """
+    features_wo_id = features.loc[:, features.columns != 'job_id']
+    job_ids = features['job_id'].index.values
+
+    # Perform dimensionality reduction on the features
+    if dim_reduction == 'pca':
+        reducer = PCA(n_components=3, random_state=seed)
+    elif dim_reduction == 'tsne':
+        reducer = TSNE(n_components=3, random_state=seed)
+    elif dim_reduction == 'umap':
+        reducer = umap.UMAP(n_components=3, random_state=seed)
+    else:
+        raise ValueError(f"Invalid dim_reduction value: {dim_reduction}")
+
+    reduced_features = reducer.fit_transform(features_wo_id)
 
     # Calculate the centroid
     centroid = np.mean(reduced_features, axis=0)
@@ -239,7 +259,7 @@ def display_features_3d(features):
     fig = go.Figure()
 
     # Add each job's features to the figure as a scatter plot
-    for i, feature in enumerate(reduced_features):
+    for i, (feature, job_id) in enumerate(zip(reduced_features, job_ids)):
         color = 'blue'
         size = 6
         if i == central_idx:
@@ -255,8 +275,8 @@ def display_features_3d(features):
                 size=size,
                 color=color,
             ),
-            text=[f'Job {i}'],
-            name=f'Job {i}'
+            text=[f'Job {job_id}'],
+            name=f'Job {job_id}'
         ))
 
     # Add the centroid to the figure
@@ -268,14 +288,58 @@ def display_features_3d(features):
         marker=dict(
             size=8,
             color='black',
+            opacity=0.5
         ),
         name='Centroid'
     ))
 
     # Add the variance explained by each principal component to the figure's title
-    fig.update_layout(
-        title=f"3D plot of features (PCA~: {np.sum(explained_variance)})"
-    )
+    title = f"3D plot of features ({dim_reduction.upper()})"
+    if dim_reduction == 'pca':
+        explained_variance = np.sum(reducer.explained_variance_ratio_)
+        title += f" (explained variance: {explained_variance})"
+    fig.update_layout(title=title)
 
     # Return the figure
+    return fig
+
+
+
+
+def display_timeseries(workflow_searcher, workflow_ids=None):
+    """
+    Display the time series of bytesRead and bytesWritten for a list of workflow IDs using Plotly.
+    If no IDs are provided, all workflows will be plotted.
+    """
+    if workflow_ids is None:
+        workflow_ids = list(workflow_searcher.connector.workflows.keys())
+
+    n = len(workflow_ids)
+    n_cols = math.ceil(math.sqrt(n))
+    n_rows = math.ceil(n / n_cols)
+    
+    fig = sp.make_subplots(rows=n_rows, cols=n_cols)
+    
+    for i, workflow_id in enumerate(workflow_ids):
+        row = i // n_cols + 1
+        col = i % n_cols + 1
+
+        workflow_data = workflow_searcher.extract_workflow_data(workflow_id)
+        job = list(workflow_data.values())[0]
+
+        fig.add_trace(go.Scatter(
+            x=job['timestamp'],
+            y=job['bytesRead'],
+            mode='lines',
+            name=f'bytesRead_{workflow_id}'
+        ), row=row, col=col)
+
+        fig.add_trace(go.Scatter(
+            x=job['timestamp'],
+            y=job['bytesWritten'],
+            mode='lines',
+            name=f'bytesWritten_{workflow_id}'
+        ), row=row, col=col)
+
+    fig.update_layout(height=400*n_rows, width=400*n_cols, title_text="Time series for Jobs")
     return fig
