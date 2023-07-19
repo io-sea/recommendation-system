@@ -8,6 +8,7 @@ import urllib3
 from pydantic import BaseModel
 from typing import List
 from app_decomposer.connector import Connector, APIConnector, ApiModel
+from app_decomposer.central_job import WorkflowSearcher
 from app_decomposer.config_parser import Configuration
 from tests_integration.iopa_integration_config import (get_backend_hostname, 
                                                        get_backend_ipv4_port,
@@ -166,6 +167,53 @@ class TestDockerConnector(unittest.TestCase):
                         '633313fcac213a8b852232db']
         self.assertListEqual(workflow_ids, expected_list)
 
+class TestWorkflowSearcher(unittest.TestCase):
+    def setUp(self):
+        """ Prepare the test suite with self.config.
+        Enter path=DOCKER_CONFIG for scraping data from kiwi0 IOI slogin node."""
+
+        self.config = Configuration(path=DOCKER_CONFIG)
+        token = self.config.get_kc_token_docker()
+        self.connector = APIConnector(api_uri='http://localhost/pybackend/',
+                                      api_token=f"Bearer {token}",
+                                      verify_ssl=False)
+        self.searcher = WorkflowSearcher(self.connector)
+
+        # To disable useless warnings with requests module on https without certificate
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        
+    def test_search_workflows(self):
+        df = self.searcher.search_workflows('Cryo_EM')
+        #print(df)
+        expected_list = ['642b5fd8547fb888bac488ed',                         
+                        '633ab5ebac213a8b8529d186',
+                        '634019e6ac213a8b852f5f9c',
+                        '63402075ac213a8b852f6821',
+                        '634015a2ac213a8b852f4ec5',
+                        '63e52bfdac213a8b85e98c21',
+                        '63be91efac213a8b85bc56eb',
+                        '63be952fac213a8b85bc65c8',
+                        '63455953ac213a8b853535f4',
+                        '63bfc87bac213a8b85be494b',
+                        '643776f0547fb888bad22e64',
+                        '634d3df5ac213a8b853d659e',
+                        '633313fcac213a8b852232db']
+        self.assertListEqual(list(df['id']), expected_list)
+        
+    def test_extract_workflow_data(self):
+        workflow_id = '643776f0547fb888bad22e64'
+        data = self.searcher.extract_workflow_data(workflow_id)
+
+        # Check that the result is a dict with the correct keys
+        self.assertEqual(set(data.keys()), {workflow_id})
+
+        # Check that the values are dicts with the correct keys
+        self.assertEqual(set(data[workflow_id].keys()), {"bytesRead", "bytesWritten", "timestamp"})
+
+        # Check that the values are numpy arrays
+        self.assertIsInstance(data[workflow_id]["bytesRead"], np.ndarray)
+        self.assertIsInstance(data[workflow_id]["bytesWritten"], np.ndarray)
+        self.assertIsInstance(data[workflow_id]["timestamp"], np.ndarray)
 
 
 
