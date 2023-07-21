@@ -329,8 +329,8 @@ def display_features(features, central_job_id, dim_reduction='PCA', seed=42,
                     size=size,
                     color=color,
                 ),
-                text=[str(job_id)[:5]],
-                name=str(job_id)[:5]
+                text=[str(job_id)[-9:]],
+                name=str(job_id)[-9:]
             ))
         elif n_components == 2:
             fig.add_trace(go.Scatter(
