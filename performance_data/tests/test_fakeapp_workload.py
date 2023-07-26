@@ -25,7 +25,8 @@ class TestFakeappWorkload(unittest.TestCase):
         self.phase = dict(read_volume=1e8, read_io_pattern="stride", read_io_size=1e4,
                           write_volume=1e8, write_io_pattern="uncl", write_io_size=1e4,
                           nodes=1)
-        self.target_tier="/fsiof/mimounis/tmp"
+        #self.target_tier="/fsiof/mimounis/tmp"
+        self.target_tier = "/p/home/jusers/mimouni1/deep/recsys/iosea-wp3-recommandation-system/performance_data/performance_data/tmp"
 
     def tearDown(self):
         """Tear down test fixtures, if any."""
