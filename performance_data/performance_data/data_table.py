@@ -63,10 +63,11 @@ class PhaseData:
             # TODO : should be able to control volume of workload to adjust accuracy.
             workload = Workload(phase=phase, target_tier=target,
                                 accelerator=accelerator, ioi=self.ioi)
-            (latency, bw) = workload.get_data()
-            latencies += latency
+            (latency, bw) = workload.get_data()            
+            latencies += latency 
             volumes += phase["read_volume"] + phase["write_volume"]
-        # print(f"n_samples = {self.sample}")
+        
+        # logger.info(f"Latencies: {latencies}")
         avg_bw = (float)(volumes/latencies) if latencies else 0
         logger.info(f"Measured throughput on tier: {target} | use SBB: {accelerator} | result: {convert_size(avg_bw)}/s")
         return avg_bw
@@ -107,7 +108,7 @@ class PhaseData:
             if "fs1_bw" in target_names:
                 perf["fs1_bw"].append(self.run_phase_workload(phase, self.target["fs1"], False))
             if "sbb_bw" in target_names:
-                perf["sbb_bw"].append(self.run_phase_workload(phase, self.target["lfs"], True))
+                perf["sbb_bw"].append(self.run_phase_workload(phase, self.target["nfs"], True))
 
         # Assemble performance data into a DataFrame
         perf_df = pd.DataFrame(perf)
@@ -129,7 +130,8 @@ class DataTable:
         perf_data (pandas.DataFrame): A DataFrame containing the performance data.
     """
 
-    def __init__(self, targets,  accelerator=False, ioi=False, sample=1, filename=None, lite=False):
+    def __init__(self, targets,  accelerator=False, ioi=False, 
+                 sample=1, filename=None, lite=False):
         """Initialize the data model with the phase features extracted from AppDecomposer.
 
         Args:
@@ -142,6 +144,7 @@ class DataTable:
             lite (bool, optional): A flag indicating whether to cap the volume of the phase for performance measurement at 1GB. Defaults to `False`.
         """
         self.filename = filename or DATASET_SOURCE
+        logger.info(f"Reading performance data from {self.filename}")
         self.targets = targets
         self.accelerator = accelerator
         self.ioi = ioi
@@ -220,7 +223,8 @@ class DataTable:
             # Update performance information for the missing parts
             new_data = new_data.drop(tiers_names, axis=1)
             phases = new_data.to_dict('records')
-            phases_perf = PhaseData(phases, self.targets, self.ioi, sample=self.sample, lite=self.lite)
+            phases_perf = PhaseData(phases, self.targets, self.ioi, 
+                                    sample=self.sample, lite=self.lite)
             perf_df = phases_perf.get_phase_data(tiers_names)
             perf_df.index = new_data.index
             new_data = new_data.join(perf_df)
@@ -230,7 +234,8 @@ class DataTable:
         else:
             # Update performance information for all rows
             phases = self.perf_data.to_dict('records')
-            phases_perf = PhaseData(phases, self.targets, self.ioi, sample=self.sample, lite=self.lite)
+            phases_perf = PhaseData(phases, self.targets, self.ioi, 
+                                    sample=self.sample, lite=self.lite)
             perf_df = phases_perf.get_phase_data(tiers_names)
             self.perf_data = self.perf_data.join(perf_df)
 
