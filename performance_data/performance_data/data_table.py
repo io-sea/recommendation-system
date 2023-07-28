@@ -72,7 +72,8 @@ class PhaseData:
         logger.info(f"Measured throughput on tier: {target} | use SBB: {accelerator} | result: {convert_size(avg_bw)}/s")
         return avg_bw
 
-    def get_phase_data(self, target_names: List[str] = ["nfs_bw", "lfs_bw", "sbb_bw"]) -> pd.DataFrame:
+    def get_phase_data(self, target_names: List[str] = ["nfs_bw",
+                                                        "lfs_bw", "sbb_bw"]) -> pd.DataFrame:
         """
         Computes the performance of each phase on the specified tiers and returns the results as a DataFrame.
 
@@ -201,7 +202,6 @@ class DataTable:
             base_filename, ext_filename = os.path.splitext(self.filename)
             output_filename = base_filename + "_completed" + ext_filename
 
-        # Load performance data from file
         try:
             # Load performance data from file
             self.perf_data = pd.read_csv(self.filename)
@@ -214,33 +214,23 @@ class DataTable:
         logger.info(f"Phases are extracted from this table: {self.perf_data}")
         logger.info(f"Following tiers will be fed: {tiers_names}")
 
-        # Check if all required tiers are present in the input data
-        if set(tiers_names).issubset(self.perf_data.columns):
-            # Split data into parts with and without performance information
-            old_data = self.perf_data[~self.perf_data.isna().any(axis=1)]
-            new_data = self.perf_data[self.perf_data.isna().any(axis=1)]
+        total_iterations = len(self.perf_data)
+        logger.info(f"Total number of iterations: {total_iterations}")
 
-            # Update performance information for the missing parts
-            new_data = new_data.drop(tiers_names, axis=1)
-            phases = new_data.to_dict('records')
-            phases_perf = PhaseData(phases, self.targets, self.ioi, 
+        # Iterate over phases, compute performance, and update perf_data for each phase
+        for i, row in self.perf_data.iterrows():
+            remaining_iterations = total_iterations - i
+            logger.info(f"Remaining iterations: {remaining_iterations}")
+
+            phase = row.to_dict()
+            phases_perf = PhaseData([phase], self.targets, self.ioi, 
                                     sample=self.sample, lite=self.lite)
             perf_df = phases_perf.get_phase_data(tiers_names)
-            perf_df.index = new_data.index
-            new_data = new_data.join(perf_df)
+            for tier in tiers_names:
+                self.perf_data.loc[i, tier] = perf_df.loc[0, tier]
 
-            # Combine old and new data
-            self.perf_data = pd.concat([old_data, new_data], axis=0)
-        else:
-            # Update performance information for all rows
-            phases = self.perf_data.to_dict('records')
-            phases_perf = PhaseData(phases, self.targets, self.ioi, 
-                                    sample=self.sample, lite=self.lite)
-            perf_df = phases_perf.get_phase_data(tiers_names)
-            self.perf_data = self.perf_data.join(perf_df)
-
-        # Save completed performance data to file and log message
-        self.perf_data.to_csv(output_filename, index=False)
-        logger.info(f"Complete table saved to: {output_filename}")
+            # Save completed performance data to file and log message after each phase
+            self.perf_data.to_csv(output_filename, index=False)
+            logger.info(f"Updated table saved to: {output_filename} after processing phase at index {i}")
 
         return self.perf_data

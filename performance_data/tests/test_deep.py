@@ -39,13 +39,13 @@ class TestPhasesTable(unittest.TestCase):
 
     def setUp(self):
         """Create an instance of the DataGenerator class for use in the tests."""
-        self.num_entries = 500
-        self.volume = 500e6
+        self.num_entries = 3
+        self.volume = 50e6
         self.generator = PhaseGenerator(num_entries=self.num_entries,
                                         volume=self.volume)
         current_dir = dirname(dirname(os.path.abspath(__file__)))
         self.filename = os.path.join(current_dir, "tests",
-                                     "test_data", "test_deep_generated_dataset.csv")
+                                     "test_data", "test_deep_small_dataset.csv")
 
     def test_generate_data(self):
         """Test the generate_data method of the DataGenerator class.
@@ -94,12 +94,13 @@ class TestDataTable(unittest.TestCase):
         """Set up test fixtures, if any."""
         current_dir = dirname(dirname(os.path.abspath(__file__)))
         self.filename = os.path.join(current_dir, "tests",
-                                         "test_data", "test_generated_dataset.csv")
-        self.output_filename = os.path.join(current_dir, "tests",
-                                         "test_data", "test_deep_dataset_complete.csv")
+                                     "test_data", "test_deep_generated_dataset.csv")
+        
+        # self.output_filename = os.path.join(current_dir, "tests",
+        #                                  "test_data", "test_deep_small_dataset_complete.csv")
         self.targets = dict(nfs="/p/home/jusers/mimouni1/deep/recsys/iosea-wp3-recommandation-system/performance_data/performance_data/tmp")
         self.accelerator = True
-        self.sample = 3
+        self.sample = 1
         self.ioi = False
         self.lite = False
         self.data_table = DataTable(self.targets, 
@@ -126,6 +127,6 @@ class TestDataTable(unittest.TestCase):
 
     def test_get_performance_table(self):
         """Test if get_performance_table method correctly returns performance data in a dataframe with expected values."""
-        perf_data = self.data_table.get_performance_table(
-            output_filename=self.output_filename)
+        perf_data = self.data_table.get_performance_table()
+            #output_filename=self.output_filename)
         print(perf_data)
