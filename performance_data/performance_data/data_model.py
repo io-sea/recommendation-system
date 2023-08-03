@@ -247,7 +247,10 @@ class DataModel:
     """
     THRESHOLD = 1.7
 
-    def __init__(self, data_file=GENERATED_DATASET_FILE, cats=DEFAULT_CATEGORIES, models=None):
+    def __init__(self, 
+                 data_file=GENERATED_DATASET_FILE, 
+                 cats=DEFAULT_CATEGORIES, 
+                 models=None):
         logger.info("Initializing DataModel object.")
         self.data_file = data_file
         self.cats = cats

@@ -211,13 +211,14 @@ class TestDataModel(unittest.TestCase):
         preprocessed_data = self.model._prepare_input_data(self.data)
         self.assertEqual(preprocessed_data.shape, (3, 13))
         self.assertCountEqual(preprocessed_data.columns, ['cat__read_io_pattern_rand',
-                                                        'cat__read_io_pattern_stride',
-                                                        'cat__read_io_pattern_seq', 'cat__read_io_pattern_uncl',
-                                                        'cat__write_io_pattern_rand', 'cat__write_io_pattern_stride',
-                                                        'cat__write_io_pattern_seq', 'cat__write_io_pattern_uncl',
-                                                        'remainder__read_io_size', 'remainder__write_io_size',
-                                                        'remainder__read_ratio', 'remainder__write_ratio',
-                                                        'remainder__avg_io_size'])
+        'cat__read_io_pattern_stride',
+        'cat__read_io_pattern_seq', 'cat__read_io_pattern_uncl',
+        'cat__write_io_pattern_rand', 'cat__write_io_pattern_stride',
+        'cat__write_io_pattern_seq', 'cat__write_io_pattern_uncl',
+        'remainder__read_io_size', 'remainder__write_io_size',
+        'remainder__read_ratio', 'remainder__write_ratio',
+        'remainder__avg_io_size'])
+        
     @patch('pandas.read_csv')
     def test_prepare_data(self, mock_read_csv):
         mock_read_csv.return_value = self.data
