@@ -85,14 +85,17 @@ class PhaseData:
 
         Raises:
             ValueError: If any of the specified tier names is invalid.
-
+            
         Example:
             # Compute performance for the "nfs_bw" and "lfs_bw" tiers and return the results as a DataFrame.
             phases_perf = PhaseData(phases, targets, ioi, sample=sample, lite=lite)
             perf_df = phases_perf.get_phase_data(target_names=["nfs_bw", "lfs_bw"])
+
         """
         # Validate input tier names
-        valid_tiers = {"fs1_bw", "nfs_bw", "lfs_bw", "sbb_bw"}
+        valid_tiers = {tier + "_bw" for tier in list(self.target.keys())}
+
+        valid_tiers = valid_tiers.union({tier + "_sbb_bw" for tier in list(self.target.keys())})
         if not set(target_names).issubset(valid_tiers):
             invalid_tiers = set(target_names) - valid_tiers
             raise ValueError(f"Invalid tier names: {invalid_tiers}")
@@ -102,14 +105,15 @@ class PhaseData:
         for tier in target_names:
             perf[tier] = []
         for phase in self.phases:
-            if "nfs_bw" in target_names:
-                perf["nfs_bw"].append(self.run_phase_workload(phase, self.target["nfs"], False))
-            if "lfs_bw" in target_names:
-                perf["lfs_bw"].append(self.run_phase_workload(phase, self.target["lfs"], False))
-            if "fs1_bw" in target_names:
-                perf["fs1_bw"].append(self.run_phase_workload(phase, self.target["fs1"], False))
-            if "sbb_bw" in target_names:
-                perf["sbb_bw"].append(self.run_phase_workload(phase, self.target["nfs"], True))
+            for target in self.target.keys():
+                if target + "_bw" in target_names:
+                    perf[target + "_bw"].append(
+                        self.run_phase_workload(phase, 
+                                                self.target[target], False))
+                if target + "_sbb_bw" in target_names:
+                    perf[target + "_sbb_bw"].append(
+                        self.run_phase_workload(phase, 
+                                                self.target[target], True))
 
         # Assemble performance data into a DataFrame
         perf_df = pd.DataFrame(perf)
@@ -160,8 +164,9 @@ class DataTable:
         """
         tiers_names = [tier + "_bw" for tier in list(self.targets.keys())]
         if self.accelerator:
-            tiers_names.append("sbb_bw")
+            tiers_names.extend([tier + "_sbb_bw" for tier in list(self.targets.keys()) if self.accelerator])
         return tiers_names
+    
 
     def get_performance_table(self, output_filename=None):
         """

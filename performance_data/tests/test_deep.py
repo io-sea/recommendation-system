@@ -99,7 +99,9 @@ class TestDataTable(unittest.TestCase):
         
         # self.output_filename = os.path.join(current_dir, "tests",
         #                                  "test_data", "test_deep_small_dataset_complete.csv")
-        self.targets = dict(nfs="/p/home/jusers/mimouni1/deep/recsys/iosea-wp3-recommandation-system/performance_data/performance_data/tmp")
+        self.targets = dict(gpfs_nfs="/p/home/jusers/mimouni1/deep/recsys/iosea-wp3-recommandation-system/performance_data/performance_data/tmp",
+                            afsm_beegfs="/afsm/iosea/mimouni1/perf_data")
+                            #beegfs_old="/work_old/iosea/mimouni1")
         self.accelerator = True
         self.sample = 1
         self.ioi = False
@@ -130,4 +132,4 @@ class TestDataTable(unittest.TestCase):
         """Test if get_performance_table method correctly returns performance data in a dataframe with expected values."""
         perf_data = self.data_table.get_performance_table()
             #output_filename=self.output_filename)
-        print(perf_data)
+        #print(perf_data)
