@@ -516,51 +516,6 @@ class DataModel:
         return pd.DataFrame(predictions)
 
 
-def load_and_predict(model_path, new_data, iops=False):
-    """
-    Load a model from a joblib file and use it to predict on new data.
-
-    Parameters:
-        model_path: str
-            The path to the joblib file containing the trained model.
-        new_data: pandas DataFrame
-            The new data for which to make predictions.
-        iops: bool, optional, default=False
-            If True, adjust the predictions based on the 'remainder__avg_io_size' column
-            in the input data. This is useful when predicting IOPS instead of bandwidth.
-
-    Returns:
-        pandas DataFrame: The predicted values.
-    """
-    # Load the model from the joblib file
-    model = joblib.load(model_path)
-
-    # Sanitize new data
-    new_data = new_data[["nodes", "read_volume", "write_volume", "read_io_pattern",
-                         "write_io_pattern", "read_io_size", "write_io_size"]]
-
-    # Check if new_data is a pandas DataFrame
-    if not isinstance(new_data, pd.DataFrame):
-        raise ValueError("Input data must be a pandas DataFrame.")
-
-    # Prepare input data
-    X = DataModel._prepare_input_data(new_data)
-
-    # Make predictions
-    model_predictions = pd.DataFrame(model.predict(X))
-    #print(f"Model: {model_path} | Input: {new_data} | Predictions: {model_predictions}")
-    # Adjust predictions if iops is True
-    if iops:
-        predictions = model_predictions * X['remainder__avg_io_size'].values.reshape(-1, 1)
-    else:
-        predictions = model_predictions
-
-    # Set predictions to 0 if both read_volume and write_volume are 0
-    predictions.loc[(new_data['read_volume'] == 0) & (new_data['write_volume'] == 0)] = 0
-
-    return predictions
-
-
 class DeepNNModel(TierModel):
     """
     Subclass of TierModel that creates a deep neural network (NN) model for regression tasks.
@@ -614,3 +569,48 @@ class DeepNNModel(TierModel):
 
         nn_model = KerasRegressor(build_fn=create_model, epochs=self.epochs)
         return nn_model
+
+def load_and_predict(model_path, new_data, iops=False):
+    """
+    Load a model from a joblib file and use it to predict on new data.
+
+    Parameters:
+        model_path: str
+            The path to the joblib file containing the trained model.
+        new_data: pandas DataFrame
+            The new data for which to make predictions.
+        iops: bool, optional, default=False
+            If True, adjust the predictions based on the 'remainder__avg_io_size' column
+            in the input data. This is useful when predicting IOPS instead of bandwidth.
+
+    Returns:
+        pandas DataFrame: The predicted values.
+    """
+    # Load the model from the joblib file
+    model = joblib.load(model_path)
+
+    # Sanitize new data
+    new_data = new_data[["nodes", "read_volume", "write_volume", "read_io_pattern",
+                         "write_io_pattern", "read_io_size", "write_io_size"]]
+
+    # Check if new_data is a pandas DataFrame
+    if not isinstance(new_data, pd.DataFrame):
+        raise ValueError("Input data must be a pandas DataFrame.")
+
+    # Prepare input data
+    X = DataModel._prepare_input_data(new_data)
+
+    # Make predictions
+    model_predictions = pd.DataFrame(model.predict(X))
+    #print(f"Model: {model_path} | Input: {new_data} | Predictions: {model_predictions}")
+    # Adjust predictions if iops is True
+    if iops:
+        predictions = model_predictions * X['remainder__avg_io_size'].values.reshape(-1, 1)
+    else:
+        predictions = model_predictions
+
+    # Set predictions to 0 if both read_volume and write_volume are 0
+    predictions.loc[(new_data['read_volume'] == 0) & (new_data['write_volume'] == 0)] = 0
+
+    return predictions
+

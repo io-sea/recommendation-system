@@ -232,5 +232,8 @@ class DataTable:
             # Save completed performance data to file and log message after each phase
             self.perf_data.to_csv(output_filename, index=False)
             logger.info(f"Updated table saved to: {output_filename} after processing phase at index {i}")
+            
+            # Log the updated ith row of the dataframe
+            logger.info(f"Updated row at index {i}: \n {self.perf_data.loc[i]}")
 
         return self.perf_data

@@ -45,7 +45,7 @@ class TestPhasesTable(unittest.TestCase):
                                         volume=self.volume)
         current_dir = dirname(dirname(os.path.abspath(__file__)))
         self.filename = os.path.join(current_dir, "tests",
-                                     "test_data", "test_deep_small_dataset.csv")
+                                     "deep_data", "deep_small_dataset.csv")
 
     def test_generate_data(self):
         """Test the generate_data method of the DataGenerator class.
@@ -74,6 +74,7 @@ class TestPhasesTable(unittest.TestCase):
         expected data.
         """
         self.generator.export_data(self.filename)
+        print(self.filename)
         self.assertTrue(os.path.exists(self.filename))
         df = pd.read_csv(self.filename)
         self.assertEqual(df.shape[0], self.num_entries)
@@ -94,7 +95,7 @@ class TestDataTable(unittest.TestCase):
         """Set up test fixtures, if any."""
         current_dir = dirname(dirname(os.path.abspath(__file__)))
         self.filename = os.path.join(current_dir, "tests",
-                                     "test_data", "test_deep_generated_dataset.csv")
+                                     "deep_data", "test_deep_generated_dataset.csv")
         
         # self.output_filename = os.path.join(current_dir, "tests",
         #                                  "test_data", "test_deep_small_dataset_complete.csv")
