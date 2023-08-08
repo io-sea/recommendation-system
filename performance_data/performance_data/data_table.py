@@ -255,6 +255,9 @@ class DataTable:
         # Read the incomplete output file
         existing_output_data = pd.read_csv(incomplete_output_filename)
 
+        # Determine the proxy filename (e.g., append "_proxy" to the filename)
+        proxy_filename = os.path.splitext(incomplete_output_filename)[0] + "_proxy.csv"
+
         # Determine the number of incomplete rows
         incomplete_rows = existing_output_data.isnull().any(axis=1).sum()
         logger.info(f"Total number of incomplete rows: {incomplete_rows}")
@@ -274,9 +277,12 @@ class DataTable:
                         row[tier] = perf_df.loc[0, tier]
                 existing_output_data.loc[i] = row  # Update the row in the DataFrame
 
-                # Save the updated DataFrame to the existing output file
-                existing_output_data.to_csv(incomplete_output_filename, index=False)
-                logger.info(f"Updated table saved to: {incomplete_output_filename} after processing phase at index {i}")
+                # Save the updated DataFrame to the proxy file
+                existing_output_data.to_csv(proxy_filename, index=False)
+                logger.info(f"Updated table saved to proxy file: {proxy_filename} after processing phase at index {i}")
 
+        # Rename the proxy file to the original filename, effectively overwriting the incomplete file
+        os.rename(proxy_filename, incomplete_output_filename)
         logger.info("Completion of the output file successful.")
         return existing_output_data
+

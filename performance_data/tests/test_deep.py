@@ -142,22 +142,23 @@ class TestDataTable(unittest.TestCase):
     def test_complete_output_file(self):
         """Test if complete_output_file method correctly completes the output file with lacking results."""
         # Define an incomplete output filename for testing
-        # DATASET = os.path.join(CURRENT_DIR, "tests", "deep_data", "deep_500_dataset.csv")
         incomplete_output_filename = os.path.join(CURRENT_DIR, "tests", 
-                                                  "deep_data", 
-                                                  "deep_500_dataset_completed.csv")
+                                                "deep_data", 
+                                                "deep_500_dataset_completed.csv")
 
-        # Create a temporary copy of the incomplete output file
-        temp_incomplete_output_filename = os.path.join(tempfile.gettempdir(), "temp_incompleted_file.csv")
-        shutil.copy(incomplete_output_filename, temp_incomplete_output_filename)
+        # Make a copy of the original incomplete file to restore it later
+        backup_filename = os.path.join(CURRENT_DIR, "tests", 
+                                    "deep_data", 
+                                    "backup_deep_500_dataset_completed.csv")
+        shutil.copy(incomplete_output_filename, backup_filename)
 
         # Execute the complete_output_file method
-        completed_data = self.data_table.complete_output_file(temp_incomplete_output_filename)
+        completed_data = self.data_table.complete_output_file(incomplete_output_filename)
 
         # Check if the resulting DataFrame has no missing values
         self.assertFalse(completed_data.isnull().any().any())
 
         # Additional assertions can be added to check specific values or other properties of the completed data
 
-        # Clean up the temporary file
-        os.remove(temp_incomplete_output_filename)
+        # Restore the original incomplete file from the backup
+        shutil.move(backup_filename, incomplete_output_filename)
