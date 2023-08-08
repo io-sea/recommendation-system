@@ -1,0 +1,534 @@
+[mimouni1@deepv ~]$ df -h
+Filesystem                     Size  Used Avail Use% Mounted on
+devtmpfs                        48G     0   48G   0% /dev
+tmpfs                           48G   72K   48G   1% /dev/shm
+tmpfs                           48G  1.1M   48G   1% /run
+tmpfs                           48G     0   48G   0% /sys/fs/cgroup
+/dev/mapper/rocky--root-root    15G  4.8G   11G  32% /
+/dev/vda1                      507M  154M  354M  31% /boot
+/dev/mapper/rocky--root-tmp    4.0G  215M  3.8G   6% /tmp
+/dev/mapper/rocky--root-var    4.0G  3.2G  848M  80% /var
+/dev/mapper/cvmfs_deepv-cvmfs  3.0G  659M  2.4G  22% /var/lib/cvmfs
+beegfs_nodev                   292T   46T  246T  16% /beegfs
+beegfs_nodev                   1.4P  123T  1.2P  10% /afsm
+134.94.100.152:/p/home/.        61T   24T   37T  40% /p/home
+tmpfs                          9.5G     0  9.5G   0% /run/user/19109
+134.94.100.152:/p/project/.    4.6P  3.4P  1.2P  75% /p/project
+dp-fs04i:/                     292T   46T  246T  16% /p/deep
+tmpfs                          9.5G     0  9.5G   0% /run/user/14538
+tmpfs                          9.5G     0  9.5G   0% /run/user/23530
+tmpfs                          9.5G     0  9.5G   0% /run/user/21056
+tmpfs                          9.5G     0  9.5G   0% /run/user/19020
+tmpfs                          9.5G     0  9.5G   0% /run/user/21417
+tmpfs                          9.5G     0  9.5G   0% /run/user/22466
+tmpfs                          9.5G     0  9.5G   0% /run/user/21944
+cvmfs2                         4.0G  592M  3.4G  15% /cvmfs/cvmfs-config.cern.ch
+tmpfs                          9.5G     0  9.5G   0% /run/user/6304
+tmpfs                          9.5G     0  9.5G   0% /run/user/21272
+134.94.100.152:/p/fastdata/.    14P  6.1P  7.3P  46% /p/fastdata
+dp-mngt03:/opt/dcdb/tmp        7.0T  1.1T  6.0T  15% /mnt/dp-mngt03
+cvmfs2                         4.0G  592M  3.4G  15% /cvmfs/cms.cern.ch
+tmpfs                          9.5G     0  9.5G   0% /run/user/19280
+tmpfs                          9.5G     0  9.5G   0% /run/user/20522
+134.94.100.152:/arch           1.1P  517T  509T  51% /p/arch
+134.94.100.152:/arch2          1.2P  449T  753T  38% /p/arch2
+tmpfs                          9.5G     0  9.5G   0% /run/user/18297
+tmpfs                          9.5G     0  9.5G   0% /run/user/21702
+dp-mngt01:/opt/dcdb/tmp        7.0T  2.0T  5.0T  29% /mnt/dp-mngt01
+dp-mngt02:/opt/dcdb/tmp        7.0T  933G  6.1T  14% /mnt/dp-mngt02
+tmpfs                          9.5G     0  9.5G   0% /run/user/21898
+tmpfs                          9.5G     0  9.5G   0% /run/user/4683
+tmpfs                          9.5G     0  9.5G   0% /run/user/22836
+tmpfs                          9.5G     0  9.5G   0% /run/user/22574
+
+
+
+
+[mimouni1@deepv ~]$ lsblk
+NAME                  MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
+sr0                    11:0    1 1024M  0 rom
+vda                   252:0    0   32G  0 disk
+├─vda1                252:1    0  512M  0 part /boot
+└─vda2                252:2    0   24G  0 part
+  ├─rocky--root-root  253:0    0   15G  0 lvm  /
+  ├─rocky--root-swap  253:1    0    1G  0 lvm  [SWAP]
+  ├─rocky--root-tmp   253:2    0    4G  0 lvm  /tmp
+  └─rocky--root-var   253:3    0    4G  0 lvm  /var
+vdb                   252:16   0    4G  0 disk
+└─vdb1                252:17   0    4G  0 part
+  └─cvmfs_deepv-cvmfs 253:4    0    3G  0 lvm  /var/lib/cvmfs
+
+
+[mimouni1@deepv ~]$ lshw
+WARNING: you should run this program as super-user.
+deepv
+    description: Computer
+    width: 64 bits
+    capabilities: smp vsyscall32
+  *-core
+       description: Motherboard
+       physical id: 0
+     *-memory
+          description: System memory
+          physical id: 0
+          size: 96GiB
+     *-cpu:0
+          product: Intel Xeon Processor (Skylake, IBRS)
+          vendor: Intel Corp.
+          physical id: 1
+          bus info: cpu@0
+          version: 6.85.4
+          width: 64 bits
+          capabilities: fpu fpu_exception wp vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss syscall nx pdpe1gb x86-64 constant_tsc rep_good nopl cpuid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch invpcid_single pti ssbd ibrs ibpb stibp fsgsbase bmi1 hle avx2 smep bmi2 erms invpcid rtm mpx avx512f avx512dq rdseed adx smap clflushopt clwb avx512cd avx512bw avx512vl xsaveopt xsavec xgetbv1 pku ospke md_clear
+          configuration: microcode=1
+     *-cpu:1
+          product: Intel Xeon Processor (Skylake, IBRS)
+          vendor: Intel Corp.
+          physical id: 2
+          bus info: cpu@1
+          version: 6.85.4
+          width: 64 bits
+          capabilities: fpu fpu_exception wp vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss syscall nx pdpe1gb x86-64 constant_tsc rep_good nopl cpuid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch invpcid_single pti ssbd ibrs ibpb stibp fsgsbase bmi1 hle avx2 smep bmi2 erms invpcid rtm mpx avx512f avx512dq rdseed adx smap clflushopt clwb avx512cd avx512bw avx512vl xsaveopt xsavec xgetbv1 pku ospke md_clear
+          configuration: microcode=1
+     *-cpu:2
+          product: Intel Xeon Processor (Skylake, IBRS)
+          vendor: Intel Corp.
+          physical id: 3
+          bus info: cpu@2
+          version: 6.85.4
+          width: 64 bits
+          capabilities: fpu fpu_exception wp vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss syscall nx pdpe1gb x86-64 constant_tsc rep_good nopl cpuid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch invpcid_single pti ssbd ibrs ibpb stibp fsgsbase bmi1 hle avx2 smep bmi2 erms invpcid rtm mpx avx512f avx512dq rdseed adx smap clflushopt clwb avx512cd avx512bw avx512vl xsaveopt xsavec xgetbv1 pku ospke md_clear
+          configuration: microcode=1
+     *-cpu:3
+          product: Intel Xeon Processor (Skylake, IBRS)
+          vendor: Intel Corp.
+          physical id: 4
+          bus info: cpu@3
+          version: 6.85.4
+          width: 64 bits
+          capabilities: fpu fpu_exception wp vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss syscall nx pdpe1gb x86-64 constant_tsc rep_good nopl cpuid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch invpcid_single pti ssbd ibrs ibpb stibp fsgsbase bmi1 hle avx2 smep bmi2 erms invpcid rtm mpx avx512f avx512dq rdseed adx smap clflushopt clwb avx512cd avx512bw avx512vl xsaveopt xsavec xgetbv1 pku ospke md_clear
+          configuration: microcode=1
+     *-cpu:4
+          product: Intel Xeon Processor (Skylake, IBRS)
+          vendor: Intel Corp.
+          physical id: 5
+          bus info: cpu@4
+          version: 6.85.4
+          width: 64 bits
+          capabilities: fpu fpu_exception wp vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss syscall nx pdpe1gb x86-64 constant_tsc rep_good nopl cpuid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch invpcid_single pti ssbd ibrs ibpb stibp fsgsbase bmi1 hle avx2 smep bmi2 erms invpcid rtm mpx avx512f avx512dq rdseed adx smap clflushopt clwb avx512cd avx512bw avx512vl xsaveopt xsavec xgetbv1 pku ospke md_clear
+          configuration: microcode=1
+     *-cpu:5
+          product: Intel Xeon Processor (Skylake, IBRS)
+          vendor: Intel Corp.
+          physical id: 6
+          bus info: cpu@5
+          version: 6.85.4
+          width: 64 bits
+          capabilities: fpu fpu_exception wp vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss syscall nx pdpe1gb x86-64 constant_tsc rep_good nopl cpuid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch invpcid_single pti ssbd ibrs ibpb stibp fsgsbase bmi1 hle avx2 smep bmi2 erms invpcid rtm mpx avx512f avx512dq rdseed adx smap clflushopt clwb avx512cd avx512bw avx512vl xsaveopt xsavec xgetbv1 pku ospke md_clear
+          configuration: microcode=1
+     *-cpu:6
+          product: Intel Xeon Processor (Skylake, IBRS)
+          vendor: Intel Corp.
+          physical id: 7
+          bus info: cpu@6
+          version: 6.85.4
+          width: 64 bits
+          capabilities: fpu fpu_exception wp vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss syscall nx pdpe1gb x86-64 constant_tsc rep_good nopl cpuid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch invpcid_single pti ssbd ibrs ibpb stibp fsgsbase bmi1 hle avx2 smep bmi2 erms invpcid rtm mpx avx512f avx512dq rdseed adx smap clflushopt clwb avx512cd avx512bw avx512vl xsaveopt xsavec xgetbv1 pku ospke md_clear
+          configuration: microcode=1
+     *-cpu:7
+          product: Intel Xeon Processor (Skylake, IBRS)
+          vendor: Intel Corp.
+          physical id: 8
+          bus info: cpu@7
+          version: 6.85.4
+          width: 64 bits
+          capabilities: fpu fpu_exception wp vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss syscall nx pdpe1gb x86-64 constant_tsc rep_good nopl cpuid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch invpcid_single pti ssbd ibrs ibpb stibp fsgsbase bmi1 hle avx2 smep bmi2 erms invpcid rtm mpx avx512f avx512dq rdseed adx smap clflushopt clwb avx512cd avx512bw avx512vl xsaveopt xsavec xgetbv1 pku ospke md_clear
+          configuration: microcode=1
+     *-cpu:8
+          product: Intel Xeon Processor (Skylake, IBRS)
+          vendor: Intel Corp.
+          physical id: 9
+          bus info: cpu@8
+          version: 6.85.4
+          width: 64 bits
+          capabilities: fpu fpu_exception wp vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss syscall nx pdpe1gb x86-64 constant_tsc rep_good nopl cpuid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch invpcid_single pti ssbd ibrs ibpb stibp fsgsbase bmi1 hle avx2 smep bmi2 erms invpcid rtm mpx avx512f avx512dq rdseed adx smap clflushopt clwb avx512cd avx512bw avx512vl xsaveopt xsavec xgetbv1 pku ospke md_clear
+          configuration: microcode=1
+     *-cpu:9
+          product: Intel Xeon Processor (Skylake, IBRS)
+          vendor: Intel Corp.
+          physical id: a
+          bus info: cpu@9
+          version: 6.85.4
+          width: 64 bits
+          capabilities: fpu fpu_exception wp vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss syscall nx pdpe1gb x86-64 constant_tsc rep_good nopl cpuid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch invpcid_single pti ssbd ibrs ibpb stibp fsgsbase bmi1 hle avx2 smep bmi2 erms invpcid rtm mpx avx512f avx512dq rdseed adx smap clflushopt clwb avx512cd avx512bw avx512vl xsaveopt xsavec xgetbv1 pku ospke md_clear
+          configuration: microcode=1
+     *-cpu:10
+          product: Intel Xeon Processor (Skylake, IBRS)
+          vendor: Intel Corp.
+          physical id: b
+          bus info: cpu@10
+          version: 6.85.4
+          width: 64 bits
+          capabilities: fpu fpu_exception wp vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss syscall nx pdpe1gb x86-64 constant_tsc rep_good nopl cpuid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch invpcid_single pti ssbd ibrs ibpb stibp fsgsbase bmi1 hle avx2 smep bmi2 erms invpcid rtm mpx avx512f avx512dq rdseed adx smap clflushopt clwb avx512cd avx512bw avx512vl xsaveopt xsavec xgetbv1 pku ospke md_clear
+          configuration: microcode=1
+     *-cpu:11
+          product: Intel Xeon Processor (Skylake, IBRS)
+          vendor: Intel Corp.
+          physical id: c
+          bus info: cpu@11
+          version: 6.85.4
+          width: 64 bits
+          capabilities: fpu fpu_exception wp vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss syscall nx pdpe1gb x86-64 constant_tsc rep_good nopl cpuid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch invpcid_single pti ssbd ibrs ibpb stibp fsgsbase bmi1 hle avx2 smep bmi2 erms invpcid rtm mpx avx512f avx512dq rdseed adx smap clflushopt clwb avx512cd avx512bw avx512vl xsaveopt xsavec xgetbv1 pku ospke md_clear
+          configuration: microcode=1
+     *-cpu:12
+          product: Intel Xeon Processor (Skylake, IBRS)
+          vendor: Intel Corp.
+          physical id: d
+          bus info: cpu@12
+          version: 6.85.4
+          width: 64 bits
+          capabilities: fpu fpu_exception wp vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss syscall nx pdpe1gb x86-64 constant_tsc rep_good nopl cpuid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch invpcid_single pti ssbd ibrs ibpb stibp fsgsbase bmi1 hle avx2 smep bmi2 erms invpcid rtm mpx avx512f avx512dq rdseed adx smap clflushopt clwb avx512cd avx512bw avx512vl xsaveopt xsavec xgetbv1 pku ospke md_clear
+          configuration: microcode=1
+     *-cpu:13
+          product: Intel Xeon Processor (Skylake, IBRS)
+          vendor: Intel Corp.
+          physical id: e
+          bus info: cpu@13
+          version: 6.85.4
+          width: 64 bits
+          capabilities: fpu fpu_exception wp vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss syscall nx pdpe1gb x86-64 constant_tsc rep_good nopl cpuid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch invpcid_single pti ssbd ibrs ibpb stibp fsgsbase bmi1 hle avx2 smep bmi2 erms invpcid rtm mpx avx512f avx512dq rdseed adx smap clflushopt clwb avx512cd avx512bw avx512vl xsaveopt xsavec xgetbv1 pku ospke md_clear
+          configuration: microcode=1
+     *-cpu:14
+          product: Intel Xeon Processor (Skylake, IBRS)
+          vendor: Intel Corp.
+          physical id: f
+          bus info: cpu@14
+          version: 6.85.4
+          width: 64 bits
+          capabilities: fpu fpu_exception wp vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss syscall nx pdpe1gb x86-64 constant_tsc rep_good nopl cpuid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch invpcid_single pti ssbd ibrs ibpb stibp fsgsbase bmi1 hle avx2 smep bmi2 erms invpcid rtm mpx avx512f avx512dq rdseed adx smap clflushopt clwb avx512cd avx512bw avx512vl xsaveopt xsavec xgetbv1 pku ospke md_clear
+          configuration: microcode=1
+     *-cpu:15
+          product: Intel Xeon Processor (Skylake, IBRS)
+          vendor: Intel Corp.
+          physical id: 10
+          bus info: cpu@15
+          version: 6.85.4
+          width: 64 bits
+          capabilities: fpu fpu_exception wp vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss syscall nx pdpe1gb x86-64 constant_tsc rep_good nopl cpuid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch invpcid_single pti ssbd ibrs ibpb stibp fsgsbase bmi1 hle avx2 smep bmi2 erms invpcid rtm mpx avx512f avx512dq rdseed adx smap clflushopt clwb avx512cd avx512bw avx512vl xsaveopt xsavec xgetbv1 pku ospke md_clear
+          configuration: microcode=1
+     *-cpu:16
+          product: Intel Xeon Processor (Skylake, IBRS)
+          vendor: Intel Corp.
+          physical id: 11
+          bus info: cpu@16
+          version: 6.85.4
+          width: 64 bits
+          capabilities: fpu fpu_exception wp vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss syscall nx pdpe1gb x86-64 constant_tsc rep_good nopl cpuid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch invpcid_single pti ssbd ibrs ibpb stibp fsgsbase bmi1 hle avx2 smep bmi2 erms invpcid rtm mpx avx512f avx512dq rdseed adx smap clflushopt clwb avx512cd avx512bw avx512vl xsaveopt xsavec xgetbv1 pku ospke md_clear
+          configuration: microcode=1
+     *-cpu:17
+          product: Intel Xeon Processor (Skylake, IBRS)
+          vendor: Intel Corp.
+          physical id: 12
+          bus info: cpu@17
+          version: 6.85.4
+          width: 64 bits
+          capabilities: fpu fpu_exception wp vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss syscall nx pdpe1gb x86-64 constant_tsc rep_good nopl cpuid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch invpcid_single pti ssbd ibrs ibpb stibp fsgsbase bmi1 hle avx2 smep bmi2 erms invpcid rtm mpx avx512f avx512dq rdseed adx smap clflushopt clwb avx512cd avx512bw avx512vl xsaveopt xsavec xgetbv1 pku ospke md_clear
+          configuration: microcode=1
+     *-cpu:18
+          product: Intel Xeon Processor (Skylake, IBRS)
+          vendor: Intel Corp.
+          physical id: 13
+          bus info: cpu@18
+          version: 6.85.4
+          width: 64 bits
+          capabilities: fpu fpu_exception wp vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss syscall nx pdpe1gb x86-64 constant_tsc rep_good nopl cpuid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch invpcid_single pti ssbd ibrs ibpb stibp fsgsbase bmi1 hle avx2 smep bmi2 erms invpcid rtm mpx avx512f avx512dq rdseed adx smap clflushopt clwb avx512cd avx512bw avx512vl xsaveopt xsavec xgetbv1 pku ospke md_clear
+          configuration: microcode=1
+     *-cpu:19
+          product: Intel Xeon Processor (Skylake, IBRS)
+          vendor: Intel Corp.
+          physical id: 14
+          bus info: cpu@19
+          version: 6.85.4
+          width: 64 bits
+          capabilities: fpu fpu_exception wp vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss syscall nx pdpe1gb x86-64 constant_tsc rep_good nopl cpuid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch invpcid_single pti ssbd ibrs ibpb stibp fsgsbase bmi1 hle avx2 smep bmi2 erms invpcid rtm mpx avx512f avx512dq rdseed adx smap clflushopt clwb avx512cd avx512bw avx512vl xsaveopt xsavec xgetbv1 pku ospke md_clear
+          configuration: microcode=1
+     *-pci
+          description: Host bridge
+          product: 440FX - 82441FX PMC [Natoma]
+          vendor: Intel Corporation
+          physical id: 100
+          bus info: pci@0000:00:00.0
+          version: 02
+          width: 32 bits
+          clock: 33MHz
+        *-isa
+             description: ISA bridge
+             product: 82371SB PIIX3 ISA [Natoma/Triton II]
+             vendor: Intel Corporation
+             physical id: 1
+             bus info: pci@0000:00:01.0
+             version: 00
+             width: 32 bits
+             clock: 33MHz
+             capabilities: isa
+             configuration: latency=0
+           *-pnp00:00
+                product: PnP device PNP0b00
+                physical id: 0
+                capabilities: pnp
+                configuration: driver=rtc_cmos
+           *-pnp00:01
+                product: PnP device PNP0303
+                physical id: 1
+                capabilities: pnp
+                configuration: driver=i8042 kbd
+           *-pnp00:02
+                product: PnP device PNP0f13
+                physical id: 2
+                capabilities: pnp
+                configuration: driver=i8042 aux
+           *-pnp00:03
+                product: PnP device PNP0700
+                physical id: 3
+                capabilities: pnp
+           *-pnp00:04
+                product: PnP device PNP0501
+                physical id: 4
+                capabilities: pnp
+                configuration: driver=serial
+        *-ide
+             description: IDE interface
+             product: 82371SB PIIX3 IDE [Natoma/Triton II]
+             vendor: Intel Corporation
+             physical id: 1.1
+             bus info: pci@0000:00:01.1
+             version: 00
+             width: 32 bits
+             clock: 33MHz
+             capabilities: ide isa_compat_mode bus_master
+             configuration: driver=ata_piix latency=0
+             resources: irq:0 ioport:1f0(size=8) ioport:3f6 ioport:170(size=8) ioport:376 ioport:c140(size=16)
+        *-bridge
+             description: Bridge
+             product: 82371AB/EB/MB PIIX4 ACPI
+             vendor: Intel Corporation
+             physical id: 1.3
+             bus info: pci@0000:00:01.3
+             version: 03
+             width: 32 bits
+             clock: 33MHz
+             capabilities: bridge
+             configuration: driver=piix4_smbus latency=0
+             resources: irq:9
+        *-display
+             description: VGA compatible controller
+             product: GD 5446
+             vendor: Cirrus Logic
+             physical id: 2
+             bus info: pci@0000:00:02.0
+             logical name: /dev/fb0
+             version: 00
+             width: 32 bits
+             clock: 33MHz
+             capabilities: vga_controller rom fb
+             configuration: depth=16 driver=cirrus latency=0 resolution=1024,768
+             resources: irq:0 memory:fa000000-fbffffff memory:feb30000-feb30fff memory:c0000-dffff
+        *-network:0
+             description: Ethernet controller
+             product: Virtio network device
+             vendor: Red Hat, Inc.
+             physical id: 3
+             bus info: pci@0000:00:03.0
+             version: 00
+             width: 32 bits
+             clock: 33MHz
+             capabilities: bus_master cap_list rom
+             configuration: driver=virtio-pci latency=0
+             resources: irq:10 ioport:c080(size=32) memory:feb31000-feb31fff memory:feb10000-feb1ffff
+           *-virtio0
+                description: Ethernet interface
+                physical id: 0
+                bus info: virtio@0
+                logical name: ens3
+                serial: 52:54:00:5b:f4:df
+                capabilities: ethernet physical
+                configuration: autonegotiation=off broadcast=yes driver=virtio_net driverversion=1.0.0 ip=10.2.8.6 link=yes multicast=yes
+        *-network:1
+             description: Ethernet controller
+             product: Virtio network device
+             vendor: Red Hat, Inc.
+             physical id: 4
+             bus info: pci@0000:00:04.0
+             version: 00
+             width: 32 bits
+             clock: 33MHz
+             capabilities: bus_master cap_list rom
+             configuration: driver=virtio-pci latency=0
+             resources: irq:11 ioport:c0a0(size=32) memory:feb32000-feb32fff memory:feb20000-feb2ffff
+           *-virtio1
+                description: Ethernet interface
+                physical id: 0
+                bus info: virtio@1
+                logical name: ens4
+                serial: 52:54:00:c3:98:70
+                capabilities: ethernet physical
+                configuration: autonegotiation=off broadcast=yes driver=virtio_net driverversion=1.0.0 ip=134.94.1.42 link=yes multicast=yes
+        *-usb:0
+             description: USB controller
+             product: 82801I (ICH9 Family) USB UHCI Controller #1
+             vendor: Intel Corporation
+             physical id: 5
+             bus info: pci@0000:00:05.0
+             version: 03
+             width: 32 bits
+             clock: 33MHz
+             capabilities: uhci bus_master
+             configuration: driver=uhci_hcd latency=0
+             resources: irq:11 ioport:c0c0(size=32)
+        *-usb:1
+             description: USB controller
+             product: 82801I (ICH9 Family) USB UHCI Controller #2
+             vendor: Intel Corporation
+             physical id: 5.1
+             bus info: pci@0000:00:05.1
+             version: 03
+             width: 32 bits
+             clock: 33MHz
+             capabilities: uhci bus_master
+             configuration: driver=uhci_hcd latency=0
+             resources: irq:11 ioport:c0e0(size=32)
+        *-usb:2
+             description: USB controller
+             product: 82801I (ICH9 Family) USB UHCI Controller #3
+             vendor: Intel Corporation
+             physical id: 5.2
+             bus info: pci@0000:00:05.2
+             version: 03
+             width: 32 bits
+             clock: 33MHz
+             capabilities: uhci bus_master
+             configuration: driver=uhci_hcd latency=0
+             resources: irq:11 ioport:c100(size=32)
+        *-usb:3
+             description: USB controller
+             product: 82801I (ICH9 Family) USB2 EHCI Controller #1
+             vendor: Intel Corporation
+             physical id: 5.7
+             bus info: pci@0000:00:05.7
+             version: 03
+             width: 32 bits
+             clock: 33MHz
+             capabilities: ehci bus_master
+             configuration: driver=ehci-pci latency=0
+             resources: irq:11 memory:feb33000-feb33fff
+        *-scsi:0
+             description: SCSI storage controller
+             product: Virtio block device
+             vendor: Red Hat, Inc.
+             physical id: 6
+             bus info: pci@0000:00:06.0
+             version: 00
+             width: 32 bits
+             clock: 33MHz
+             capabilities: scsi bus_master cap_list
+             configuration: driver=virtio-pci latency=0
+             resources: irq:10 ioport:c000(size=64) memory:feb34000-feb34fff
+           *-virtio2
+                description: Virtual I/O device
+                physical id: 0
+                bus info: virtio@2
+                logical name: /dev/vda
+                configuration: driver=virtio_blk
+        *-memory
+             description: RAM memory
+             product: Virtio memory balloon
+             vendor: Red Hat, Inc.
+             physical id: 7
+             bus info: pci@0000:00:07.0
+             version: 00
+             width: 32 bits
+             clock: 33MHz (30.3ns)
+             capabilities: bus_master
+             configuration: driver=virtio-pci latency=0
+             resources: irq:10 ioport:c120(size=32)
+           *-virtio3 UNCLAIMED
+                description: Virtual I/O device
+                physical id: 0
+                bus info: virtio@3
+                configuration: driver=virtio_balloon
+        *-scsi:1
+             description: SCSI storage controller
+             product: Virtio block device
+             vendor: Red Hat, Inc.
+             physical id: 9
+             bus info: pci@0000:00:09.0
+             version: 00
+             width: 32 bits
+             clock: 33MHz
+             capabilities: scsi bus_master cap_list
+             configuration: driver=virtio-pci latency=0
+             resources: irq:11 ioport:c040(size=64) memory:feb35000-feb35fff
+           *-virtio4
+                description: Virtual I/O device
+                physical id: 0
+                bus info: virtio@4
+                logical name: /dev/vdb
+                configuration: driver=virtio_blk
+        *-network:2
+             description: interface
+             product: MT27800 Family [ConnectX-5]
+             vendor: Mellanox Technologies
+             physical id: b
+             bus info: pci@0000:00:0b.0
+             logical name: ib0
+             version: 00
+             serial: 00:00:10:29:fe:80:00:00:00:00:00:00:50:6b:00:00:00:00:00:00
+             width: 64 bits
+             clock: 33MHz
+             capabilities: bus_master cap_list rom physical
+             configuration: autonegotiation=off broadcast=yes driver=mlx5_core[ib_ipoib] driverversion=5.7-1.0.2 duplex=full firmware=16.31.2006 (MT_0000000010) ip=10.2.16.6 latency=0 link=yes multicast=yes
+             resources: irq:10 memory:fc000000-fdffffff memory:fea00000-feafffff
+  *-input:0
+       product: Power Button
+       physical id: 1
+       logical name: input0
+       logical name: /dev/input/event0
+       capabilities: platform
+  *-input:1
+       product: AT Translated Set 2 keyboard
+       physical id: 2
+       logical name: input1
+       logical name: /dev/input/event1
+       logical name: input1::capslock
+       logical name: input1::numlock
+       logical name: input1::scrolllock
+       capabilities: i8042
+  *-input:2
+       product: VirtualPS/2 VMware VMMouse
+       physical id: 3
+       logical name: input3
+       logical name: /dev/input/event3
+       logical name: /dev/input/mouse1
+       capabilities: i8042
+  *-input:3
+       product: VirtualPS/2 VMware VMMouse
+       physical id: 4
+       logical name: input4
+       logical name: /dev/input/event2
+       logical name: /dev/input/mouse0
+       capabilities: i8042
+  *-input:4
+       product: QEMU QEMU USB Tablet
+       physical id: 5
+       logical name: input5
+       logical name: /dev/input/event4
+       logical name: /dev/input/mouse2
+       capabilities: usb
+  *-input:5
+       product: PC Speaker
+       physical id: 6
+       logical name: input6
+       logical name: /dev/input/event5
+       capabilities: isa
+
+

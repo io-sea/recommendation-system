@@ -242,3 +242,41 @@ class DataTable:
             logger.info(f"Updated row at index {i}: \n {self.perf_data.loc[i]}")
 
         return self.perf_data
+    
+    def complete_output_file(self, incomplete_output_filename):
+        """
+        Completes the output file by computing only lacking results and adding them to the existing CSV file.
+
+        Args:
+            incomplete_output_filename (str): The name of the incomplete output file.
+        """
+        logger.info(f"Attempting to complete the output file: {incomplete_output_filename}")
+
+        # Read the incomplete output file
+        existing_output_data = pd.read_csv(incomplete_output_filename)
+
+        # Determine the number of incomplete rows
+        incomplete_rows = existing_output_data.isnull().any(axis=1).sum()
+        logger.info(f"Total number of incomplete rows: {incomplete_rows}")
+
+        # Iterate over the rows, identify the incomplete rows, compute performance, and update the DataFrame
+        tiers_names = self.get_tiers_from_targets()
+        for i, row in existing_output_data.iterrows():
+            # Check if any value is missing in the current row
+            if row.isnull().any():
+                logger.info(f"Processing incomplete row at index {i}")
+                phase = row.to_dict()
+                phases_perf = PhaseData([phase], self.targets, self.ioi, sample=self.sample, lite=self.lite)
+                perf_df = phases_perf.get_phase_data(tiers_names)
+                # Fill missing values in the current row
+                for tier in tiers_names:
+                    if pd.isnull(row[tier]):
+                        row[tier] = perf_df.loc[0, tier]
+                existing_output_data.loc[i] = row  # Update the row in the DataFrame
+
+                # Save the updated DataFrame to the existing output file
+                existing_output_data.to_csv(incomplete_output_filename, index=False)
+                logger.info(f"Updated table saved to: {incomplete_output_filename} after processing phase at index {i}")
+
+        logger.info("Completion of the output file successful.")
+        return existing_output_data

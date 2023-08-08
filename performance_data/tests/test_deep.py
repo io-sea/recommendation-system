@@ -9,6 +9,7 @@ import unittest
 from abc import ABC, abstractmethod
 import random
 import tempfile
+import shutil
 import pandas as pd
 import numpy as np
 from unittest.mock import MagicMock, patch, Mock
@@ -33,19 +34,21 @@ TEST_DATA = os.path.join(os.path.dirname(CURRENT_DIR), "tests", "test_data",
 TEST_MODELS = os.path.join(os.path.dirname(CURRENT_DIR), "tests", "test_data",
                            "test_deep_models")
 
+CURRENT_DIR = dirname(dirname(os.path.abspath(__file__)))
+DATASET = os.path.join(CURRENT_DIR, "tests", "deep_data", "deep_500_dataset.csv")
+
 
 class TestPhasesTable(unittest.TestCase):
     """A unit test class for the PhaseGenerator class."""
 
     def setUp(self):
         """Create an instance of the DataGenerator class for use in the tests."""
-        self.num_entries = 3
-        self.volume = 50e6
+        self.num_entries = 500
+        self.volume = 500e6
         self.generator = PhaseGenerator(num_entries=self.num_entries,
                                         volume=self.volume)
-        current_dir = dirname(dirname(os.path.abspath(__file__)))
-        self.filename = os.path.join(current_dir, "tests",
-                                     "deep_data", "deep_small_dataset.csv")
+        
+        self.filename = DATASET
 
     def test_generate_data(self):
         """Test the generate_data method of the DataGenerator class.
@@ -94,8 +97,10 @@ class TestDataTable(unittest.TestCase):
         logger.add(sys.stderr, level="INFO")
         """Set up test fixtures, if any."""
         current_dir = dirname(dirname(os.path.abspath(__file__)))
-        self.filename = os.path.join(current_dir, "tests",
-                                     "deep_data", "test_deep_generated_dataset.csv")
+        # self.filename = os.path.join(current_dir, "tests",
+        #                              "deep_data", "test_deep_generated_dataset.csv")
+        
+        self.filename = DATASET
         
         # self.output_filename = os.path.join(current_dir, "tests",
         #                                  "test_data", "test_deep_small_dataset_complete.csv")
@@ -133,3 +138,26 @@ class TestDataTable(unittest.TestCase):
         perf_data = self.data_table.get_performance_table()
             #output_filename=self.output_filename)
         #print(perf_data)
+        
+    def test_complete_output_file(self):
+        """Test if complete_output_file method correctly completes the output file with lacking results."""
+        # Define an incomplete output filename for testing
+        # DATASET = os.path.join(CURRENT_DIR, "tests", "deep_data", "deep_500_dataset.csv")
+        incomplete_output_filename = os.path.join(CURRENT_DIR, "tests", 
+                                                  "deep_data", 
+                                                  "deep_500_dataset_completed.csv")
+
+        # Create a temporary copy of the incomplete output file
+        temp_incomplete_output_filename = os.path.join(tempfile.gettempdir(), "temp_incompleted_file.csv")
+        shutil.copy(incomplete_output_filename, temp_incomplete_output_filename)
+
+        # Execute the complete_output_file method
+        completed_data = self.data_table.complete_output_file(temp_incomplete_output_filename)
+
+        # Check if the resulting DataFrame has no missing values
+        self.assertFalse(completed_data.isnull().any().any())
+
+        # Additional assertions can be added to check specific values or other properties of the completed data
+
+        # Clean up the temporary file
+        os.remove(temp_incomplete_output_filename)
