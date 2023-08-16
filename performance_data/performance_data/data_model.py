@@ -18,7 +18,7 @@ from loguru import logger
 
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
-from tensorflow.keras.wrappers.scikit_learn import KerasRegressor
+#from tensorflow.keras.wrappers.scikit_learn import KerasRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.compose import ColumnTransformer
@@ -443,7 +443,9 @@ class DataModel:
         """
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(self.X, self.y, test_size=test_size, random_state=random_state)
         kfold = KFold(n_splits=5, shuffle=True, random_state=random_state)
+        logger.info(f"Models {self.y.columns}")
         for col in self.y.columns:
+            
             # self.models[col] = self.models[col].fit(self.X_train, self.y_train[col])
             # # Compute scores for each model
             # score = self.models[col].score(self.X_test, self.y_test[col])
@@ -452,7 +454,7 @@ class DataModel:
             for train_index, test_index in kfold.split(self.X_train):
                 X_train, X_test = self.X_train.iloc[train_index], self.X_train.iloc[test_index]
                 y_train, y_test = self.y_train[col].iloc[train_index], self.y_train[col].iloc[test_index]
-
+                logger.info(f"Model {self.models[col].model} for Tier: {col}")
                 self.models[col] = self.models[col].fit(X_train, y_train)
                 score = self.models[col].score(X_test, y_test)
                 scores.append(score)
@@ -516,59 +518,59 @@ class DataModel:
         return pd.DataFrame(predictions)
 
 
-class DeepNNModel(TierModel):
-    """
-    Subclass of TierModel that creates a deep neural network (NN) model for regression tasks.
+# class DeepNNModel(TierModel):
+#     """
+#     Subclass of TierModel that creates a deep neural network (NN) model for regression tasks.
 
-    Attributes:
-        depth: int
-            The number of hidden layers in the neural network.
-        width: int
-            The number of neurons in each hidden layer.
-        input_dim: int
-            The number of input features for the neural network.
-    """
-    def __init__(self, depth=15, width=32, input_dim=14, epochs=50, **kwargs):
-        """
-        Initializes the DeepNNModel object with the specified depth and width.
+#     Attributes:
+#         depth: int
+#             The number of hidden layers in the neural network.
+#         width: int
+#             The number of neurons in each hidden layer.
+#         input_dim: int
+#             The number of input features for the neural network.
+#     """
+#     def __init__(self, depth=15, width=32, input_dim=14, epochs=50, **kwargs):
+#         """
+#         Initializes the DeepNNModel object with the specified depth and width.
 
-        Parameters:
-            depth: int
-                The number of hidden layers in the neural network.
-            width: int
-                The number of neurons in each hidden layer.
-            input_dim: int
-                The number of input features for the neural network.
-            **kwargs: dict
-                Additional keyword arguments for KerasRegressor.
-        """
-        self.depth = depth
-        self.width = width
-        self.input_dim = input_dim
-        self.epochs = epochs
-        super().__init__(regressor=self._build_nn_model(), **kwargs)
+#         Parameters:
+#             depth: int
+#                 The number of hidden layers in the neural network.
+#             width: int
+#                 The number of neurons in each hidden layer.
+#             input_dim: int
+#                 The number of input features for the neural network.
+#             **kwargs: dict
+#                 Additional keyword arguments for KerasRegressor.
+#         """
+#         self.depth = depth
+#         self.width = width
+#         self.input_dim = input_dim
+#         self.epochs = epochs
+#         super().__init__(regressor=self._build_nn_model(), **kwargs)
 
-    def _build_nn_model(self):
-        """
-        Builds the neural network model using Keras.
+#     def _build_nn_model(self):
+#         """
+#         Builds the neural network model using Keras.
 
-        Returns:
-            nn_model: KerasRegressor
-                The KerasRegressor object wrapping the neural network model.
-        """
-        def create_model():
-            model = Sequential()
-            model.add(Dense(self.width, input_dim=self.input_dim, activation='relu'))
+#         Returns:
+#             nn_model: KerasRegressor
+#                 The KerasRegressor object wrapping the neural network model.
+#         """
+#         def create_model():
+#             model = Sequential()
+#             model.add(Dense(self.width, input_dim=self.input_dim, activation='relu'))
 
-            for _ in range(self.depth - 1):
-                model.add(Dense(self.width, activation='relu'))
+#             for _ in range(self.depth - 1):
+#                 model.add(Dense(self.width, activation='relu'))
 
-            model.add(Dense(1, activation='linear'))
-            model.compile(loss='mean_squared_error', optimizer='adam')
-            return model
+#             model.add(Dense(1, activation='linear'))
+#             model.compile(loss='mean_squared_error', optimizer='adam')
+#             return model
 
-        nn_model = KerasRegressor(build_fn=create_model, epochs=self.epochs)
-        return nn_model
+#         nn_model = KerasRegressor(build_fn=create_model, epochs=self.epochs)
+#         return nn_model
 
 def load_and_predict(model_path, new_data, iops=False):
     """
