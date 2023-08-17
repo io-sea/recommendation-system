@@ -245,7 +245,7 @@ class DataModel:
     Raises:
         TypeError: If `models` is not a dictionary, a list, or None.
     """
-    THRESHOLD = 1.7
+    THRESHOLD = 0.7
 
     def __init__(self, 
                  data_file=GENERATED_DATASET_FILE, 
@@ -453,8 +453,7 @@ class DataModel:
 
             for train_index, test_index in kfold.split(self.X_train):
                 X_train, X_test = self.X_train.iloc[train_index], self.X_train.iloc[test_index]
-                y_train, y_test = self.y_train[col].iloc[train_index], self.y_train[col].iloc[test_index]
-                logger.info(f"Model {self.models[col].model} for Tier: {col}")
+                y_train, y_test = self.y_train[col].iloc[train_index], self.y_train[col].iloc[test_index]                
                 self.models[col] = self.models[col].fit(X_train, y_train)
                 score = self.models[col].score(X_test, y_test)
                 scores.append(score)
