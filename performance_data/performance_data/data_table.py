@@ -63,15 +63,17 @@ class PhaseData:
             # TODO : should be able to control volume of workload to adjust accuracy.
             workload = Workload(phase=phase, target_tier=target,
                                 accelerator=accelerator, ioi=self.ioi)
-            (latency, bw) = workload.get_data()
-            latencies += latency
+            (latency, bw) = workload.get_data()            
+            latencies += latency 
             volumes += phase["read_volume"] + phase["write_volume"]
-        # print(f"n_samples = {self.sample}")
+        
+        # logger.info(f"Latencies: {latencies}")
         avg_bw = (float)(volumes/latencies) if latencies else 0
         logger.info(f"Measured throughput on tier: {target} | use SBB: {accelerator} | result: {convert_size(avg_bw)}/s")
         return avg_bw
 
-    def get_phase_data(self, target_names: List[str] = ["nfs_bw", "lfs_bw", "sbb_bw"]) -> pd.DataFrame:
+    def get_phase_data(self, target_names: List[str] = ["nfs_bw",
+                                                        "lfs_bw", "sbb_bw"]) -> pd.DataFrame:
         """
         Computes the performance of each phase on the specified tiers and returns the results as a DataFrame.
 
@@ -83,14 +85,17 @@ class PhaseData:
 
         Raises:
             ValueError: If any of the specified tier names is invalid.
-
+            
         Example:
             # Compute performance for the "nfs_bw" and "lfs_bw" tiers and return the results as a DataFrame.
             phases_perf = PhaseData(phases, targets, ioi, sample=sample, lite=lite)
             perf_df = phases_perf.get_phase_data(target_names=["nfs_bw", "lfs_bw"])
+
         """
         # Validate input tier names
-        valid_tiers = {"fs1_bw", "nfs_bw", "lfs_bw", "sbb_bw"}
+        valid_tiers = {tier + "_bw" for tier in list(self.target.keys())}
+
+        valid_tiers = valid_tiers.union({tier + "_sbb_bw" for tier in list(self.target.keys())})
         if not set(target_names).issubset(valid_tiers):
             invalid_tiers = set(target_names) - valid_tiers
             raise ValueError(f"Invalid tier names: {invalid_tiers}")
@@ -100,14 +105,15 @@ class PhaseData:
         for tier in target_names:
             perf[tier] = []
         for phase in self.phases:
-            if "nfs_bw" in target_names:
-                perf["nfs_bw"].append(self.run_phase_workload(phase, self.target["nfs"], False))
-            if "lfs_bw" in target_names:
-                perf["lfs_bw"].append(self.run_phase_workload(phase, self.target["lfs"], False))
-            if "fs1_bw" in target_names:
-                perf["fs1_bw"].append(self.run_phase_workload(phase, self.target["fs1"], False))
-            if "sbb_bw" in target_names:
-                perf["sbb_bw"].append(self.run_phase_workload(phase, self.target["lfs"], True))
+            for target in self.target.keys():
+                if target + "_bw" in target_names:
+                    perf[target + "_bw"].append(
+                        self.run_phase_workload(phase, 
+                                                self.target[target], False))
+                if target + "_sbb_bw" in target_names:
+                    perf[target + "_sbb_bw"].append(
+                        self.run_phase_workload(phase, 
+                                                self.target[target], True))
 
         # Assemble performance data into a DataFrame
         perf_df = pd.DataFrame(perf)
@@ -129,7 +135,8 @@ class DataTable:
         perf_data (pandas.DataFrame): A DataFrame containing the performance data.
     """
 
-    def __init__(self, targets,  accelerator=False, ioi=False, sample=1, filename=None, lite=False):
+    def __init__(self, targets,  accelerator=False, ioi=False, 
+                 sample=1, filename=None, lite=False):
         """Initialize the data model with the phase features extracted from AppDecomposer.
 
         Args:
@@ -142,6 +149,7 @@ class DataTable:
             lite (bool, optional): A flag indicating whether to cap the volume of the phase for performance measurement at 1GB. Defaults to `False`.
         """
         self.filename = filename or DATASET_SOURCE
+        logger.info(f"Reading performance data from {self.filename}")
         self.targets = targets
         self.accelerator = accelerator
         self.ioi = ioi
@@ -156,8 +164,9 @@ class DataTable:
         """
         tiers_names = [tier + "_bw" for tier in list(self.targets.keys())]
         if self.accelerator:
-            tiers_names.append("sbb_bw")
+            tiers_names.extend([tier + "_sbb_bw" for tier in list(self.targets.keys()) if self.accelerator])
         return tiers_names
+    
 
     def get_performance_table(self, output_filename=None):
         """
@@ -198,7 +207,6 @@ class DataTable:
             base_filename, ext_filename = os.path.splitext(self.filename)
             output_filename = base_filename + "_completed" + ext_filename
 
-        # Load performance data from file
         try:
             # Load performance data from file
             self.perf_data = pd.read_csv(self.filename)
@@ -211,31 +219,70 @@ class DataTable:
         logger.info(f"Phases are extracted from this table: {self.perf_data}")
         logger.info(f"Following tiers will be fed: {tiers_names}")
 
-        # Check if all required tiers are present in the input data
-        if set(tiers_names).issubset(self.perf_data.columns):
-            # Split data into parts with and without performance information
-            old_data = self.perf_data[~self.perf_data.isna().any(axis=1)]
-            new_data = self.perf_data[self.perf_data.isna().any(axis=1)]
+        total_iterations = len(self.perf_data)
+        logger.info(f"Total number of iterations: {total_iterations}")
 
-            # Update performance information for the missing parts
-            new_data = new_data.drop(tiers_names, axis=1)
-            phases = new_data.to_dict('records')
-            phases_perf = PhaseData(phases, self.targets, self.ioi, sample=self.sample, lite=self.lite)
+        # Iterate over phases, compute performance, and update perf_data for each phase
+        for i, row in self.perf_data.iterrows():
+            remaining_iterations = total_iterations - i
+            logger.info(f"Remaining iterations: {remaining_iterations}")
+
+            phase = row.to_dict()
+            phases_perf = PhaseData([phase], self.targets, self.ioi, 
+                                    sample=self.sample, lite=self.lite)
             perf_df = phases_perf.get_phase_data(tiers_names)
-            perf_df.index = new_data.index
-            new_data = new_data.join(perf_df)
+            for tier in tiers_names:
+                self.perf_data.loc[i, tier] = perf_df.loc[0, tier]
 
-            # Combine old and new data
-            self.perf_data = pd.concat([old_data, new_data], axis=0)
-        else:
-            # Update performance information for all rows
-            phases = self.perf_data.to_dict('records')
-            phases_perf = PhaseData(phases, self.targets, self.ioi, sample=self.sample, lite=self.lite)
-            perf_df = phases_perf.get_phase_data(tiers_names)
-            self.perf_data = self.perf_data.join(perf_df)
-
-        # Save completed performance data to file and log message
-        self.perf_data.to_csv(output_filename, index=False)
-        logger.info(f"Complete table saved to: {output_filename}")
+            # Save completed performance data to file and log message after each phase
+            self.perf_data.to_csv(output_filename, index=False)
+            logger.info(f"Updated table saved to: {output_filename} after processing phase at index {i}")
+            
+            # Log the updated ith row of the dataframe
+            logger.info(f"Updated row at index {i}: \n {self.perf_data.loc[i]}")
 
         return self.perf_data
+    
+    def complete_output_file(self, incomplete_output_filename):
+        """
+        Completes the output file by computing only lacking results and adding them to the existing CSV file.
+
+        Args:
+            incomplete_output_filename (str): The name of the incomplete output file.
+        """
+        logger.info(f"Attempting to complete the output file: {incomplete_output_filename}")
+
+        # Read the incomplete output file
+        existing_output_data = pd.read_csv(incomplete_output_filename)
+
+        # Determine the proxy filename (e.g., append "_proxy" to the filename)
+        proxy_filename = os.path.splitext(incomplete_output_filename)[0] + "_proxy.csv"
+
+        # Determine the number of incomplete rows
+        incomplete_rows = existing_output_data.isnull().any(axis=1).sum()
+        logger.info(f"Total number of incomplete rows: {incomplete_rows}")
+
+        # Iterate over the rows, identify the incomplete rows, compute performance, and update the DataFrame
+        tiers_names = self.get_tiers_from_targets()
+        for i, row in existing_output_data.iterrows():
+            # Check if any value is missing in the current row
+            if row.isnull().any():
+                logger.info(f"Processing incomplete row at index {i}")
+                phase = row.to_dict()
+                phases_perf = PhaseData([phase], self.targets, self.ioi, sample=self.sample, lite=self.lite)
+                perf_df = phases_perf.get_phase_data(tiers_names)
+                # Fill missing values in the current row
+                for tier in tiers_names:
+                    if pd.isnull(row[tier]):
+                        row[tier] = perf_df.loc[0, tier]
+                existing_output_data.loc[i] = row  # Update the row in the DataFrame
+
+                # Save the updated DataFrame to the proxy file
+                existing_output_data.to_csv(proxy_filename, index=False)
+                logger.info(f"Updated table saved to proxy file: {proxy_filename} after processing phase at index {i}")
+
+        # Rename the proxy file to the original filename, effectively overwriting the incomplete file
+        os.rename(proxy_filename, incomplete_output_filename)
+        logger.info("Completion of the output file successful.")
+        return existing_output_data
+

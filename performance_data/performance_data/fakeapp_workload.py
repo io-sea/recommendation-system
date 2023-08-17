@@ -5,6 +5,7 @@ This is not Free or Open Source software.
 Please contact Bull S. A. S. for details about its license.
 """
 import os, re
+import time
 import subprocess
 import string, random
 from numpy import size
@@ -14,6 +15,9 @@ from app_decomposer.utils import convert_size
 path = os.path.abspath(__file__)
 dir_path = os.path.dirname(path)
 
+
+MAX_RETRIES = 10
+RETRY_DELAY = 10  # time to wait between retries, in seconds
 
 class FakeappWorkload:
     """Class to create and manage an IO Workload using fakeapp binary. """
@@ -74,8 +78,9 @@ class FakeappWorkload:
 
         return minutes * 60 + seconds + milliseconds / 1000
 
+    
     def get_slurm_times(self):
-        """Parses the slurm times associated with the file slurm-job_id.out
+        """Parses the slurm times associated with the file slurm-job_id.out.
 
         Args:
             out_file (str): The job slurm output file path to parse.
@@ -85,20 +90,27 @@ class FakeappWorkload:
         """
         self.output_file = os.path.join(self.working_dir, f"slurm-{str(self.job_id)}.out")
         logger.info(f"Parsing Slurm output file: {self.output_file}")
-        real_time = None
-        try:
-            with open(self.output_file, "r") as slurm_file:
-                lines = slurm_file.readlines()
-                for line in lines:
-                    if line.startswith("real"):
-                        time = line.split("real")[-1].strip()
-                        real_time = FakeappWorkload.parse_milliseconds(time)
-                        logger.info(f"Time found is {time}  | Parsed time is {real_time}")
-            if real_time:
-                return real_time
-            raise ValueError("Slurm command was not timed !")
-        except FileNotFoundError as exc:
-            raise FileNotFoundError("Slurm output was not found.") from exc
+
+        retry_count = 0
+        while retry_count < MAX_RETRIES:
+            try:
+                with open(self.output_file, "r") as slurm_file:
+                    lines = slurm_file.readlines()
+                    for line in lines:
+                        if line.startswith("real"):
+                            time = line.split("real")[-1].strip()
+                            real_time = FakeappWorkload.parse_milliseconds(time)
+                            logger.info(f"Time found is {time}  | Parsed time is {real_time}")
+                    if real_time:
+                        return real_time
+                    raise ValueError("Slurm command was not timed !")
+            except FileNotFoundError:
+                logger.warning(f"Slurm output file {self.output_file} not found, retrying in {RETRY_DELAY} seconds...")
+                time.sleep(RETRY_DELAY)
+                retry_count += 1
+
+        # if the file still not found after all retries
+        raise FileNotFoundError(f"Slurm output file {self.output_file} not found after {MAX_RETRIES} retries.")
 
 
     def write_sbatch_file(self):
@@ -182,6 +194,16 @@ class FakeappWorkload:
         else:
             logger.error(f"Could not run sbatch file: {self.sbatch_file}")
             raise Exception(f"Could not submit job: \n stderr: {output_stderr}")
+        
+        # Add this block to check the job status and wait for it to finish
+        if not wait:
+            while True:
+                time.sleep(5)  # wait for 5 seconds before checking the job status again
+                check_job = f"squeue -j {self.job_id}"
+                check_ps = subprocess.run(check_job.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                check_stdout = check_ps.stdout.decode()
+                if str(self.job_id) not in check_stdout:  # if the job_id is not in the output, the job has finished
+                    break
 
         #get avg time from slurm out
         real_time = self.get_slurm_times()
@@ -211,7 +233,7 @@ class FakeappWorkload:
         total_volume = self.phase["read_volume"] + self.phase["write_volume"]
         if  total_volume > 0:
             self.write_sbatch_file()
-            elapsed_time = self.run_sbatch_file(self.ioi, clean=False)
+            elapsed_time = self.run_sbatch_file(self.ioi, clean=True)
             if elapsed_time > 0:
                 bandwidth = total_volume / elapsed_time
 
