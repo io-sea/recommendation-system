@@ -144,7 +144,7 @@ class TestDataTable(unittest.TestCase):
         # Define an incomplete output filename for testing
         incomplete_output_filename = os.path.join(CURRENT_DIR, "tests", 
                                                 "deep_data", 
-                                                "deep_500_dataset_completed.csv")
+                                                "deep_500_dataset_completed_proxy.csv")
 
         # Make a copy of the original incomplete file to restore it later
         backup_filename = os.path.join(CURRENT_DIR, "tests", 
@@ -161,4 +161,4 @@ class TestDataTable(unittest.TestCase):
         # Additional assertions can be added to check specific values or other properties of the completed data
 
         # Restore the original incomplete file from the backup
-        shutil.move(backup_filename, incomplete_output_filename)
+        #shutil.move(backup_filename, incomplete_output_filename)

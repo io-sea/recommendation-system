@@ -7,6 +7,7 @@ Please contact Bull S. A. S. for details about its license.
 import os
 from os.path import dirname
 import sys
+import shutil
 import pandas as pd
 from loguru import logger
 from app_decomposer.utils import convert_size
@@ -281,7 +282,10 @@ class DataTable:
                 existing_output_data.to_csv(proxy_filename, index=False)
                 logger.info(f"Updated table saved to proxy file: {proxy_filename} after processing phase at index {i}")
 
-        # Rename the proxy file to the original filename, effectively overwriting the incomplete file
+        # Copy and rename the proxy file to the original filename, effectively overwriting the incomplete file
+        backup_filename = os.path.splitext(incomplete_output_filename)[0] + "_proxy" + os.path.splitext(incomplete_output_filename)[1]
+
+        shutil.copy(proxy_filename, backup_filename)
         os.rename(proxy_filename, incomplete_output_filename)
         logger.info("Completion of the output file successful.")
         return existing_output_data
