@@ -26,8 +26,9 @@ CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
 TEST_CONFIG_DEFAULT = os.path.join(CURRENT_DIR, "test_data", "test_config.yaml")
 TEST_CONFIG_KO = os.path.join(CURRENT_DIR, "test_data", "test_config_kc_ko.yaml")
 KIWI_CONFIG = os.path.join(CURRENT_DIR, "test_data", "test_kiwi_config.yaml")
+DEEP_CONFIG = os.path.join(CURRENT_DIR, "test_data", "test_deep_config.yaml")
 
-TEST_CONFIG = KIWI_CONFIG
+TEST_CONFIG = DEEP_CONFIG
 class TestKeycloakToken(unittest.TestCase):
     """ Test KeycloakToken functionalities """
 
@@ -35,21 +36,44 @@ class TestKeycloakToken(unittest.TestCase):
         """ Prepare the test suite with self.config.
         Enter path=KIWI_CONFIG for scraping data from kiwi0 IOI slogin node."""
         self.config = Configuration(path=TEST_CONFIG)
+        
         # To disable useless warnings with requests module on https without certificate
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        
+        # Fetch the proxy address from the Configuration instance
+        proxy_address = self.config.get_proxy()
+        self.proxies = {        
+            "http": proxy_address,
+            "https": proxy_address
+        }
 
-    @unittest.skipIf(os.name=='nt', "Skip this test because it is not working on windows")
+        # Test to call an API with the token
+        api_uri = f"{self.config.get_api_uri()}:{self.config.get_api_port()}/backend/api/user/settings"
+        print(f"api_uri = {api_uri}")
+
+    def test_get_token_with_proxy(self):
+        """Test that keycloak_connector.get_kc_token returns a valid token with proxy."""
+        keycloak_token = self.config.get_kc_token()
+        print(f"Token: {keycloak_token}")
+
+        # Assert that the token is of expected format (very basic validation)
+        self.assertTrue(keycloak_token.startswith('Bearer '))
+
+
+
+    #@unittest.skipIf(os.name=='nt', "Skip this test because it is not working on windows")
     def test_get_token(self):
         """Test that keycloak_connector.get_kc_token returns a valid token."""
         keycloak_token = self.config.get_kc_token()
-        print(keycloak_token)
+        print(f"Token: {keycloak_token}")
         #self.assertIn('Bearer ', keycloak_token)
         # test to call an api with the token
         api_uri = f"{self.config.get_api_uri()}:{self.config.get_api_port()}" \
             "/backend/api/user/settings"
-        print(api_uri)
+        print(f"api_uri = {api_uri}")
         rqst = request_delegator(requests.get,
                                  api_uri,
+                                 proxies=self.proxies,
                                  headers={'Authorization': "Bearer "+ keycloak_token})
         self.assertIsInstance(rqst, requests.Response)
         resp = rqst.json()

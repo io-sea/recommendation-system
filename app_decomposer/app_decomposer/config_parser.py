@@ -28,7 +28,8 @@ class Configuration:
         Returns:
             A dict with configuration content and parameters.
         """
-        self.parsed_yaml_file = yaml.load(Path(path).read_text(), Loader=yaml.SafeLoader)
+        self.parsed_yaml_file = yaml.load(Path(path).read_text(), 
+                                          Loader=yaml.SafeLoader)
 
     def parse(self):
         """Returns all yaml content as a dict."""
@@ -53,26 +54,43 @@ class Configuration:
     def get_api_port(self):
         """Get api port."""
         return 10443 if "port" not in self.parse()["api"] else self.parse()["api"]["port"]
+    
+    def get_proxy(self):
+        """Parse the YAML configuration to get proxy settings."""
+        proxy_config = self.parsed_yaml_file.get("proxy", {})
+        http_proxy = proxy_config.get("http", None)
+        https_proxy = proxy_config.get("https", None)
+
+        if http_proxy or https_proxy:
+            return {
+                "http": http_proxy,
+                "https": https_proxy
+            }
+        return {}
 
     def get_kc_token(self):
         """Get a keycloak valid token."""
         ioi_backend_url = f"{self.get_kc_hostname()}:{self.get_kc_port()}"\
             f"/auth/realms/{self.get_kc_realm()}/protocol/openid-connect/token"
-            #f"/auth/realms/{self.get_kc_realm()}/protocol/openid-connect/token"
-        cmd = ['curl', '--silent', '--insecure']
+        cmd = ['curl', '-v', '--silent', '--insecure']
+
+        proxy = self.get_proxy().get('http')  # Just get the HTTP proxy
+        if proxy:
+            cmd += ['--proxy', proxy]
+
         cmd += ['--header', 'Content-Type: application/x-www-form-urlencoded']
         cmd += ['--request', 'POST', '--data', 'username=ioi-admin', '--data', 'password=password',
                 '--data', 'grant_type=password', '--data', f'client_id={self.parse()["keycloak"]["client"]}']
 
         cmd += [ioi_backend_url]
         print(f"CMD = {cmd}")
-        rc = subprocess.run(cmd, stdout=subprocess.PIPE, shell=False, check=True)
+        #rc = subprocess.run(cmd, stdout=subprocess.PIPE, shell=False, check=True)
+        rc = subprocess.run(cmd, shell=False, check=True)
         conf = json.loads(rc.stdout)
         assert('access_token' in conf)
-
-        # if "Bearer " not in conf['access_token']:
-        #     token = "Bearer " + conf["access_token"]
         return conf["access_token"]
+
+
     
     def get_kc_token_docker(self):
         """Get a keycloak valid token."""

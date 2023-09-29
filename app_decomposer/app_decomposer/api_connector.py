@@ -604,7 +604,7 @@ class JobListMultiple(ApiConnect):
             data = dict()
         return data
 
-def request_delegator(request, *args, verify_ssl=False, **kwargs):
+def request_delegator(request, *args, verify_ssl=False, proxies=None, **kwargs):
     """Raises exceptions in case of bad given http request.
        Do not verify SSL certificate to allow self-signed certificate.
        In case of HTTPError, warns with response text.
@@ -620,7 +620,7 @@ def request_delegator(request, *args, verify_ssl=False, **kwargs):
         request object: the request object if it succeeds, exception otherwise.
     """
     try:
-        rqst = request(*args, verify=verify_ssl, **kwargs)
+        rqst = request(*args, verify=verify_ssl, proxies=proxies, **kwargs)
         if rqst.status_code != requests.codes.ok:
             warnings.warn("HTTP request succeeds without standard status code: "
                           "{} with response {}.".format(rqst.status_code, rqst.text),
@@ -640,7 +640,7 @@ def request_delegator(request, *args, verify_ssl=False, **kwargs):
     raise RuntimeError("Error: Impossible to connect: {}".format(*args))
 
 
-def check_http_code(url, code, verify_ssl=False, **kwargs):
+def check_http_code(url, code, verify_ssl=False, proxies=None, **kwargs):
     """Check if the server returns the expected http/https code.
 
     Args:
@@ -654,7 +654,7 @@ def check_http_code(url, code, verify_ssl=False, **kwargs):
         (bool): True if the expected code is returned by the server, False otherwise.
     """
     try:
-        rqst = requests.head(url, verify=verify_ssl, **kwargs)
+        rqst = requests.head(url, verify=verify_ssl, proxies=proxies, **kwargs)
         return rqst.status_code == code
     except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
         return False
