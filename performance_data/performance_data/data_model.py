@@ -157,6 +157,9 @@ class TierModel(RegressionModel):
         """
         self.model = regressor
 
+    def __call__(self, X):
+        return self.model.predict(X)
+
     def fit(self, X, y):
         """
         Fits the regression model to the training data.
@@ -247,9 +250,9 @@ class DataModel:
     """
     THRESHOLD = 0.7
 
-    def __init__(self, 
-                 data_file=GENERATED_DATASET_FILE, 
-                 cats=DEFAULT_CATEGORIES, 
+    def __init__(self,
+                 data_file=GENERATED_DATASET_FILE,
+                 cats=DEFAULT_CATEGORIES,
                  models=None):
         logger.info("Initializing DataModel object.")
         self.data_file = data_file
@@ -445,7 +448,7 @@ class DataModel:
         kfold = KFold(n_splits=5, shuffle=True, random_state=random_state)
         logger.info(f"Models {self.y.columns}")
         for col in self.y.columns:
-            
+
             # self.models[col] = self.models[col].fit(self.X_train, self.y_train[col])
             # # Compute scores for each model
             # score = self.models[col].score(self.X_test, self.y_test[col])
@@ -453,7 +456,7 @@ class DataModel:
 
             for train_index, test_index in kfold.split(self.X_train):
                 X_train, X_test = self.X_train.iloc[train_index], self.X_train.iloc[test_index]
-                y_train, y_test = self.y_train[col].iloc[train_index], self.y_train[col].iloc[test_index]                
+                y_train, y_test = self.y_train[col].iloc[train_index], self.y_train[col].iloc[test_index]
                 self.models[col] = self.models[col].fit(X_train, y_train)
                 score = self.models[col].score(X_test, y_test)
                 scores.append(score)

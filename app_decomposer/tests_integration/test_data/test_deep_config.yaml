@@ -1,0 +1,15 @@
+api:
+  uri: http://dp-ioi
+  port: 80
+  #proxy: socks5://localhost:7979
+
+keycloak:
+  uri: http://dp-ioi
+  port: 8080
+  realm: atos-data-management
+  client: io-instrumentation
+  #proxy: socks5://localhost:7979
+
+proxy:
+  http: socks5://localhost:7979
+  https: socks5://localhost:7979
