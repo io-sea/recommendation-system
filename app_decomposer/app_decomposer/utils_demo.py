@@ -174,6 +174,48 @@ def plot_detected_phases(jobid, merge=False, show_phases=False, ts=None, width=1
         )
     return fig
 
+def plot_detected_phases_compare(jobid, merge=False, show_phases=False, ts=None, width=1200, height=600):
+    if not ts:
+        timestamps, read_signal, write_signal = get_job_timeseries_from_file_as_array(job_id=jobid)
+    else:
+        timestamps, read_signal, write_signal = ts
+    ab = np.arange(len(read_signal))
+    read_dec = KmeansSignalDecomposer(read_signal, merge=merge)
+    read_bkps, read_labels = read_dec.decompose()
+    rec_signal = read_dec.reconstruct(read_bkps)
+    write_dec = KmeansSignalDecomposer(write_signal, merge=merge)
+    write_bkps, write_labels = write_dec.decompose()
+    rec_wsignal = write_dec.reconstruct(write_bkps)
+    compute, volume, bandwidth = get_signal_representation(timestamps, read_signal, read_labels)
+    w_compute, w_volume, w_bandwidth = get_signal_representation(timestamps, write_signal, write_labels)
+
+    max_bw = max(max(volume), max(w_volume))
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=ab.flatten(), y=read_signal.flatten(),
+                            mode='lines+markers', name='original write signal from IOI', line_width=1.5,
+                            text=list(map(lambda x: "class="+str(x), read_labels))))
+
+    fig.add_trace(go.Scatter(x=ab.flatten(), y=write_signal.flatten(),
+                            mode='lines+markers', name='reconstructed write signal from IOI', line=dict(width=1.5, dash='dash'),
+                            text=list(map(lambda x: "class="+str(x), write_labels))))
+    # breakpoints
+    if show_phases:
+        for read_bkp in read_bkps + write_bkps:
+            fig.add_trace(go.Scatter(x=[read_bkp-1, read_bkp-1], y=[0, max_bw/2],
+                                mode='lines', line_color="black", line_dash='longdash',
+                                showlegend=False, line_width=0.5))
+
+
+    fig.update_layout(
+        width=width, height=height,
+        title=  "IOI Signal - comparison between real and reconstructed",
+        legend=dict(orientation="h", yanchor="top"),
+        #xaxis_title="timestamps",
+        yaxis_title="volume conveyed by the application",
+        legend_title="Signals",
+        )
+    return fig
 
 def simulate_app(compute, reads, writes, io_bw, app_name=""):
     # Set Simulation Env
