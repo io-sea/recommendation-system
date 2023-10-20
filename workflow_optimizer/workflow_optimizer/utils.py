@@ -12,6 +12,7 @@ def camel_case_to_snake_case(name):
     logger.debug("Converting CamelCase to snake_case")
     return re.sub('([a-z0-9])([A-Z])', r'\1_\2', re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)).lower()
 
+
 def get_column_names(json_file_name):
     """
     Given a JSON file name, this function returns a list of relevant column names.
@@ -28,6 +29,7 @@ def get_column_names(json_file_name):
     }
     return column_name_mapping.get(json_file_name, [])
 
+
 def is_file_extension(filename, expected_extension):
     """
     Check if the file has the expected extension.
@@ -35,6 +37,7 @@ def is_file_extension(filename, expected_extension):
     logger.debug(f"Checking file extension for {filename}")
     _, file_extension = os.path.splitext(filename)
     return file_extension == f".{expected_extension}"
+
 
 def list_and_classify_directory_contents(directory_path):
     """
