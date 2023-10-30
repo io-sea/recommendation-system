@@ -1,0 +1,1 @@
+{"node_count": 1, "events": [0, 1], "read_volumes": [849622, 19210], "read_bw": [424811.0, 19210.0], "write_volumes": [0, 9053429170], "write_bw": [0, 754452430.8333334], "read_pattern": ["Uncl", "Uncl"], "write_pattern": ["Uncl", "Str"], "read_operations": [13, 11], "write_operations": [0, 1022]}

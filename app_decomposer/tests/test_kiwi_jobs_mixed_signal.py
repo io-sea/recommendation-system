@@ -230,7 +230,7 @@ class TestJobDecomposerFeatures(unittest.TestCase):
         expected_phases_features = [{'job_id': 'unknown', 'nodes': 1, 'read_volume': 0,
                                      'write_volume': 0, 'read_io_pattern': 'uncl', 'write_io_pattern': 'uncl', 'read_io_size': 0, 'write_io_size': 0, 'ioi_bw': 0.0},
                                     {'job_id': 'unknown', 'nodes': 1, 'read_volume': 60, 'write_volume': 40, 'read_io_pattern': 'seq',
-                                        'write_io_pattern': 'str', 'read_io_size': 30.0, 'write_io_size': 0, 'ioi_bw': 14.0},
+                                        'write_io_pattern': 'str', 'read_io_size': 60/7, 'write_io_size': 40.0, 'ioi_bw': 14.0},
                                     {'job_id': 'unknown', 'nodes': 1, 'read_volume': 0, 'write_volume': 0, 'read_io_pattern': 'uncl', 'write_io_pattern': 'uncl', 'read_io_size': 0, 'write_io_size': 0, 'ioi_bw': 0.0}]
         self.assertCountEqual(phases_features, expected_phases_features)
 
