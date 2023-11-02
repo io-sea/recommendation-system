@@ -43,7 +43,71 @@ class TestJobDependencyAnalyzer(unittest.TestCase):
         self.assertEqual(analyzer.sorted_jobs, {'job1': {'start_time': 1000, 'end_time': 2000}, 'job2': {'start_time': 1000, 'end_time': 2000}})
 
         # Validate 'delay' as default dependency type
-        self.assertAlmostEqual({'sequential': [], 'parallel': [['job1', 'job2']], 'delay': []}, analyzer.dependencies)
+        self.assertDictEqual({'sequential': [], 'parallel': [['job1', 'job2']], 'delay': []}, analyzer.dependencies)
+
+    @patch("workflow_optimizer.job_dependency_analyzer.JobDependencyAnalyzer.__init__")
+    def test_is_connected(self, MockInit):
+        """
+        Test the is_connected method.
+        """
+        # Mock the __init__ so it doesn't do anything
+        MockInit.return_value = None
+
+        # Initialize mock object
+        mock_analyzer = JobDependencyAnalyzer()
+        mock_analyzer.dependencies = {'sequential': [['job700', 'job800'], ['job800', 'job900']],
+                                      'parallel': [],
+                                      'delay': []}
+        result = mock_analyzer.is_connected('job700', 'job900')
+        self.assertTrue(result)
+
+    @patch("workflow_optimizer.job_dependency_analyzer.JobDependencyAnalyzer.__init__")
+    def test_is_connected_2(self, MockInit):
+        """
+        Test the is_connected method.
+        """
+        # Mock the __init__ so it doesn't do anything
+        MockInit.return_value = None
+
+        # Initialize mock object
+        mock_analyzer = JobDependencyAnalyzer()
+        mock_analyzer.dependencies = {'sequential': [],
+                                      'parallel': [['job700', 'job800'], ['job800', 'job900']],
+                                      'delay': []}
+        result = mock_analyzer.is_connected('job700', 'job900')
+        self.assertTrue(result)
+
+    @patch("workflow_optimizer.job_dependency_analyzer.JobDependencyAnalyzer.__init__")
+    def test_is_connected_3(self, MockInit):
+        """
+        Test the is_connected method.
+        """
+        # Mock the __init__ so it doesn't do anything
+        MockInit.return_value = None
+
+        # Initialize mock object
+        mock_analyzer = JobDependencyAnalyzer()
+        mock_analyzer.dependencies = {'sequential': [],
+                                      'parallel': [],
+                                      'delay': [['job700', 'job800'], ['job800', 'job900']]}
+        result = mock_analyzer.is_connected('job700', 'job900')
+        self.assertTrue(result)
+
+    @patch("workflow_optimizer.job_dependency_analyzer.JobDependencyAnalyzer.__init__")
+    def test_is_connected_4(self, MockInit):
+        """
+        Test the is_connected method.
+        """
+        # Mock the __init__ so it doesn't do anything
+        MockInit.return_value = None
+
+        # Initialize mock object
+        mock_analyzer = JobDependencyAnalyzer()
+        mock_analyzer.dependencies = {'sequential': [['job1', 'job2'], ['job3', 'job4']],
+                                      'parallel': [['job2', 'job3']],
+                                      'delay': []}
+        self.assertTrue(mock_analyzer.is_connected('job1', 'job4'))
+        self.assertTrue(mock_analyzer.is_connected('job1', 'job3'))
 
     @patch("workflow_optimizer.job_dependency_analyzer.JobDependencyAnalyzer")
     def test_is_sequential(self, MockAnalyzer):
@@ -97,19 +161,97 @@ class TestJobDependencyAnalyzer(unittest.TestCase):
             'job3': {'start_time': 3000, 'end_time': 4000}
         }
 
-        mock_analyzer.analyze_dependencies(threshold=0.1)
+        mock_analyzer.analyze_dependencies()
         dependencies = mock_analyzer.dependencies
         # Validate output (modify this according to what you expect the output to be)
-        self.assertEqual(dependencies, {'sequential': [['job1', 'job2']],
+        self.assertEqual(dependencies, {'sequential': [['job1', 'job2'], ['job2', 'job3']],
                                         'parallel': [], 'delay': []})
 
         # Validate that is_sequential was called (modify this based on your expectations)
         MockInit.assert_called()
 
+
     @patch("workflow_optimizer.job_dependency_analyzer.JobDependencyAnalyzer.__init__")
-    def test_analyze_dependencies_2(self, MockInit):
+    def test_dependencies_1(self, MockInit):
         """
-        Test the analyze_dependencies method.
+        Test that the analyze_dependencies method correctly identifies parallel jobs.
+        """
+        MockInit.return_value = None
+        mock_analyzer = JobDependencyAnalyzer()
+        mock_analyzer.threshold = 0.1
+        mock_analyzer.sorted_jobs = {
+            'job1': {'start_time': 1000, 'end_time': 2000},
+            'job2': {'start_time': 1050, 'end_time': 2050},
+            'job3': {'start_time': 1200, 'end_time': 1300}
+        }
+        mock_analyzer.analyze_dependencies()
+        dependencies = mock_analyzer.dependencies
+        self.assertIn(['job1', 'job2'], dependencies['parallel'])
+        self.assertNotIn(['job2', 'job3'], dependencies['sequential'])
+
+
+    @patch("workflow_optimizer.job_dependency_analyzer.JobDependencyAnalyzer.__init__")
+    def test_dependencies_2(self, MockInit):
+        """
+        Test that the analyze_dependencies method correctly identifies parallel jobs.
+        """
+        MockInit.return_value = None
+        mock_analyzer = JobDependencyAnalyzer()
+        mock_analyzer.threshold = 0.1
+        mock_analyzer.sorted_jobs = {
+            'job1': {'start_time': 1000, 'end_time': 2000},
+            'job2': {'start_time': 1050, 'end_time': 2050},
+            'job3': {'start_time': 2050, 'end_time': 3000}
+        }
+        mock_analyzer.analyze_dependencies()
+        dependencies = mock_analyzer.dependencies
+        print(dependencies)
+        expected_dependencies = {'sequential': [['job1', 'job3'], ['job2', 'job3']],
+                                  'parallel': [['job1', 'job2']],
+                                  'delay': []}
+
+        self.assertDictEqual(expected_dependencies, dependencies)
+        # self.assertIn(['job1', 'job3'], dependencies['sequential'])
+        # self.assertIn(['job2', 'job3'], dependencies['sequential'])
+        # self.assertNotIn(['job1', 'job2'], dependencies['parallel'])
+
+    @patch("workflow_optimizer.job_dependency_analyzer.JobDependencyAnalyzer.__init__")
+    def test_analyze_dependencies_threshold_0(self, MockInit):
+        """
+        Test the analyze_dependencies method when threshold is 0.
+        In such case, only delay dependencies are considered.
+        """
+        # Mock the __init__ so it doesn't do anything
+        MockInit.return_value = None
+
+        # Initialize mock object
+        mock_analyzer = JobDependencyAnalyzer()
+        mock_analyzer.threshold = 0.1
+
+        # Set sorted_jobs directly
+        mock_analyzer.sorted_jobs = {
+            'job1': {'start_time': 1000, 'end_time': 2000},
+            'job2': {'start_time': 2000, 'end_time': 3000},
+            'job3': {'start_time': 2000, 'end_time': 7000}
+        }
+
+        mock_analyzer.analyze_dependencies()
+        dependencies = mock_analyzer.dependencies
+        print(dependencies)
+        # Validate output (modify this according to what you expect the output to be)
+        self.assertEqual(dependencies, {'sequential': [],
+                                        'parallel': [],
+                                        'delay': [['job1', 'job2', 0],
+                                                  ['job2', 'job3', -1000]]})
+
+        # Validate that is_sequential was called (modify this based on your expectations)
+        MockInit.assert_called()
+
+    @patch("workflow_optimizer.job_dependency_analyzer.JobDependencyAnalyzer.__init__")
+    def test_analyze_dependencies_threshold_1(self, MockInit):
+        """
+        Test the analyze_dependencies method when threshold is 0.
+        In such case, only delay dependencies are considered.
         """
         # Mock the __init__ so it doesn't do anything
         MockInit.return_value = None
@@ -125,17 +267,16 @@ class TestJobDependencyAnalyzer(unittest.TestCase):
             'job3': {'start_time': 5000, 'end_time': 7000}
         }
 
-        mock_analyzer.analyze_dependencies(threshold=0.1)
+        mock_analyzer.analyze_dependencies()
         dependencies = mock_analyzer.dependencies
-        print(mock_analyzer.is_connected('job1', 'job3'))
-        print(dependencies)
         # Validate output (modify this according to what you expect the output to be)
-        self.assertEqual(dependencies, {'sequential': [['job1', 'job2'],
-                                                       ['job2', 'job3']],
-                                        'parallel': [], 'delay': []})
+        self.assertEqual(dependencies, {'sequential': [['job1', 'job2']],
+                                        'parallel': [],
+                                        'delay': [['job2', 'job3', 2000]]})
 
         # Validate that is_sequential was called (modify this based on your expectations)
         MockInit.assert_called()
+
 
 class TestIsConnected(unittest.TestCase):
     """

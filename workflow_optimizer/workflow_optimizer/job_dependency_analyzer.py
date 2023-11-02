@@ -40,7 +40,8 @@ class JobDependencyAnalyzer:
         """
         return filename.endswith(f'.{extension}')
 
-    def is_connected(self, start_job, end_job, visited=None):
+    def is_connected(self, start_job, end_job, visited=None, path_cache=None,
+                     dependency_type=None):
         """
         Checks if two jobs are connected directly or indirectly via sequential or parallel dependencies.
 
@@ -55,40 +56,37 @@ class JobDependencyAnalyzer:
         if visited is None:
             visited = set()
 
+        if path_cache is None:
+            path_cache = {}
+
+        # Check cache first to avoid redundant calculations
+        if (start_job, end_job) in path_cache:
+            return path_cache[(start_job, end_job)]
+
         # Mark the current node as visited
         visited.add(start_job)
 
-        logger.info(f"Checking connectivity from {start_job} to {end_job}")
-        logger.info(f"Visited so far: {visited}")
+        logger.debug(f"Checking connectivity from {start_job} to {end_job}")
+        logger.debug(f"Visited so far: {visited}")
 
         # If the end node is reached
         if start_job == end_job:
             return True
 
-        # # Check sequential, parallel, and delay lists to see if end_job is directly reachable from start_job
-        # logger.info(f'Dependencies are {self.dependencies}')
-        # for next_job in (self.dependencies.get('sequential', []) +
-        #                  self.dependencies.get('parallel', []) +
-        #                  [delay[:2] for delay in self.dependencies.get('delay', [])]):
-        #     from_job, to_job = next_job[0], next_job[1]
-        #     if start_job == from_job and to_job not in visited:
-        #         if self.is_connected(to_job, end_job, visited):
-        #             logger.info(f'Job {start_job} is connected to {end_job} via {from_job}')
-        #             return True
-        # logger.info(f'Job {start_job} is not connected to {end_job}')
-        # return False
-        # Iterate through all types of dependencies to find a connection
-        for dep_type in ['sequential', 'parallel', 'delay']:
+        dependency_types = [dependency_type] if dependency_type else ['sequential', 'parallel', 'delay']
+        for dep_type in dependency_types:
             for next_job in self.dependencies.get(dep_type, []):
                 from_job, to_job = next_job[0], next_job[1]
 
                 # If a relevant connection is found and the next job hasn't been visited
                 if start_job == from_job and to_job not in visited:
                     if self.is_connected(to_job, end_job, visited):
-                        logger.info(f"Job {start_job} is connected to {end_job} via {to_job}")
+                        logger.debug(f"Job {start_job} is connected to {end_job} via {to_job}")
                         return True
 
-        logger.info(f"Job {start_job} is not connected to {end_job}")
+        # If no connection is found, update the cache with the result
+        path_cache[(start_job, end_job)] = False
+        logger.debug(f"Job {start_job} is not connected to {end_job}")
         return False
 
     def extract_and_sort_jobs(self):
@@ -177,12 +175,60 @@ class JobDependencyAnalyzer:
         job1_duration = job1['end_time'] - job1['start_time']
         return job2['start_time'] in range(int(job1['start_time'] - threshold * job1_duration), int(job1['start_time'] + threshold * job1_duration))
 
-    def analyze_dependencies(self, threshold=0.1):
+    def remove_redundant_delays(self):
+        """
+        Removes redundant delay entries from the dependencies dictionary.
+        """
+        # Initialize cache for is_connected method
+        path_cache = {}
+
+        # Initialize a new list to hold only the necessary delay dependencies
+        necessary_delays = []
+
+        # Sort the delays by the delay time, descending
+        sorted_delays = sorted(self.dependencies['delay'], key=lambda x: x[2], reverse=True)
+
+        for delay in sorted_delays:
+            job1, job2, _ = delay
+            # Temporarily remove the delay entry
+            self.dependencies['delay'].remove(delay)
+            # Check if a path still exists without this delay
+            if not self.is_connected(job1, job2, path_cache=path_cache):
+                # If no path exists, the delay is necessary
+                necessary_delays.append(delay)
+            # Add the delay back if it was deemed redundant
+            else:
+                self.dependencies['delay'].append(delay)
+
+        # Update the 'delay' dependencies with only necessary ones
+        self.dependencies['delay'] = necessary_delays
+
+    def remove_redundant_parallel(self):
+        """
+        Removes parallel entries that are already connected via sequential dependencies.
+        """
+        # Initialize a new list to hold non-redundant parallel dependencies
+        non_redundant_parallel = []
+
+        # Iterate through each parallel dependency
+        for parallel_entry in self.dependencies['parallel']:
+            job1, job2 = parallel_entry
+
+            # Check if a sequential path exists between job1 and job2
+            if not self.is_connected(job1, job2, dependency_type='sequential'):
+                # If no sequential path exists, then the parallel dependency is necessary
+                non_redundant_parallel.append(parallel_entry)
+
+        # Update the 'parallel' dependencies with non-redundant ones
+        self.dependencies['parallel'] = non_redundant_parallel
+
+        # Optionally, log the updated dependencies
+        logger.info(f"Updated parallel dependencies: {self.dependencies['parallel']}")
+
+    def analyze_dependencies(self):
         """
         Analyze job dependencies based on job timings.
 
-        Args:
-        - threshold (float): The threshold value for deciding dependencies.
         """
         # Initialize a dictionary to hold dependencies
         self.dependencies = {
@@ -201,12 +247,14 @@ class JobDependencyAnalyzer:
                 job2_id = job_ids[j]
                 job2 = self.sorted_jobs[job2_id]
 
-                if self.is_sequential(job1, job2, threshold):
+                if self.is_sequential(job1, job2, self.threshold):
                     self.dependencies['sequential'].append([job1_id, job2_id])
-                    logger.info(f"Job {job1_id} and {job2_id} are sequential : {self.is_sequential(job1, job2, threshold)}")
-                elif self.is_parallel(job1, job2, threshold):
+                    logger.info(f"Job {job1_id} and {job2_id} are sequential : {self.is_sequential(job1, job2, self.threshold)}")
+                elif self.is_parallel(job1, job2, self.threshold):
                     self.dependencies['parallel'].append([job1_id, job2_id])
 
+        # Remove redundant parallel dependencies
+        self.remove_redundant_parallel()
 
         # Second pass to determine delay relationships
         for i in range(len(job_ids)):
@@ -219,23 +267,17 @@ class JobDependencyAnalyzer:
 
                 # Check if job1 and job2 are already connected via some other path
                 if not self.is_connected(job1_id, job2_id):
-                    logger.info(f"Job {job1_id} and {job2_id} are not connected : {self.is_connected(job1_id, job2_id)}")
+                    logger.debug(f"Job {job1_id} and {job2_id} are not connected : {self.is_connected(job1_id, job2_id)}")
                     delay = job2['start_time'] - job1['end_time']
                     self.dependencies['delay'].append([job1_id, job2_id, delay])
 
         # After populating self.dependencies in analyze_dependencies
+        logger.debug(f"Analyzed dependencies with redundancy: {self.dependencies}")
 
-        # Initialize a list to hold non-redundant delays
-        non_redundant_delays = []
+        # Call the method to remove redundant delays and reorder them
+        self.remove_redundant_delays()
 
-        for delay_relationship in self.dependencies['delay']:
-            job1, job2, delay = delay_relationship
-            if not self.is_connected(job1, job2):
-                non_redundant_delays.append(delay_relationship)
-
-        # Update the 'delay' dependencies with non-redundant ones
-        self.dependencies['delay'] = non_redundant_delays
-
+        self.dependencies["delay"]
         logger.info(f"Analyzed dependencies: {self.dependencies}")
 
     def save_to_json(self, file_path):
