@@ -2,6 +2,12 @@ import os
 import json
 from loguru import logger
 import networkx as nx
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+from datetime import datetime
+import plotly.figure_factory as ff
+import plotly.graph_objs as go
+from datetime import datetime, timedelta
 
 class JobDependencyAnalyzerNX:
     def __init__(self, workflow_folder, threshold=0.1):
@@ -172,3 +178,184 @@ class JobDependencyAnalyzerNX:
 
         logger.info("Redundancy cleaning complete.")
 
+
+    def dump_graph_to_json(self, file_path=None):
+        """
+        Dumps the graph with metadata to a JSON file.
+
+        Args:
+            file_path (str): Optional. The path to the JSON file to save the graph data.
+                             If not provided, it defaults to {self.workflow_folder}_dependencies_job.json.
+        """
+        if file_path is None:
+            # Create the default file name based on the workflow folder name
+            wf_folder_name = os.path.basename(os.path.normpath(self.workflow_folder))
+            file_path = os.path.join(self.workflow_folder, f"{wf_folder_name}_dependencies_job.json")
+
+        # Convert the graph to a node-link format that is JSON serializable
+        graph_data = nx.node_link_data(self.graph)
+
+        # Add the sorted_jobs data to the graph data
+        graph_data['sorted_jobs'] = self.sorted_jobs
+
+        # Write the graph data to a JSON file
+        with open(file_path, 'w') as f:
+            json.dump(graph_data, f, indent=4)
+
+        logger.info(f"Graph data has been dumped to {file_path}")
+
+    def dump_edges_to_json(self, file_path=None):
+        """
+        Dumps the graph edges with metadata to a JSON file in an edge list format.
+
+        Args:
+            file_path (str): Optional. The path to the JSON file to save the edges data.
+                             If not provided, it defaults to {self.workflow_folder}_edges.json.
+        """
+        if file_path is None:
+            # Create the default file name based on the workflow folder name
+            wf_folder_name = os.path.basename(os.path.normpath(self.workflow_folder))
+            file_path = os.path.join(self.workflow_folder, f"{wf_folder_name}_edges.json")
+
+        # Extract the edges and their attributes from the graph
+        edges_data = [(u, v, d) for u, v, d in self.graph.edges(data=True)]
+
+        # Write the edges data to a JSON file
+        with open(file_path, 'w') as f:
+            json.dump(edges_data, f, indent=4)
+
+        print(f"Edges data has been dumped to {file_path}")
+
+    def print_graph(self):
+        """
+        Prints the graph to the console.
+        """
+
+        print("Job Dependency Graph:")
+        for node in self.graph.nodes():
+            print(f"Job: {node}")
+        for edge in self.graph.edges(data=True):
+            print(f"From {edge[0]} to {edge[1]} - Type: {edge[2]['type']}")
+
+    def plot_gantt_chart(self):
+        """
+        Plots a Gantt chart of the jobs using their start and end times.
+        """
+
+        fig, ax = plt.subplots(figsize=(10, 6))
+
+        # Create a list for the bar labels and start and end dates
+        labels = []
+        start_dates = []
+        end_dates = []
+
+        # Extract job data for the Gantt chart
+        for job_id, job_data in self.sorted_jobs.items():
+            labels.append(job_id)
+            start_dates.append(datetime.fromtimestamp(job_data['start_time'] / 1000.0))
+            end_dates.append(datetime.fromtimestamp(job_data['end_time'] / 1000.0))
+
+        # Create the bars for the Gantt chart
+        for i, (start, end) in enumerate(zip(start_dates, end_dates)):
+            ax.barh(i, end - start, left=start, height=0.4, align='center')
+
+        # Set the y-axis labels
+        ax.set(yticks=range(len(labels)), yticklabels=labels)
+        ax.invert_yaxis()  # Invert the y-axis so the first entry is at the top
+
+        # Format the dates on the x-axis
+        ax.xaxis_date()  # Tell matplotlib that these are dates
+        date_format = mdates.DateFormatter('%Y-%m-%d %H:%M:%S')
+        ax.xaxis.set_major_formatter(date_format)
+        fig.autofmt_xdate()  # Rotate dates to prevent overlap
+
+        # Draw dependency lines
+        for edge in self.graph.edges(data=True):
+            start_job = edge[0]
+            end_job = edge[1]
+            edge_type = edge[2]['type']
+
+            start_index = labels.index(start_job)
+            end_index = labels.index(end_job)
+
+            if edge_type == 'sequential':
+                ax.annotate('',
+                            xy=(datetime.fromtimestamp(self.sorted_jobs[end_job]['start_time'] / 1000.0), end_index),
+                            xytext=(datetime.fromtimestamp(self.sorted_jobs[start_job]['end_time'] / 1000.0), start_index),
+                            arrowprops=dict(arrowstyle='->', color='r'))
+            elif edge_type == 'parallel':
+                ax.annotate('',
+                            xy=(datetime.fromtimestamp(self.sorted_jobs[start_job]['start_time'] / 1000.0), start_index),
+                            xytext=(datetime.fromtimestamp(self.sorted_jobs[end_job]['start_time'] / 1000.0), end_index),
+                            arrowprops=dict(arrowstyle='-', color='g', linestyle='dotted'))
+            elif edge_type == 'delay':
+                # For delay, we assume the arrow starts a bit after the end of job1 and points to the start of job2
+                ax.annotate('',
+                            xy=(datetime.fromtimestamp(self.sorted_jobs[end_job]['start_time'] / 1000.0), end_index),
+                            xytext=(datetime.fromtimestamp(self.sorted_jobs[start_job]['end_time'] / 1000.0 + self.threshold * (self.sorted_jobs[start_job]['end_time'] - self.sorted_jobs[start_job]['start_time']) / 1000.0), start_index),
+                            arrowprops=dict(arrowstyle='-', color='b', linestyle='dashed'))
+
+        return plt
+
+
+    def create_gantt_chart(self, fig_size=(1024, 768), show_grid=True):
+        """
+        Creates a Gantt chart using Plotly with curved dependency arrows.
+
+        Args:
+            fig_size (tuple): Figure size in the form of (width, height).
+            show_grid (bool): Whether to show grid lines in the chart.
+
+        Returns:
+            plotly.graph_objs._figure.Figure: The Plotly figure object for the Gantt chart.
+        """
+        df = []
+        for job_id, job_data in self.sorted_jobs.items():
+            df.append(dict(Task=job_id, Start=self._ms_to_datetime(job_data['start_time']),
+                        Finish=self._ms_to_datetime(job_data['end_time']), Resource='Job'))
+
+        fig = ff.create_gantt(df, colors=['rgb(210, 210, 210)'], index_col='Resource', show_colorbar=False,
+                            bar_width=0.4, showgrid_x=show_grid, showgrid_y=show_grid)
+
+        annotations = []
+        for edge in self.graph.edges(data=True):
+            start_job = edge[0]
+            end_job = edge[1]
+            edge_type = edge[2]['type']
+
+            # Calculate positions for start and end
+            y_start = df.index(next(item for item in df if item["Task"] == start_job))
+            y_end = df.index(next(item for item in df if item["Task"] == end_job))
+            x_start = self.sorted_jobs[start_job]['end_time']
+            x_end = self.sorted_jobs[end_job]['start_time']
+
+            # Add arrows with annotations
+            annotations.append(
+                dict(
+                    ax=self._ms_to_datetime(x_start), ay=y_start, axref='x', ayref='y',
+                    x=self._ms_to_datetime(x_end), y=y_end, xref='x', yref='y',
+                    showarrow=True,
+                    arrowhead=2,
+                    arrowsize=1,
+                    arrowwidth=2,
+                    arrowcolor='green' if edge_type == 'parallel' else 'red'
+                )
+            )
+
+        fig.update_layout(annotations=annotations)
+        fig.update_layout(
+            height=fig_size[1],
+            width=fig_size[0],
+            title='Job Scheduling Gantt Chart',
+            xaxis_title='Time',
+            yaxis_title='Jobs',
+            hovermode='closest',
+            yaxis=dict(autorange='reversed')  # Reverse the y-axis to have jobs from top to bottom
+        )
+
+        return fig
+
+    @staticmethod
+    def _ms_to_datetime(milliseconds):
+        """Convert milliseconds since epoch to datetime."""
+        return datetime.fromtimestamp(milliseconds / 1000)
