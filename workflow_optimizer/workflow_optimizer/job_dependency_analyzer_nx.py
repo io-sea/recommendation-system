@@ -53,7 +53,6 @@ class JobDependencyAnalyzerNX:
         job1_duration = job1['end_time'] - job1['start_time']
         return job2_start >= job1_end - (self.threshold * job1_duration) and job2_start <= job1_end + (self.threshold * job1_duration)
 
-
     def is_parallel(self, job1, job2):
         """
         Check if job1 and job2 are running in parallel within the threshold.
@@ -67,7 +66,8 @@ class JobDependencyAnalyzerNX:
         """
 
         job1_duration = job1['end_time'] - job1['start_time']
-        return job2["start_time"] >= job1["start_time"] - (self.threshold * job1_duration) and job2["start_time"] >= job1["start_time"] - (self.threshold * job1_duration)
+
+        return job2["start_time"] >= job1["start_time"] - (self.threshold * job1_duration) and job2["start_time"] <= job1["start_time"] + (self.threshold * job1_duration)
 
     def analyze_dependencies(self):
         """
@@ -97,6 +97,8 @@ class JobDependencyAnalyzerNX:
                     self.graph.add_edge(job1_id, job2_id, type='delay', delay=delay)
 
         logger.info("Dependencies analyzed and graph populated.")
+        self.clean_redundancy()
+        logger.info("Redundancy removed.")
 
     def find_nodes_with_multiple_incoming_edges(self, edge_type=None):
         """
@@ -169,10 +171,4 @@ class JobDependencyAnalyzerNX:
             self.remove_edges_by_priority(node)
 
         logger.info("Redundancy cleaning complete.")
-
-
-
-
-
-
 
