@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 
- 
+
 def convert_size(size_bytes):
     """Function to display a data volume in human readable way (B, KB, MB,...) instead of 1e3, 1e6, 1e9 bytes.
 
@@ -198,7 +198,7 @@ class Cluster:
         Returns:
             string: description of the cluster properties and state.
         """
-        description = "====================\n"
+        description = "\n====================\n"
         description += (f"Cluster with {self.compute_nodes.capacity} compute nodes \n")
         description += f"Each having {self.compute_cores.capacity} cores in total \n"
         if self.tiers:
@@ -206,6 +206,7 @@ class Cluster:
                 description += tier.__str__()
         if self.ephemeral_tier:
             description += self.ephemeral_tier.__str__()
+        logger.trace(description)
         return description
 
     def get_levels(self):
@@ -219,7 +220,7 @@ class Cluster:
             levels[self.ephemeral_tier.name] = self.ephemeral_tier.capacity.level
         return levels
 
-    def get_max_bandwidth(self, tier, cores=1, operation='read', pattern=1, 
+    def get_max_bandwidth(self, tier, cores=1, operation='read', pattern=1,
                           phase_features=None):
         """Get the maximum bandwidth for a given tier, number of cores dedicated to the operation, a type of operation. Sequential pattern are assumed during copy/move as well as an important blocksize.
 
@@ -234,17 +235,17 @@ class Cluster:
         """
         if not isinstance(tier, Tier):
             tier = get_tier(self, tier)
-        
+
         if tier.bandwidth_model_path:
             if phase_features is None:
                 phase_features = PhaseFeatures(cores=cores,
                                                operation=operation,
                                                pattern=pattern)
-                
+
             logger.trace(f"features: {phase_features.get_attributes()}")
-            predictions = load_and_predict(tier.bandwidth_model_path, 
+            predictions = load_and_predict(tier.bandwidth_model_path,
                                            pd.DataFrame(
-                                               phase_features.get_attributes()), 
+                                               phase_features.get_attributes()),
                                            iops=True)
             logger.trace(f"predictions: {predictions.values.flatten()[0]}")
             return predictions.values.flatten()[0]
@@ -253,18 +254,18 @@ class Cluster:
             return (tier.max_bandwidth[operation]['seq'] * pattern +
                     tier.max_bandwidth[operation]['rand'] * (1-pattern)) * cores * 1e6
 
-        
+
         if isinstance(tier.max_bandwidth, (int, float)):
-            return tier.max_bandwidth * cores 
+            return tier.max_bandwidth * cores
         else:
             # Try to cast max_bandwidth to a float
             try:
-                max_bandwidth = float(tier.max_bandwidth) * cores 
+                max_bandwidth = float(tier.max_bandwidth) * cores
             except ValueError:
                 # Handle the case where max_bandwidth cannot be cast to a float
                 raise TypeError('max_bandwidth must be an int or float')
 
-        return max_bandwidth * cores 
+        return max_bandwidth * cores
         # elif isinstance(self.max_bandwidth, (int, float)):
         #     return self.max_bandwidth
 
@@ -368,6 +369,7 @@ class Tier:
             description += ("{:<12} {:<12} {:<12}".format("any", "any", float(self.max_bandwidth))+"\n")
         if self.bandwidth_model_path:
             description += f"Bandwidth model path: {self.bandwidth_model_path}\n"
+        logger.trace(description)
         return description
 
 

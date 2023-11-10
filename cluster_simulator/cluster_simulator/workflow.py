@@ -88,8 +88,7 @@ class Workflow:
 
         logger.info(f"Scheduling job {job_id}.")
         # Schedule the job for execution
-        self.job_events[job_id] = self.env.process(self.run_job(job_id))
-
+        self.env.process(self.run_job(job_id))
 
     def run_job(self, job_id, cluster=None, placement=None, use_bb=None):
         """
@@ -122,13 +121,33 @@ class Workflow:
         logger.debug(f"Running job {job_id} on cluster {cluster} with placement {placement} and burst buffer usage {use_bb}.")
 
         # Start the job's execution within the simulation environment
-        job_process = self.env.process(self.jobs[job_id].run(cluster=cluster,
-                                            placement=placement,
-                                            use_bb=use_bb))
+        # and wait for the job to complete
+        yield self.env.process(self.jobs[job_id].run(cluster=cluster,
+                                                     placement=placement,
+                                                     use_bb=use_bb))
 
-        # Wait for the job to complete
-        yield job_process
-        # Once the job process is done, trigger the job's event to signal completion
-        assert self.job_events[job_id] is not None, f"Event for job_id {job_id} is None"
-        self.job_events[job_id].succeed()
+        # Trigger the job's event to signal completion, ensuring it's the correct type
+        if isinstance(self.job_events[job_id], simpy.events.Event) and not self.job_events[job_id].triggered:
+            self.job_events[job_id].succeed()
 
+    def check_other_dependencies(self, job_id):
+        """
+        Check if there are other sequential dependencies that need to be completed before the given job can start.
+
+        Args:
+            job_id (str): The identifier for the job whose dependencies are to be checked.
+
+        Yields:
+            simpy.Event: An event that triggers when all other dependencies have been met.
+        """
+        sequential_dependencies = [dep for dep in self.dependencies if dep[1] == job_id and dep[2].get('type') == 'sequential']
+
+        # If there are sequential dependencies, we must wait for all of them to complete
+        if sequential_dependencies:
+            events_to_wait = []
+            for pre_job_id, _, _ in sequential_dependencies:
+                events_to_wait.append(self.job_events[pre_job_id])
+
+            # Wait for all events to be triggered
+            for event in events_to_wait:
+                yield event
