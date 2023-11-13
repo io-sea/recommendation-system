@@ -207,7 +207,7 @@ class Cluster:
         if self.ephemeral_tier:
             description += self.ephemeral_tier.__str__()
         logger.trace(description)
-        return description
+        return ""
 
     def get_levels(self):
         """Gathers tiers levels snapshot at a specific time event into a dict.
@@ -370,7 +370,7 @@ class Tier:
         if self.bandwidth_model_path:
             description += f"Bandwidth model path: {self.bandwidth_model_path}\n"
         logger.trace(description)
-        return description
+        return ""
 
 
 class EphemeralTier(Tier):
