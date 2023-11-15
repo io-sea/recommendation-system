@@ -150,10 +150,12 @@ class Cluster:
             # Override default values if provided in YAML file
             default_config = config.get('defaults')
             if default_config:
-                compute_nodes = compute_nodes or default_config.get('compute_nodes')
-                cores_per_node = cores_per_node or default_config.get('cores_per_node')
-                self.compute_nodes = simpy.Resource(env, capacity=compute_nodes)
-                self.cores_per_node = simpy.Resource(env, capacity=cores_per_node*compute_nodes)
+                compute_nodes = default_config.get('compute_nodes')
+                cores_per_node = default_config.get('cores_per_node')
+                self.compute_nodes = simpy.Resource(env,
+                                                    capacity=compute_nodes)
+                self.compute_cores = simpy.Resource(env,
+                                                    capacity=cores_per_node*compute_nodes)
 
             # Create tiers from configuration
             if tiers is None:
