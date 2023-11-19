@@ -229,7 +229,7 @@ class TestWorkflow(unittest.TestCase):
     #     actual_independent_jobs = workflow.independent_jobs
     #     self.assertEqual(expected_independent_jobs, actual_independent_jobs)
 
-    def test_parallel_jobs(self):
+    def test_parallel_chains(self):
         # Arrange
         compute, read, write = [0, 10], [1e9, 0], [0, 5e9]
         jobs = {
@@ -242,9 +242,38 @@ class TestWorkflow(unittest.TestCase):
         workflow = Workflow(self.env, jobs, dependencies, self.cluster)
         parallel_chains = workflow.find_parallel_chains()
         self.assertListEqual([['job1', 'job2']], parallel_chains)
+        self.assertTrue(workflow.is_in_parallel_chain('job1'))
 
+    def test_schedule_jobs_sequential_simple(self):
+        # Arrange
+        compute, read, write = [0, 10], [1e6, 0], [0, 5e6]
+        jobs = {'job1': Application(self.env, name='job1', compute=compute,
+                                    read=read, write=write),
+                'job2': Application(self.env, name='job2', compute=compute,
+                                    read=read, write=write)}
 
-    def test_schedule_jobs_sequential(self):
+        dependencies = [('job1', 'job2', {'type': 'sequential'})]
+        # Act
+        workflow = Workflow(self.env, jobs, dependencies, self.cluster)
+        workflow.run()
+
+    def test_schedule_jobs_sequential_0(self):
+        # Arrange
+        compute, read, write = [0, 10], [1e6, 0], [0, 5e6]
+        jobs = {'job1': Application(self.env, name='job1', compute=compute,
+                                    read=read, write=write),
+                'job2': Application(self.env, name='job2', compute=compute,
+                                    read=read, write=write),
+                'job3': Application(self.env, name='job3', compute=compute,
+                                    read=read, write=write)}
+
+        dependencies = [('job1', 'job2', {'type': 'sequential'}),
+                        ('job2', 'job3', {'type': 'sequential'})]
+        # Act
+        workflow = Workflow(self.env, jobs, dependencies, self.cluster)
+        workflow.run()
+
+    def test_schedule_jobs_sequential_1(self):
         # Arrange
         compute, read, write = [0, 10], [1e6, 0], [0, 5e6]
         jobs = {'job1': Application(self.env, name='job1', compute=compute,
@@ -278,7 +307,39 @@ class TestWorkflow(unittest.TestCase):
         workflow = Workflow(self.env, jobs, dependencies, self.cluster)
         workflow.run()
 
+    def test_schedule_jobs_sequential_3(self):
+        compute, read, write = [0, 10], [1e6, 0], [0, 5e6]
+        jobs = {'job1': Application(self.env, name='job1', compute=compute,
+                                    read=read, write=write),
+                'job2': Application(self.env, name='job2', compute=compute,
+                                    read=read, write=write),
+                'job3': Application(self.env, name='job3', compute=compute,
+                                    read=read, write=write),
+                'job4': Application(self.env, name='job4', compute=compute,
+                                    read=read, write=write)}
+
+        dependencies = [('job1', 'job2', {'type': 'sequential'}),
+                        ('job2', 'job3', {'type': 'sequential'}),
+                        ('job3', 'job4', {'type': 'sequential'})]
+        # Act
+        workflow = Workflow(self.env, jobs, dependencies, self.cluster)
+        workflow.run()
+
     def test_schedule_jobs_parallel(self):
+        # Arrange
+        compute, read, write = [0, 10], [1e6, 0], [0, 5e6]
+        jobs = {'job1': Application(self.env, name='job1', compute=compute,
+                                    read=read, write=write),
+                'job2': Application(self.env, name='job2', compute=compute,
+                                    read=read, write=write),
+                }
+
+        dependencies = [('job1', 'job2', {'type': 'parallel'})]
+        # Act
+        workflow = Workflow(self.env, jobs, dependencies, self.cluster)
+        workflow.run()
+
+    def test_schedule_jobs_parallel_1(self):
         # Arrange
         compute, read, write = [0, 10], [1e6, 0], [0, 5e6]
         jobs = {'job1': Application(self.env, name='job1', compute=compute,
@@ -290,6 +351,38 @@ class TestWorkflow(unittest.TestCase):
 
         dependencies = [('job1', 'job2', {'type': 'parallel'}),
                         ('job1', 'job3', {'type': 'parallel'})]
+        # Act
+        workflow = Workflow(self.env, jobs, dependencies, self.cluster)
+        workflow.run()
+
+    def test_schedule_jobs_parallel_sequential(self):
+        # Arrange
+        compute, read, write = [0, 10], [1e6, 0], [0, 5e6]
+        jobs = {'job1': Application(self.env, name='job1', compute=compute,
+                                    read=read, write=write),
+                'job2': Application(self.env, name='job2', compute=compute,
+                                    read=read, write=write),
+                'job3': Application(self.env, name='job3', compute=compute,
+                                    read=read, write=write)}
+
+        dependencies = [('job1', 'job2', {'type': 'parallel'}),
+                        ('job2', 'job3', {'type': 'sequential'})]
+        # Act
+        workflow = Workflow(self.env, jobs, dependencies, self.cluster)
+        workflow.run()
+
+    def test_schedule_jobs_parallel_sequential_parallel(self):
+        # Arrange
+        compute, read, write = [0, 10], [1e6, 0], [0, 5e6]
+        jobs = {'job1': Application(self.env, name='job1', compute=compute,
+                                    read=read, write=write),
+                'job2': Application(self.env, name='job2', compute=compute,
+                                    read=read, write=write),
+                'job3': Application(self.env, name='job3', compute=compute,
+                                    read=read, write=write)}
+
+        dependencies = [('job1', 'job2', {'type': 'sequential'}),
+                        ('job2', 'job3', {'type': 'parallel'})]
         # Act
         workflow = Workflow(self.env, jobs, dependencies, self.cluster)
         workflow.run()

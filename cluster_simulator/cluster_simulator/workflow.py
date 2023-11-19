@@ -119,35 +119,107 @@ class Workflow:
 
         return chain if len(chain) > 1 else []
 
+    def update_job_events(self):
+        """Update the job_events dictionary based on the current graph state."""
+        for job_id in self.graph.nodes():
+            if job_id not in self.job_events:
+                self.job_events[job_id] = self.env.event()
+
+    # def setup_dependencies(self):
+    #     """Set up dependencies between jobs, identifying independent and parallel chains and scheduling them."""
+    #     logger.info("Setting up job dependencies.")
+
+    #     # Schedule independent jobs
+    #     for job_id in self.jobs:
+    #         if self.is_independent_job(job_id):
+    #             self.env.process(self.run_job(job_id))
+
+    #     # Schedule parallel and sequential jobs based on their dependencies
+    #     for job_id in self.jobs:
+    #         if not self.job_events[job_id].triggered:
+    #             if self.is_in_parallel_chain(job_id):
+    #                 chain = self.find_parallel_chain(job_id, set())
+    #                 self.schedule_parallel_chain(chain)
+    #             else:
+    #                 self.schedule_job_with_dependencies(job_id)
+
+    #     logger.info("Job dependencies setup is complete.")
+    # def setup_dependencies(self):
+    #     """Set up dependencies between jobs, identifying independent and parallel chains and scheduling them."""
+    #     logger.info("Setting up job dependencies.")
+
+    #     # Identify and schedule independent jobs and their parallel chains
+    #     for job_id in self.jobs:
+    #         if self.is_independent_job(job_id):
+    #             logger.debug(f"Job {job_id} is independent.")
+    #             if self.is_in_parallel_chain(job_id):
+    #                 logger.debug(f"Job {job_id} is part of a parallel chain.")
+    #                 chain = self.find_parallel_chain(job_id, set())
+    #                 logger.debug(f"Scheduling parallel chain: {chain}")
+    #                 self.schedule_parallel_chain(chain)
+    #             else:
+    #                 logger.debug(f"Scheduling independent job {job_id} for immediate execution.")
+    #                 self.env.process(self.run_job(job_id))
+
+    #     # Schedule parallel chains that are independent or have resolved dependencies
+    #     parallel_chains = self.find_parallel_chains()
+    #     for chain in parallel_chains:
+    #         if self.are_chain_dependencies_resolved(chain):
+    #             logger.debug(f"Dependencies resolved for parallel chain: {chain}. Scheduling it.")
+    #             self.schedule_parallel_chain(chain)
+    #         else:
+    #             logger.debug(f"Dependencies not yet resolved for parallel chain: {chain}. Delaying scheduling.")
+
+    #     # Schedule remaining jobs considering their dependencies
+    #     for job_id in self.jobs:
+    #         if not self.is_in_parallel_chain(job_id) and not self.is_independent_job(job_id):
+    #             logger.debug(f"Scheduling job {job_id} with dependencies.")
+    #             self.schedule_job_with_dependencies(job_id)
+
+    #     logger.info("Job dependencies setup is complete.")
+
+
     def setup_dependencies(self):
-        """
-        Setup dependencies between jobs, identifying independent and parallel chains and scheduling them.
-        """
+        """Set up dependencies between jobs, identifying independent and parallel chains and scheduling them."""
         logger.info("Setting up job dependencies.")
 
-        # Identify all parallel chains in the graph
-        parallel_chains = self.find_parallel_chains()
+        # A set to keep track of jobs that have been scheduled in a parallel chain
+        scheduled_in_parallel = set()
 
-        # Identify and schedule independent jobs and their parallel chains
+        # Step 1: Identify and schedule independent jobs
         for job_id in self.jobs:
             if self.is_independent_job(job_id):
-                if self.is_in_parallel_chain(job_id):
+                logger.debug(f"Job {job_id} is independent.")
+
+                # Check if the job is in a parallel chain and schedule the chain if necessary
+                if self.is_in_parallel_chain(job_id) and job_id not in scheduled_in_parallel:
                     chain = self.find_parallel_chain(job_id, set())
+                    logger.debug(f"Scheduling parallel chain: {chain}")
                     self.schedule_parallel_chain(chain)
-                else:
+                    # Add all jobs in the chain to the scheduled set
+                    scheduled_in_parallel.update(chain)
+                elif not self.is_in_parallel_chain(job_id):
+                    logger.debug(f"Scheduling independent job {job_id} for immediate execution.")
                     self.env.process(self.run_job(job_id))
 
-        # Schedule parallel chains that are independent or have resolved dependencies
+        # Step 2: Schedule parallel chains that have not been scheduled yet
+        parallel_chains = self.find_parallel_chains()
         for chain in parallel_chains:
-            if self.are_chain_dependencies_resolved(chain):
-                self.schedule_parallel_chain(chain)
+            # Check if any job in the chain has already been scheduled
+            if not scheduled_in_parallel.intersection(set(chain)):
+                if self.are_chain_dependencies_resolved(chain):
+                    logger.debug(f"Dependencies resolved for parallel chain: {chain}. Scheduling it.")
+                    self.schedule_parallel_chain(chain)
+                    scheduled_in_parallel.update(chain)
+                else:
+                    logger.debug(f"Dependencies not yet resolved for parallel chain: {chain}. Delaying scheduling.")
 
-        # Schedule remaining jobs considering their dependencies
+
+        # Step 3: Schedule remaining jobs considering their dependencies
         for job_id in self.jobs:
-            if not self.is_in_parallel_chain(job_id) and not self.is_independent_job(job_id):
+            if job_id not in scheduled_in_parallel and not self.is_independent_job(job_id):
+                logger.debug(f"Scheduling job {job_id} with dependencies.")
                 self.schedule_job_with_dependencies(job_id)
-
-        logger.info("Job dependencies setup is complete.")
 
     def is_independent_job(self, job_id):
         """
@@ -234,6 +306,28 @@ class Workflow:
 
         logger.info(f"Parallel chain scheduled: {chain}")
 
+    def wait_and_schedule_job(self, job_id, predecessor_id):
+        """
+        Wait for the predecessor job to complete before scheduling the current job.
+
+        Args:
+            job_id (str): The ID of the job to schedule.
+            predecessor_id (str): The ID of the predecessor job.
+        """
+        logger.debug(f"Job {job_id} is waiting for predecessor {predecessor_id} to complete.")
+
+        # Define a process to wait for the predecessor to complete
+        def wait_for_predecessor(env, pre_job_event):
+            yield pre_job_event
+            logger.debug(f"Predecessor {predecessor_id} completed. Now scheduling job {job_id}.")
+            yield env.process(self.run_job(job_id))
+
+        # Get the event associated with the predecessor job
+        pre_job_event = self.job_events[predecessor_id]
+
+        # Add the process to the simulation environment
+        self.env.process(wait_for_predecessor(self.env, pre_job_event))
+
     # def are_chain_dependencies_resolved(self, chain):
     #     """
     #     Check if the dependencies of a parallel chain are resolved.
@@ -261,10 +355,20 @@ class Workflow:
             bool: True if all dependencies are resolved, False otherwise.
         """
         for job_id in chain:
-            predecessor = next(self.graph.predecessors(job_id), None)
-            if predecessor and not self.job_events[predecessor].triggered:
-                return False
-        return True
+            # Retrieve all predecessors of the job
+            predecessors = list(self.graph.predecessors(job_id))
+
+            # If there are no predecessors, the job is independent and can be executed
+            if not predecessors:
+                return True
+
+            # Check if all predecessors have completed
+            for predecessor in predecessors:
+                if not self.job_events[predecessor].triggered:
+                    return False
+
+        # If no job in the chain is independent and some have uncompleted predecessors, return False
+        return False
 
     # def schedule_job(self, job_id, pre_job_event, relation):
     #     """
@@ -302,6 +406,34 @@ class Workflow:
     #     logger.info(f"Scheduling job {job_id}.")
     #     # Schedule the job for execution
     #     self.env.process(self.run_job(job_id, is_parallel=True))
+    def check_dependencies_resolved(self, job_id):
+        """
+        Checks if all dependencies of a job are resolved.
+
+        Args:
+            job_id (str): The identifier of the job.
+
+        Returns:
+            bool: True if all dependencies are resolved, False otherwise.
+        """
+        for predecessor, _, dependency_type in self.dependencies:
+            if _ == job_id and dependency_type in ['sequential', 'delayed']:
+                if not self.job_events[predecessor].triggered:
+                    return False
+        return True
+
+    def reschedule_parallel_chain(self, job_id):
+        """
+        Reschedules a parallel chain if its dependencies are now resolved.
+
+        Args:
+            job_id (str): The identifier of the job that just completed.
+        """
+        for predecessor, successor, dependency_type in self.dependencies:
+            if predecessor == job_id and dependency_type == 'parallel':
+                if self.check_dependencies_resolved(successor):
+                    # All dependencies of the parallel chain are resolved
+                    self.schedule_parallel_chain(successor)
 
     def run_job(self, job_id, is_parallel=False, cluster=None, placement=None,
                 use_bb=None):
@@ -335,18 +467,66 @@ class Workflow:
         logger.debug(f"Running job {job_id} on cluster {cluster} with placement {placement} and burst buffer usage {use_bb}.")
 
         # Start the job's execution within the simulation environment
-        # Trigger the job's event at the start for parallel jobs
-        if is_parallel:
-            self.job_events[job_id].succeed()
-        # and wait for the job to complete
         yield self.env.process(self.jobs[job_id].run(cluster=cluster,
                                                      placement=placement,
                                                      use_bb=use_bb))
+
+        # After job completion, check if it was a dependency for any parallel chain
+        self.reschedule_parallel_chain(job_id)
+
+        # Trigger the job's event at the start for parallel jobs
+        if is_parallel and not self.job_events[job_id].triggered:
+                self.job_events[job_id].succeed()
+        # and wait for the job to complete
+
 
         # Trigger the job's event to signal completion, ensuring it's the correct type
         # if isinstance(self.job_events[job_id], simpy.events.Event) and not self.job_events[job_id].triggered:
         if not is_parallel and not self.job_events[job_id].triggered:
             self.job_events[job_id].succeed()
+
+        # Determine if any successor job requires this job to be completed in a sequential manner
+        sequential_successor = any(dependency_type == 'sequential' for _, successor, dependency_type in self.dependencies if _ == job_id)
+        if not self.job_events[job_id].triggered:
+            self.job_events[job_id].succeed()
+
+
+
+    def check_and_schedule_dependents(self, job_id):
+        """
+        Check and schedule dependent jobs after the completion of a given job.
+
+        Args:
+            job_id (str): The identifier of the completed job.
+        """
+        logger.debug(f"Checking dependents for job {job_id}.")
+
+        for dependent_id in self.graph.successors(job_id):
+            logger.debug(f"Checking if dependent job {dependent_id} is ready to be scheduled.")
+            # Determine if this dependent job is ready to be scheduled
+            if self.is_job_ready_to_schedule(dependent_id):
+                logger.debug(f"Dependent job {dependent_id} is ready. Scheduling with dependencies.")
+                self.schedule_job_with_dependencies(dependent_id)
+            else:
+                logger.debug(f"Dependent job {dependent_id} is not ready to be scheduled yet.")
+
+    def is_job_ready_to_schedule(self, job_id):
+        """
+        Determine if a job is ready to be scheduled based on its dependencies.
+
+        Args:
+            job_id (str): The identifier of the job to check.
+
+        Returns:
+            bool: True if the job is ready to be scheduled, False otherwise.
+        """
+        logger.debug(f"Checking if job {job_id} is ready to be scheduled based on dependencies.")
+        for predecessor_id in self.graph.predecessors(job_id):
+            if not self.job_events[predecessor_id].triggered:
+                logger.debug(f"Job {job_id} is not ready to be scheduled. Waiting for predecessor {predecessor_id}.")
+                return False
+        logger.debug(f"All dependencies resolved for job {job_id}. It is ready to be scheduled.")
+        return True
 
     def check_other_dependencies(self, job_id):
         """
