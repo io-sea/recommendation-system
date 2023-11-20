@@ -134,7 +134,7 @@ class TestWorkflow(unittest.TestCase):
             'job3': MockApplication(self.env, compute=compute, read=read, write=write)
         }
         workflow = Workflow(self.env, jobs, dependencies, self.cluster)
-        workflow.build_graph()
+
         self.assertTrue(workflow.is_independent_job('job1'))
         self.assertFalse(workflow.is_independent_job('job2'))
         self.assertFalse(workflow.is_independent_job('job3'))
@@ -355,7 +355,7 @@ class TestWorkflow(unittest.TestCase):
         workflow = Workflow(self.env, jobs, dependencies, self.cluster)
         workflow.run()
 
-    def test_schedule_jobs_parallel_sequential(self):
+    def test_schedule_jobs_parallel_sequential_0(self):
         # Arrange
         compute, read, write = [0, 10], [1e6, 0], [0, 5e6]
         jobs = {'job1': Application(self.env, name='job1', compute=compute,
@@ -371,7 +371,7 @@ class TestWorkflow(unittest.TestCase):
         workflow = Workflow(self.env, jobs, dependencies, self.cluster)
         workflow.run()
 
-    def test_schedule_jobs_parallel_sequential_parallel(self):
+    def test_schedule_jobs_parallel_sequential_1(self):
         # Arrange
         compute, read, write = [0, 10], [1e6, 0], [0, 5e6]
         jobs = {'job1': Application(self.env, name='job1', compute=compute,
