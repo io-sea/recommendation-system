@@ -21,7 +21,81 @@ class MockApplication(Application):
         # Mock behavior: complete after a short delay
         yield self.env.timeout(10)
 
-class TestWorkflow(unittest.TestCase):
+class TestWorkflowPlacement(unittest.TestCase):
+    def setUp(self):
+        self.env = simpy.Environment()
+        self.cluster = Cluster(self.env, CLUSTER_CONFIG)
+
+    def test_placement_tiers_sequential(self):
+        dependencies = [
+            ('job1', 'job2', {'type': 'sequential'})
+        ]
+        compute, read, write = [0, 10], [1e6, 0], [0, 5e6]
+        jobs = {'job1': Application(self.env, name='job1', compute=compute,
+                                    read=read, write=write),
+                'job2': Application(self.env, name='job2', compute=compute,
+                                    read=read, write=write)}
+        jobs_placements = {
+            'job1': {
+                'placement': [1, 1, 1],  # For job1, phase 1 data is placed at tier 0, and phase 2 data is placed at tier 1
+                'use_bb': [False, False, False]  # Assuming you also want to specify burst buffer usage for each phase
+            },
+            'job2': {
+                'placement': [0, 0, 0],  # For job2, phase 1 data is placed at tier 1, and phase 2 data is placed at tier 0
+                'use_bb': [False, False, False]
+            }
+        }
+        workflow = Workflow(self.env, jobs, dependencies, self.cluster,
+                            jobs_placements=jobs_placements)
+        workflow.run()
+
+    def test_placement_tiers_parallel(self):
+        dependencies = [
+            ('job1', 'job2', {'type': 'parallel'})
+        ]
+        compute, read, write = [0, 10], [1e6, 0], [0, 5e6]
+        jobs = {'job1': Application(self.env, name='job1', compute=compute,
+                                    read=read, write=write),
+                'job2': Application(self.env, name='job2', compute=compute,
+                                    read=read, write=write)}
+        jobs_placements = {
+            'job1': {
+                'placement': [1, 1, 1],  # For job1, phase 1 data is placed at tier 0, and phase 2 data is placed at tier 1
+                'use_bb': [False, False]  # Assuming you also want to specify burst buffer usage for each phase
+            },
+            'job2': {
+                'placement': [0, 0, 0],  # For job2, phase 1 data is placed at tier 1, and phase 2 data is placed at tier 0
+                'use_bb': [False, False]
+            }
+        }
+        workflow = Workflow(self.env, jobs, dependencies, self.cluster)
+        workflow.run(jobs_placements=jobs_placements)
+
+    def test_placement_tiers_sequential_bb(self):
+        dependencies = [
+            ('job1', 'job2', {'type': 'sequential'})
+        ]
+        compute, read, write = [0, 10], [1e6, 0], [0, 5e6]
+        jobs = {'job1': Application(self.env, name='job1', compute=compute,
+                                    read=read, write=write),
+                'job2': Application(self.env, name='job2', compute=compute,
+                                    read=read, write=write)}
+        jobs_placements = {
+            'job1': {
+                'placement': [1, 1, 1],  # For job1, phase 1 data is placed at tier 0, and phase 2 data is placed at tier 1
+                'use_bb': [True, False]  # Assuming you also want to specify burst buffer usage for each phase
+            },
+            'job2': {
+                'placement': [0, 0, 0],  # For job2, phase 1 data is placed at tier 1, and phase 2 data is placed at tier 0
+                'use_bb': [False, False]
+            }
+        }
+        workflow = Workflow(self.env, jobs, dependencies, self.cluster,
+                            jobs_placements=jobs_placements)
+        workflow.run()
+
+
+class TestWorkflowScheduler(unittest.TestCase):
     def setUp(self):
         self.env = simpy.Environment()
         self.cluster = Cluster(self.env, CLUSTER_CONFIG)
@@ -140,94 +214,31 @@ class TestWorkflow(unittest.TestCase):
         self.assertFalse(workflow.is_independent_job('job3'))
 
 
+    def test_schedule_delay(self):
+        # Arrange
+        compute, read, write = [0, 10], [1e6, 0], [0, 5e6]
+        jobs = {'job1': Application(self.env, name='job1', compute=compute,
+                                    read=read, write=write),
+                'job2': Application(self.env, name='job2', compute=compute,
+                                    read=read, write=write)}
 
-    # def test_setup_deps_2(self):
-    #     dependencies = [
-    #         ('job1', 'job2', {'type': 'parallel'}),
-    #         ('job1', 'job3', {'type': 'parallel'})
-    #     ]
-    #     compute, read, write = [0, 10], [1e9, 0], [0, 5e9]
-    #     jobs = {
-    #         'job1': MockApplication(self.env, compute=compute, read=read, write=write),
-    #         'job2': MockApplication(self.env, compute=compute, read=read, write=write),
-    #         'job3': MockApplication(self.env, compute=compute, read=read, write=write)
-    #     }
-    #     workflow = Workflow(self.env, jobs, dependencies, self.cluster)
-    #     workflow.build_graph()
-    #     workflow.setup_dependencies()
+        dependencies = [('job1', 'job2', {'type': 'delay', 'delay': 33})]
+        # Act
+        workflow = Workflow(self.env, jobs, dependencies, self.cluster)
+        workflow.run()
 
-    #     # Check if the independent jobs are identified correctly
-    #     expected_independent_jobs = {'job1', 'job2', 'job3'}
-    #     actual_independent_jobs = workflow.independent_jobs
-    #     self.assertEqual(expected_independent_jobs, actual_independent_jobs)
+    def test_schedule_delay_0(self):
+        # Arrange
+        compute, read, write = [0, 10], [1e6, 0], [0, 5e6]
+        jobs = {'job1': Application(self.env, name='job1', compute=compute,
+                                    read=read, write=write),
+                'job2': Application(self.env, name='job2', compute=compute,
+                                    read=read, write=write)}
 
-    # def test_setup_deps_3(self):
-    #     dependencies = [
-    #         ('job1', 'job2', {'type': 'parallel'}),
-    #         ('job1', 'job3', {'type': 'sequential'}),
-    #         ('job2', 'job4', {'type': 'parallel'})
-    #     ]
-    #     compute, read, write = [0, 10], [1e9, 0], [0, 5e9]
-    #     jobs = {
-    #         'job1': MockApplication(self.env, compute=compute, read=read, write=write),
-    #         'job2': MockApplication(self.env, compute=compute, read=read, write=write),
-    #         'job3': MockApplication(self.env, compute=compute, read=read, write=write),
-    #         'job4': MockApplication(self.env, compute=compute, read=read, write=write)
-    #     }
-    #     workflow = Workflow(self.env, jobs, dependencies, self.cluster)
-    #     workflow.build_graph()
-    #     workflow.setup_dependencies()
-
-    #     # Check if the independent jobs are identified correctly
-    #     expected_independent_jobs = {'job1', 'job2', 'job4'}
-    #     actual_independent_jobs = workflow.independent_jobs
-    #     self.assertEqual(expected_independent_jobs, actual_independent_jobs)
-
-    # def test_setup_deps_4(self):
-    #     dependencies = [
-    #         ('job1', 'job2', {'type': 'parallel'}),
-    #         ('job1', 'job3', {'type': 'sequential'}),
-    #         ('job2', 'job4', {'type': 'parallel'}),
-    #         ('job3', 'job5', {'type': 'parallel'})
-
-    #     ]
-    #     compute, read, write = [0, 10], [1e9, 0], [0, 5e9]
-    #     jobs = {
-    #         'job1': MockApplication(self.env, compute=compute, read=read, write=write),
-    #         'job2': MockApplication(self.env, compute=compute, read=read, write=write),
-    #         'job3': MockApplication(self.env, compute=compute, read=read, write=write),
-    #         'job4': MockApplication(self.env, compute=compute, read=read, write=write),
-    #         'job5': MockApplication(self.env, compute=compute, read=read, write=write)
-    #     }
-    #     workflow = Workflow(self.env, jobs, dependencies, self.cluster)
-    #     workflow.build_graph()
-    #     workflow.setup_dependencies()
-
-    #     # Check if the independent jobs are identified correctly
-    #     expected_independent_jobs = {'job1', 'job2', 'job4'}
-    #     actual_independent_jobs = workflow.independent_jobs
-    #     self.assertEqual(expected_independent_jobs, actual_independent_jobs)
-
-    # def test_setup_deps_5(self):
-    #     dependencies = [
-    #         ('job1', 'job2', {'type': 'sequential'}),
-    #         ('job1', 'job3', {'type': 'sequential'}),
-    #         ('job2', 'job4', {'type': 'sequential'})
-    #     ]
-    #     compute, read, write = [0, 10], [1e9, 0], [0, 5e9]
-    #     jobs = {
-    #         'job1': MockApplication(self.env, compute=compute, read=read, write=write),
-    #         'job2': MockApplication(self.env, compute=compute, read=read, write=write),
-    #         'job3': MockApplication(self.env, compute=compute, read=read, write=write)
-    #     }
-    #     workflow = Workflow(self.env, jobs, dependencies, self.cluster)
-    #     workflow.build_graph()
-    #     workflow.setup_dependencies()
-
-    #     # Check if the independent jobs are identified correctly
-    #     expected_independent_jobs = {"job1"}
-    #     actual_independent_jobs = workflow.independent_jobs
-    #     self.assertEqual(expected_independent_jobs, actual_independent_jobs)
+        dependencies = [('job1', 'job2', {'type': 'delay', 'delay': 0})]
+        # Act
+        workflow = Workflow(self.env, jobs, dependencies, self.cluster)
+        workflow.run()
 
     def test_parallel_chains(self):
         # Arrange
@@ -409,8 +420,8 @@ class TestWorkflow(unittest.TestCase):
     def test_schedule_jobs_complex_0(self):
         # Arrange
         compute, read, write = [0, 10], [1e6, 0], [0, 5e6]
-        jobs = {'job1': Application(self.env, name='job1', compute=compute,
-                                    read=read, write=write),
+        jobs = {'job1': Application(self.env, name='job1', compute=[0, 10],
+                                    read=[1e6, 0], write=[0, 5e6]),
                 'job2': Application(self.env, name='job2', compute=compute,
                                     read=read, write=write),
                 'job3': Application(self.env, name='job3', compute=compute,
@@ -428,7 +439,116 @@ class TestWorkflow(unittest.TestCase):
         workflow = Workflow(self.env, jobs, dependencies, self.cluster)
         workflow.run()
 
+    def test_schedule_jobs_complex_1(self):
+        # Arrange
+        compute, read, write = [0, 10], [1e6, 0], [0, 5e6]
+        jobs = {'job1': Application(self.env, name='job1', compute=[0, 10],
+                                    read=[1e6, 0], write=[0, 5e6]),
+                'job2': Application(self.env, name='job2', compute=compute,
+                                    read=read, write=write),
+                'job3': Application(self.env, name='job3', compute=compute,
+                                    read=read, write=write),
+                'job4': Application(self.env, name='job4', compute=compute,
+                                    read=read, write=write),
+                'job5': Application(self.env, name='job5', compute=compute,
+                                    read=read, write=write)}
+
+        dependencies = [('job1', 'job2', {'type': 'sequential'}),
+                        ('job2', 'job3', {'type': 'parallel'}),
+                        ('job3', 'job4', {'type': 'parallel'}),
+                        ('job2', 'job5', {'type': 'delay', 'delay': 10})]
+        # Act
+        workflow = Workflow(self.env, jobs, dependencies, self.cluster)
+        workflow.run()
 
 
 
+
+    # def test_setup_deps_2(self):
+    #     dependencies = [
+    #         ('job1', 'job2', {'type': 'parallel'}),
+    #         ('job1', 'job3', {'type': 'parallel'})
+    #     ]
+    #     compute, read, write = [0, 10], [1e9, 0], [0, 5e9]
+    #     jobs = {
+    #         'job1': MockApplication(self.env, compute=compute, read=read, write=write),
+    #         'job2': MockApplication(self.env, compute=compute, read=read, write=write),
+    #         'job3': MockApplication(self.env, compute=compute, read=read, write=write)
+    #     }
+    #     workflow = Workflow(self.env, jobs, dependencies, self.cluster)
+    #     workflow.build_graph()
+    #     workflow.setup_dependencies()
+
+    #     # Check if the independent jobs are identified correctly
+    #     expected_independent_jobs = {'job1', 'job2', 'job3'}
+    #     actual_independent_jobs = workflow.independent_jobs
+    #     self.assertEqual(expected_independent_jobs, actual_independent_jobs)
+
+    # def test_setup_deps_3(self):
+    #     dependencies = [
+    #         ('job1', 'job2', {'type': 'parallel'}),
+    #         ('job1', 'job3', {'type': 'sequential'}),
+    #         ('job2', 'job4', {'type': 'parallel'})
+    #     ]
+    #     compute, read, write = [0, 10], [1e9, 0], [0, 5e9]
+    #     jobs = {
+    #         'job1': MockApplication(self.env, compute=compute, read=read, write=write),
+    #         'job2': MockApplication(self.env, compute=compute, read=read, write=write),
+    #         'job3': MockApplication(self.env, compute=compute, read=read, write=write),
+    #         'job4': MockApplication(self.env, compute=compute, read=read, write=write)
+    #     }
+    #     workflow = Workflow(self.env, jobs, dependencies, self.cluster)
+    #     workflow.build_graph()
+    #     workflow.setup_dependencies()
+
+    #     # Check if the independent jobs are identified correctly
+    #     expected_independent_jobs = {'job1', 'job2', 'job4'}
+    #     actual_independent_jobs = workflow.independent_jobs
+    #     self.assertEqual(expected_independent_jobs, actual_independent_jobs)
+
+    # def test_setup_deps_4(self):
+    #     dependencies = [
+    #         ('job1', 'job2', {'type': 'parallel'}),
+    #         ('job1', 'job3', {'type': 'sequential'}),
+    #         ('job2', 'job4', {'type': 'parallel'}),
+    #         ('job3', 'job5', {'type': 'parallel'})
+
+    #     ]
+    #     compute, read, write = [0, 10], [1e9, 0], [0, 5e9]
+    #     jobs = {
+    #         'job1': MockApplication(self.env, compute=compute, read=read, write=write),
+    #         'job2': MockApplication(self.env, compute=compute, read=read, write=write),
+    #         'job3': MockApplication(self.env, compute=compute, read=read, write=write),
+    #         'job4': MockApplication(self.env, compute=compute, read=read, write=write),
+    #         'job5': MockApplication(self.env, compute=compute, read=read, write=write)
+    #     }
+    #     workflow = Workflow(self.env, jobs, dependencies, self.cluster)
+    #     workflow.build_graph()
+    #     workflow.setup_dependencies()
+
+    #     # Check if the independent jobs are identified correctly
+    #     expected_independent_jobs = {'job1', 'job2', 'job4'}
+    #     actual_independent_jobs = workflow.independent_jobs
+    #     self.assertEqual(expected_independent_jobs, actual_independent_jobs)
+
+    # def test_setup_deps_5(self):
+    #     dependencies = [
+    #         ('job1', 'job2', {'type': 'sequential'}),
+    #         ('job1', 'job3', {'type': 'sequential'}),
+    #         ('job2', 'job4', {'type': 'sequential'})
+    #     ]
+    #     compute, read, write = [0, 10], [1e9, 0], [0, 5e9]
+    #     jobs = {
+    #         'job1': MockApplication(self.env, compute=compute, read=read, write=write),
+    #         'job2': MockApplication(self.env, compute=compute, read=read, write=write),
+    #         'job3': MockApplication(self.env, compute=compute, read=read, write=write)
+    #     }
+    #     workflow = Workflow(self.env, jobs, dependencies, self.cluster)
+    #     workflow.build_graph()
+    #     workflow.setup_dependencies()
+
+    #     # Check if the independent jobs are identified correctly
+    #     expected_independent_jobs = {"job1"}
+    #     actual_independent_jobs = workflow.independent_jobs
+    #     self.assertEqual(expected_independent_jobs, actual_independent_jobs)
 
