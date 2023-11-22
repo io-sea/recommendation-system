@@ -219,7 +219,7 @@ class Workflow:
                 if self.is_in_parallel_chain(job_id) and job_id not in scheduled_in_parallel:
                     chain = self.find_parallel_chain(job_id, set())
                     logger.debug(f"Scheduling parallel chain: {chain}")
-                    self.schedule_parallel_chain(chain)
+                    self.schedule_parallel_chain_with_dependencies(chain)
                     # Add all jobs in the chain to the scheduled set
                     scheduled_in_parallel.update(chain)
                     remove_from_queue(job_queue, chain)
@@ -237,7 +237,7 @@ class Workflow:
                 logger.debug(f"Scheduling parallel chain: {chain}")
                 remove_from_queue(job_queue, chain)
                 scheduled_in_parallel.update(chain)
-                self.schedule_parallel_chain(chain)
+                self.schedule_parallel_chain_with_dependencies(chain)
                 # if self.are_chain_dependencies_resolved(chain):
                 #     logger.debug(f"Dependencies resolved for parallel chain: {chain}. Scheduling it.")
                 #     remove_from_queue(job_queue, chain)
@@ -292,25 +292,57 @@ class Workflow:
             logger.debug(f"Job {job_id} has no predecessors, scheduling immediately")
             self.env.process(self.run_job(job_id))
 
-
-    def schedule_parallel_chain(self, chain):
+    def schedule_parallel_chain_with_dependencies(self, chain):
         """
         Schedule all jobs in a parallel chain to run simultaneously.
 
         Args:
             chain (list): A list of job IDs that are in the parallel chain.
         """
-        logger.debug(f"Scheduling parallel chain: {chain}")
-        # Only schedule the job if all dependencies are resolved
-        if self.are_chain_dependencies_resolved(chain):
-            logger.debug(f"Scheduling {chain} in parallel chain for immediate execution.")
+        logger.debug(f"Scheduling parallel chain with dependencies: {chain}")
+        predecessors = self.find_all_external_predecessors(chain)
+
+        if predecessors:
+            logger.debug(f"Chain {chain} has a predecessor(s): {predecessors}")
+            pre_job_event = self.job_events[predecessors[0]]
+
+            # Define a process to wait for the predecessor to complete
+            def wait_and_run(env, pre_job_event):
+                yield pre_job_event
+                logger.debug(f"Predecessors {predecessors} completed, now running chain {chain}")
+                chain_events = [self.env.process(self.run_job(job_id, is_parallel=True)) for job_id in chain]
+                yield simpy.AllOf(self.env, chain_events)
+
+            # Add the process to the simulation environment
+            self.env.process(wait_and_run(self.env, pre_job_event))
+        else:
+            # If there is no predecessor, schedule the job immediately
+            logger.debug(f"Chain {chain} has no predecessors, scheduling immediately")
+            #chain_events = [self.env.process(self.run_job(job_id, is_parallel=True)) for job_id in chain]
+            #self.env.process(simpy.AllOf(self.env, chain_events))
             for job_id in chain:
                 self.env.process(self.run_job(job_id, is_parallel=True))
-        else:
-            # Otherwise, wait for the dependencies to be resolved before scheduling
-            predecessor = self.find_all_external_predecessors(chain)[0]
-            if predecessor:
-                self.env.process(self.wait_and_schedule_parallel_chain(chain, predecessor))
+
+
+
+    # def schedule_parallel_chain(self, chain):
+    #     """
+    #     Schedule all jobs in a parallel chain to run simultaneously.
+
+    #     Args:
+    #         chain (list): A list of job IDs that are in the parallel chain.
+    #     """
+    #     logger.debug(f"Scheduling parallel chain: {chain}")
+    #     # Only schedule the job if all dependencies are resolved
+    #     if self.are_chain_dependencies_resolved(chain):
+    #         logger.debug(f"Scheduling {chain} in parallel chain for immediate execution.")
+    #         for job_id in chain:
+    #             self.env.process(self.run_job(job_id, is_parallel=True))
+    #     else:
+    #         # Otherwise, wait for the dependencies to be resolved before scheduling
+    #         predecessor = self.find_all_external_predecessors(chain)[0]
+    #         if predecessor:
+    #             self.env.process(self.wait_and_schedule_parallel_chain(chain, predecessor))
 
     def are_chain_dependencies_resolved(self, chain):
         """
@@ -337,49 +369,50 @@ class Workflow:
         # If all external predecessors are completed, return True
         return True
 
-    def wait_and_schedule_parallel_chain(self, chain, predecessor_id):
-        """
-        Wait for the predecessor job to complete before scheduling the current job.
+    # def wait_and_schedule_parallel_chain(self, chain, predecessor_id):
+    #     """
+    #     Wait for the predecessor job to complete before scheduling the current job.
 
-        Args:
-            job_id (str): The ID of the job to schedule.
-            predecessor_id (str): The ID of the predecessor job.
-        """
-        logger.debug(f"Parallel chain {chain} is waiting for predecessor {predecessor_id} to complete.")
+    #     Args:
+    #         job_id (str): The ID of the job to schedule.
+    #         predecessor_id (str): The ID of the predecessor job.
+    #     """
+    #     logger.debug(f"Parallel chain {chain} is waiting for predecessor {predecessor_id} to complete.")
 
-        # Define a process to wait for the predecessor to complete
-        def wait_for_predecessor(env, pre_job_event):
-            yield pre_job_event
-            logger.debug(f"Predecessor {predecessor_id} completed. Now scheduling chain {chain}.")
-            yield env.process(self.schedule_parallel_chain(chain))
+    #     # Define a process to wait for the predecessor to complete
+    #     def wait_for_predecessor(env, pre_job_event):
+    #         yield pre_job_event
+    #         logger.debug(f"Predecessor {predecessor_id} completed. Now scheduling chain {chain}.")
+    #         chain_events = [self.env.process(self.run_job(job_id, in_parallel=True)) for job_id in chain]
+    #         yield simpy.AllOf(self.env, chain_events)
 
-        # Get the event associated with the predecessor job
-        pre_job_event = self.job_events[predecessor_id]
+    #     # Get the event associated with the predecessor job
+    #     pre_job_event = self.job_events[predecessor_id]
 
-        # Add the process to the simulation environment
-        self.env.process(wait_for_predecessor(self.env, pre_job_event))
+    #     # Add the process to the simulation environment
+    #     self.env.process(wait_for_predecessor(self.env, pre_job_event))
 
-    def wait_and_schedule_job(self, job_id, predecessor_id):
-        """
-        Wait for the predecessor job to complete before scheduling the current job.
+    # def wait_and_schedule_job(self, job_id, predecessor_id):
+    #     """
+    #     Wait for the predecessor job to complete before scheduling the current job.
 
-        Args:
-            job_id (str): The ID of the job to schedule.
-            predecessor_id (str): The ID of the predecessor job.
-        """
-        logger.debug(f"Job {job_id} is waiting for predecessor {predecessor_id} to complete.")
+    #     Args:
+    #         job_id (str): The ID of the job to schedule.
+    #         predecessor_id (str): The ID of the predecessor job.
+    #     """
+    #     logger.debug(f"Job {job_id} is waiting for predecessor {predecessor_id} to complete.")
 
-        # Define a process to wait for the predecessor to complete
-        def wait_for_predecessor(env, pre_job_event):
-            yield pre_job_event
-            logger.debug(f"Predecessor {predecessor_id} completed. Now scheduling job {job_id}.")
-            yield env.process(self.run_job(job_id))
+    #     # Define a process to wait for the predecessor to complete
+    #     def wait_for_predecessor(env, pre_job_event):
+    #         yield pre_job_event
+    #         logger.debug(f"Predecessor {predecessor_id} completed. Now scheduling job {job_id}.")
+    #         yield env.process(self.run_job(job_id))
 
-        # Get the event associated with the predecessor job
-        pre_job_event = self.job_events[predecessor_id]
+    #     # Get the event associated with the predecessor job
+    #     pre_job_event = self.job_events[predecessor_id]
 
-        # Add the process to the simulation environment
-        self.env.process(wait_for_predecessor(self.env, pre_job_event))
+    #     # Add the process to the simulation environment
+    #     self.env.process(wait_for_predecessor(self.env, pre_job_event))
 
     def run_job(self, job_id, is_parallel=False, cluster=None, placement=None,
                 use_bb=None):

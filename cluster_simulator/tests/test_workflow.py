@@ -406,6 +406,28 @@ class TestWorkflow(unittest.TestCase):
         workflow = Workflow(self.env, jobs, dependencies, self.cluster)
         workflow.run()
 
+    def test_schedule_jobs_complex_0(self):
+        # Arrange
+        compute, read, write = [0, 10], [1e6, 0], [0, 5e6]
+        jobs = {'job1': Application(self.env, name='job1', compute=compute,
+                                    read=read, write=write),
+                'job2': Application(self.env, name='job2', compute=compute,
+                                    read=read, write=write),
+                'job3': Application(self.env, name='job3', compute=compute,
+                                    read=read, write=write),
+                'job4': Application(self.env, name='job4', compute=compute,
+                                    read=read, write=write),
+                'job5': Application(self.env, name='job5', compute=compute,
+                                    read=read, write=write)}
+
+        dependencies = [('job1', 'job2', {'type': 'sequential'}),
+                        ('job2', 'job3', {'type': 'parallel'}),
+                        ('job3', 'job4', {'type': 'parallel'}),
+                        ('job4', 'job5', {'type': 'sequential'})]
+        # Act
+        workflow = Workflow(self.env, jobs, dependencies, self.cluster)
+        workflow.run()
+
 
 
 
