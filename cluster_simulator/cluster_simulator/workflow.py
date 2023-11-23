@@ -6,27 +6,41 @@ import os
 from loguru import logger
 from cluster_simulator.cluster import Cluster, Tier
 
+
 class Workflow:
-    """Class to manage the execution of jobs within a workflow with dependencies.
+    """
+    Manages the execution of a set of interdependent jobs within a high-performance computing (HPC) workflow.
+
+    This class provides functionality to schedule and run jobs based on their dependencies,
+    utilizing a simulation environment for orchestration.
 
     Attributes:
-        env (simpy.Environment): The simulation environment.
-        jobs (dict): A dictionary mapping job IDs to Application instances.
-        dependencies (list): A list of dependencies. Each dependency is represented as a list
-            with the format [pre_job_id, post_job_id, relation]. Relation is a dict
-            with the format {'type':'delay', 'delay':10}.
-        job_events (dict): A dictionary mapping job IDs to SimPy events. These events signal job completion.
+        env (simpy.Environment): The simulation environment where the jobs are executed.
+        jobs (dict): A mapping of job IDs to their corresponding Application instances.
+        dependencies (list): A list of dependencies, where each dependency is represented as a tuple (pre_job_id, post_job_id, relation). The relation is a dictionary with keys like 'type' and 'delay'.
+        job_events (dict): A mapping of job IDs to SimPy events, used to signal the completion of each job.
+        graph (nx.DiGraph): A directed graph representing the dependencies between jobs.
+        cluster (Cluster): The computational cluster where the jobs are executed.
+        jobs_placements (dict): A mapping of job IDs to their data placement strategies and burst buffer usage.
 
     """
     def __init__(self, env, jobs, dependencies, cluster, jobs_placements=None):
         """
-        Initialize the workflow with the environment, workflow definition, applications, and cluster.
+        Initializes the Workflow instance with the required simulation environment, job definitions,
+        dependencies, cluster, and optional job placement strategies.
 
         Args:
-            env (simpy.Environment): The simulation environment.
-            jobs (dict): A dictionary of Application instances keyed by job ID.
-            dependencies (dict): A dictionary of dependencies keyed by job ID. Each           dependency is a list with the format [pre_job_id, post_job_id, relation].
-            cluster (Cluster): The cluster on which to run the applications.
+            env (simpy.Environment): The simulation environment for running the workflow.
+            jobs (dict): A dictionary mapping job IDs to Application instances, representing each job in the workflow.
+            dependencies (list): A list of tuples representing job dependencies. Each tuple is in the form (pre_job_id, post_job_id, relation), where relation is a dictionary specifying the dependency type and delay.
+            cluster (Cluster): The cluster resource on which the jobs will be executed.
+            jobs_placements (dict, optional): A dictionary specifying the data placement strategy and burst buffer usage for each job. Defaults to None, which means no specific placement strategy is provided.
+
+        Raises:
+            ValueError: If the provided dependencies are not in the expected list format.
+
+        The initialization process involves setting up the simulation environment, jobs, dependencies, and the
+        cluster. It also constructs a directed graph to represent job dependencies for efficient scheduling.
         """
         logger.debug("Initializing Workflow instance.")
         self.env = env
@@ -51,10 +65,26 @@ class Workflow:
 
     def build_graph(self):
         """
-        Builds a graph from dependencies, which can be a JSON file path or a dictionary.
+        Constructs a directed graph to represent the dependencies between jobs.
+
+        This method supports building the graph from a JSON file or directly from
+        a list of dependency tuples. The graph is used to manage job execution order,
+        considering their interdependencies.
+
+        Raises:
+            FileNotFoundError: If the dependencies file path is provided but the file does not exist.
+            ValueError: If the dependencies format is neither a file path nor a list of tuples.
+
+        Returns:
+            networkx.DiGraph: A directed graph representing job dependencies.
+
+        Note:
+        The graph is stored as a networkx DiGraph object, providing efficient
+        graph operations for the scheduling and execution of the workflow.
         """
         logger.debug("Building the dependency graph.")
         self.graph = nx.DiGraph()
+
         if isinstance(self.dependencies, str):  # dependencies is a file path
             if not os.path.exists(self.dependencies):
                 raise FileNotFoundError(f"File {self.dependencies} does not exist.")
@@ -66,18 +96,24 @@ class Workflow:
                 self.graph.add_edge(pre_job, post_job, **relation)
         else:
             raise ValueError("Invalid dependencies format. Must be file path or list of tuples.")
-         # Log the entire graph structure
+
+        # Log the entire graph structure
         logger.debug("Graph structure:")
         for node in self.graph.nodes:
             logger.debug(f"Node: {node}, Incoming Edges: {list(self.graph.in_edges(node))}, Outgoing Edges: {list(self.graph.out_edges(node))}")
+
         return self.graph
 
     def find_parallel_chains(self):
         """
-        Identifie et retourne toutes les chaînes parallèles dans le graphe.
+        Identifies and returns all parallel chains in the workflow graph.
+
+        A parallel chain is defined as a sequence of jobs connected with 'parallel' or 'delay' type dependencies,
+        indicating that these jobs can be executed in a parallel or delayed parallel manner.
 
         Returns:
-            list of lists: Une liste de chaînes, où chaque chaîne est une liste de job IDs.
+            list of lists: A list containing parallel chains, where each chain is a list of job IDs. A chain is only
+            considered parallel if it contains more than one job connected with parallel dependencies.
         """
         visited = set()
         parallel_chains = []
@@ -92,14 +128,19 @@ class Workflow:
 
     def find_parallel_chain(self, job_id, visited):
         """
-        Trouve récursivement tous les jobs dans une chaîne parallèle à partir d'un job donné.
+        Recursively finds all jobs in a parallel chain starting from a given job.
+
+        This method explores both predecessors and successors of the given job, adding them to the chain if they
+        are connected by 'parallel' or 'delay' dependencies. It ensures that each job is visited only once to avoid
+        infinite loops in the graph traversal.
 
         Args:
-            job_id (str): ID du job de départ.
-            visited (set): Ensemble des jobs déjà visités.
+            job_id (str): The ID of the starting job.
+            visited (set): A set of job IDs that have already been visited in the graph traversal.
 
         Returns:
-            list: Une chaîne parallèle sous forme de liste de job IDs.
+            list: A parallel chain as a list of job IDs. Returns an empty list if no parallel chain is found starting
+            from the given job or if the chain contains only the starting job.
         """
         chain = []
         stack = [job_id]
@@ -109,7 +150,7 @@ class Workflow:
             if current_job not in visited:
                 visited.add(current_job)
                 chain.append(current_job)
-                # Ajouter les prédécesseurs et successeurs connectés par des relations parallèles
+                # Add predecessors and successors connected by parallel and delay relationships.
                 for neighbor in self.graph.predecessors(current_job):
                     if self.graph[neighbor][current_job].get('type') in ['parallel', 'delay']:
                         stack.append(neighbor)
@@ -173,13 +214,25 @@ class Workflow:
 
         return list(external_predecessors)
 
-
     def setup_dependencies(self):
-        """Set up dependencies between jobs, identifying independent and parallel chains and scheduling them."""
+        """
+        Organizes the scheduling of jobs based on their dependencies.
+
+        This method identifies and schedules independent jobs and parallel chains,
+        and then schedules the remaining jobs, considering their dependencies.
+        It ensures that jobs are executed in an order that respects the
+        predefined workflow structure.
+
+        Note:
+        The method uses internal utility functions to manage job queues and
+        relies on other class methods to determine job independence, chain
+        membership, and scheduling.
+        """
         logger.info("Setting up job dependencies.")
+
         def add_to_queue(queue, elements):
             """
-            Ajoute des éléments à la file d'attente. Accepte un élément individuel ou une liste d'éléments.
+            Adds elements to a queue, accepting either a single element or a list of elements.
 
             Args:
                 queue (list): La file d'attente actuelle.
@@ -192,7 +245,7 @@ class Workflow:
 
         def remove_from_queue(queue, elements):
             """
-            Retire des éléments de la file d'attente. Accepte un élément individuel ou une liste d'éléments.
+            Removes elements from a queue, accepting either a single element or a list of elements.
 
             Args:
                 queue (list): La file d'attente actuelle.
@@ -247,10 +300,18 @@ class Workflow:
 
     def schedule_job_with_dependencies(self, job_id):
         """
-        Schedule a job taking into account its dependencies.
+        Schedules a job to run, considering its dependencies within the workflow.
+
+        This method schedules the specified job only after ensuring all its
+        dependencies are resolved. If the job has a predecessor, it waits for the
+        predecessor to complete before starting. Otherwise, it starts the job immediately.
 
         Args:
-            job_id (str): The identifier for the job.
+            job_id (str): The identifier of the job to be scheduled.
+
+        Note:
+            This method assumes that the workflow graph correctly reflects the job
+            dependencies and that the job events are managed appropriately.
         """
         logger.debug(f"Scheduling job with dependencies: {job_id}")
 
@@ -277,10 +338,19 @@ class Workflow:
 
     def schedule_parallel_chain_with_dependencies(self, chain):
         """
-        Schedule all jobs in a parallel chain to run simultaneously.
+        Schedules a chain of parallel jobs, taking into account their dependencies.
+
+        This method schedules each job in the specified chain to run in parallel,
+        but only after all the dependencies (if any) are resolved. If a chain has
+        external predecessors, it waits for these jobs to complete before starting
+        the chain. Otherwise, it starts the chain immediately.
 
         Args:
-            chain (list): A list of job IDs that are in the parallel chain.
+            chain (list of str): A list of job IDs that are part of the parallel chain.
+
+        Note:
+            This method assumes that the job dependencies have been correctly set up
+            in the workflow graph and that the job events are managed appropriately.
         """
         logger.debug(f"Scheduling parallel chain with dependencies: {chain}")
         predecessors = self.find_all_external_predecessors(chain)
@@ -301,11 +371,9 @@ class Workflow:
         else:
             # If there is no predecessor, schedule the job immediately
             logger.debug(f"Chain {chain} has no predecessors, scheduling immediately")
-            #chain_events = [self.env.process(self.run_job(job_id, is_parallel=True)) for job_id in chain]
-            #self.env.process(simpy.AllOf(self.env, chain_events))
+
             for job_id in chain:
                 self.env.process(self.run_job(job_id, is_parallel=True))
-
 
     def are_chain_dependencies_resolved(self, chain):
         """
@@ -336,7 +404,6 @@ class Workflow:
 
         # If all external predecessors are completed, return True
         return True
-
 
     def run_job(self, job_id, is_parallel=False, cluster=None, placement=None,
                 use_bb=None):
@@ -447,7 +514,6 @@ class Workflow:
 
         return placement[:num_phases], use_bb[:num_phases]
 
-
     def run(self, jobs_placements=None):
         """
         Executes the workflow by setting up job dependencies and running the simulation.
@@ -457,9 +523,9 @@ class Workflow:
 
         Args:
             jobs_placements (dict, optional): A dictionary mapping job IDs to their placement strategies and burst buffer usage.
-                                            Each entry in the dictionary should have the format:
-                                            {job_id: {'placement': [list_of_placement_indices], 'use_bb': [list_of_boolean_values]}}
-                                            If not provided, the default placements and burst buffer usages are used.
+            Each entry in the dictionary should have the format:
+            {job_id: {'placement': [list_of_placement_indices], 'use_bb': [list_of_boolean_values]}}
+            If not provided, the default placements and burst buffer usages are used.
         """
         # Update job placements if provided
         if jobs_placements:

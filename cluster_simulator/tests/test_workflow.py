@@ -6,7 +6,7 @@ from loguru import logger
 from unittest.mock import patch, mock_open, MagicMock
 from cluster_simulator.application import Application
 from cluster_simulator.workflow import Workflow
-from cluster_simulator.cluster import Cluster, Tier
+from cluster_simulator.cluster import Cluster, Tier, EphemeralTier, get_tier
 
 CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
 CLUSTER_CONFIG = os.path.join(CURRENT_DIR, "test_data", "workflow_config.yaml")
@@ -42,7 +42,7 @@ class TestWorkflowPlacement(unittest.TestCase):
             },
             'job2': {
                 'placement': [0, 0, 0],  # For job2, phase 1 data is placed at tier 1, and phase 2 data is placed at tier 0
-                'use_bb': [False, False, False]
+                'use_bb': [True, False, False]
             }
         }
         workflow = Workflow(self.env, jobs, dependencies, self.cluster,
@@ -61,11 +61,11 @@ class TestWorkflowPlacement(unittest.TestCase):
         jobs_placements = {
             'job1': {
                 'placement': [1, 1, 1],  # For job1, phase 1 data is placed at tier 0, and phase 2 data is placed at tier 1
-                'use_bb': [False, False]  # Assuming you also want to specify burst buffer usage for each phase
+                'use_bb': [False, True]  # Assuming you also want to specify burst buffer usage for each phase
             },
             'job2': {
-                'placement': [0, 0, 0],  # For job2, phase 1 data is placed at tier 1, and phase 2 data is placed at tier 0
-                'use_bb': [False, False]
+                'placement': [1, 0, 0],  # For job2, phase 1 data is placed at tier 1, and phase 2 data is placed at tier 0
+                'use_bb': [False, True]
             }
         }
         workflow = Workflow(self.env, jobs, dependencies, self.cluster)

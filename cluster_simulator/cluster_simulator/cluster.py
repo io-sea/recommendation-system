@@ -372,7 +372,7 @@ class Tier:
         if self.bandwidth_model_path:
             description += f"Bandwidth model path: {self.bandwidth_model_path}\n"
         logger.trace(description)
-        return ""
+        return description
 
 
 class EphemeralTier(Tier):
