@@ -1,6 +1,6 @@
 defaults:
-  compute_nodes: 1
-  cores_per_node: 2
+  compute_nodes: 2
+  cores_per_node: 4
 
 tiers:
   - name: tier1

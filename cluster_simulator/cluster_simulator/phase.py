@@ -19,7 +19,7 @@ from enum import Enum
 # from cluster_simulator.cluster import Cluster, Tier, bandwidth_share_model, compute_share_model, get_tier, convert_size
 
 from cluster_simulator.utils import convert_size, get_tier, compute_share_model, BandwidthResource
-from cluster_simulator.cluster import Tier, EphemeralTier
+from cluster_simulator.cluster import Tier, EphemeralTier, get_tier
 import random
 import string
 import time
@@ -190,7 +190,8 @@ class IOPhase:
         io_pattern = f"{self.pattern*100}% sequential | {(1-self.pattern)*100} % random"
         description = "-------------------\n"
         description += (f"{self.operation.capitalize()} I/O Phase of volume {convert_size(self.volume)} with pattern: {io_pattern}\n")
-        return description
+        logger.trace(description)
+        return ""
 
     def register_step(self, t_start, step_duration, available_bandwidth, cluster, tier,
                       initial_levels=None, source_tier=None, eviction=None):
@@ -405,7 +406,7 @@ class IOPhase:
         if self.bw:
             available_bandwidth = self.bw
         else:
-            
+
             max_bandwidth = cluster.get_max_bandwidth(tier, operation=self.operation,
                                                       pattern=self.pattern)
             logger.trace(f"max bandwidth: {max_bandwidth}")
@@ -570,11 +571,15 @@ class IOPhase:
         # ret = yield self.env.process(self.run_step(self.env, cluster, tier))
         logger.info(f"(App {self.appname}) - Start I/O phase at {env.now}")
         if isinstance(tier, EphemeralTier):
+            # retrieve EphemeralTier
+            persistent_tier = get_tier(cluster, tier.persistent_tier)
             if self.operation == "read":
                 # do prefetch
                 io_prefetch = self.env.process(self.move_step(self.env, cluster,
-                                                              tier.persistent_tier,
-                                                              tier, erase=False))
+                                                              persistent_tier,
+                                                              #tier.persistent_tier,
+                                                              tier,
+                                                              erase=False))
                 ret1 = yield io_prefetch
                 io_event = self.env.process(self.run_step(self.env, cluster, tier))
                 if ret1:
@@ -583,8 +588,11 @@ class IOPhase:
             elif self.operation == "write":
                 io_event = self.env.process(self.run_step(self.env, cluster, tier))
                 # destage
-                destage_event = self.env.process(self.move_step(self.env, cluster, tier,
-                                                                tier.persistent_tier, erase=False))
+                destage_event = self.env.process(self.move_step(self.env, cluster,
+                                                                tier,
+                                                                #tier.persistent_tier,
+                                                                persistent_tier,
+                                                                erase=False))
                 # do not wait for the destage to complete
                 # TODO, logic will fail if destaging is faster than the IO
                 response = yield io_event | destage_event
@@ -633,7 +641,8 @@ class MixIOPhase():
         write_io_pattern = f"{self.write_pattern*100}% sequential | {(1-self.write_pattern)*100} % random"
         description = "-------------------\n"
         description += (f"{self.operation.capitalize()} I/O Phase of read volume {convert_size(self.read_volume)} with read pattern: {read_io_pattern} and write volume {convert_size(self.write_volume)} write pattern: {write_io_pattern}\n")
-        return description
+        logger.trace(description)
+        return ""
 
     def register_step(self, t_start, step_duration, available_bandwidth, cluster, tier,
                       initial_levels=None, source_tier=None, eviction=None):
