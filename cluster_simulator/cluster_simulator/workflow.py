@@ -3,6 +3,7 @@ import json
 import networkx as nx
 import simpy
 import os
+import math
 from loguru import logger
 from cluster_simulator.cluster import Cluster, Tier
 
@@ -50,6 +51,7 @@ class Workflow:
         self.cluster = cluster
         self.jobs_placements = jobs_placements or {}  # Default to empty dict if not provided
         self.job_events = {job_id: self.env.event() for job_id in jobs.keys()}
+        self.applications_data = {}
         logger.info(f"Workflow initialized with {len(self.jobs)} jobs and {len(self.dependencies)} dependencies.")
 
     def print_graph(self):
@@ -537,3 +539,54 @@ class Workflow:
         # Run the simulation environment
         self.env.run()
 
+        # Collect data from all applications in the workflow
+        self.collect_applications_data()
+
+    def collect_applications_data(self):
+        """Collects and aggregates data from all applications in the workflow into a single dictionary.
+
+        Each entry in the dictionary corresponds to an application, with the key being the application's job ID and
+        the value being a list of data items extracted from the application's data store.
+        """
+        for job_id, application in self.jobs.items():
+            # Assuming each Application instance has a 'data' attribute
+            self.applications_data[job_id] = application.data
+
+    def get_fitness(self):
+        """
+        Calculates the total execution duration of the workflow by aggregating the durations of all applications.
+
+        This method utilizes the aggregated application data collected by `collect_applications_data` to compute the maximum execution duration among all applications in the workflow.
+
+        Returns:
+            float: Total execution duration of the workflow.
+        """
+        max_duration = 0
+        for job_id, app_data in self.applications_data.items():
+            t_min = math.inf
+            t_max = 0
+            for phase in app_data.items:
+                if phase["type"] in ["read", "write", "compute"]:
+                    t_max = max(t_max, phase["t_end"])
+                    t_min = min(t_min, phase["t_start"])
+            max_duration = max(max_duration, t_max - t_min)
+        return max_duration
+
+    def get_ephemeral_size(self):
+        """
+        Calculates the maximum space used by the ephemeral tier across all applications in the workflow.
+
+        This method utilizes the aggregated application data collected by `collect_applications_data` to compute
+        the maximum space used by the ephemeral tier (e.g., burst buffer) across all phases of all applications.
+
+        Returns:
+            float: Maximum space used by the ephemeral tier in the workflow.
+        """
+        max_ephemeral_size = 0
+        for job_id, app_data in self.applications_data.items():
+            for phase in app_data.items:
+                bb = list(set(phase["tier_level"].keys()) - set(phase["tiers"]))
+                if bb:
+                    ephemeral_tier = bb[0]
+                    max_ephemeral_size = max(max_ephemeral_size, phase["tier_level"][ephemeral_tier])
+        return max_ephemeral_size
