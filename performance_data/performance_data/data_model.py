@@ -347,7 +347,7 @@ class DataModel:
         category_dict = {}
         for col in data.columns:
             if col.endswith("_io_pattern"):
-                categories = all_categories #self.cats
+                categories = all_categories  #self.cats
                 if col in category_dict:
                     category_dict[col].update(categories)
                 else:
@@ -363,6 +363,9 @@ class DataModel:
             ],
             remainder="passthrough"
         )
+
+        logger.info(f"Preprocessing input {type(data)}/data: {data}")
+        print(data)
 
         # transform X data and extract y data
         X = preprocessor.fit_transform(data)

@@ -39,7 +39,8 @@ class WorkflowDecomposer:
             workflow_name (str): The optional workflow folder name. Default is an empty string.
         """
         self.v0_threshold = v0_threshold
-        self.wf_folder = os.path.join(BASE_WF_FOLDER, workflow_name)
+        self.workflow_name = workflow_name
+        self.wf_folder = os.path.join(BASE_WF_FOLDER, self.workflow_name)
         logger.info(f"WorkflowDecomposer initialized with threshold {self.v0_threshold} and workflow folder {self.wf_folder}")
 
     def get_job_timeseries_from_json_file(self, job_id, skip_columns=[]):
@@ -186,7 +187,7 @@ class WorkflowDecomposer:
                     phase_features = cd.get_phases_features(representation, job_id=job_id)
                     return representation, phase_features
 
-    def save_representation(self, job_id, representation):
+    def save_representation(self, job_id, representation, output=None):
         """
         Save the job's representation data as a JSON file.
 
@@ -200,8 +201,9 @@ class WorkflowDecomposer:
                 return int(o)
             raise TypeError
 
-        # Create a folder to store decomposed data if it doesn't exist
-        decomposed_data_folder = os.path.join(self.wf_folder, 'decomposed_data')
+        # Use specified output path if provided, else use decomposed_data_folder
+        decomposed_data_folder = output if output is not None else os.path.join(
+            self.wf_folder, 'decomposed_data')
         if not os.path.exists(decomposed_data_folder):
             os.mkdir(decomposed_data_folder)
 
@@ -214,7 +216,7 @@ class WorkflowDecomposer:
 
         logger.info(f"Saved representation for job {job_id} to {file_path}")
 
-    def save_phase_features(self, job_id, phase_features):
+    def save_phase_features(self, job_id, phase_features, output=None):
         """
         Save the job's phase features as a JSON file.
 
@@ -228,8 +230,9 @@ class WorkflowDecomposer:
                 return int(o)
             raise TypeError
 
-        # Create a folder to store decomposed data if it doesn't exist
-        decomposed_data_folder = os.path.join(self.wf_folder, 'decomposed_data')
+        # Use specified output path if provided, else use decomposed_data_folder
+        decomposed_data_folder = output if output is not None else os.path.join(
+            self.wf_folder, 'decomposed_data')
         if not os.path.exists(decomposed_data_folder):
             os.mkdir(decomposed_data_folder)
 
@@ -242,7 +245,7 @@ class WorkflowDecomposer:
 
         logger.info(f"Saved phase features for job {job_id} to {file_path}")
 
-    def decompose_workflow(self):
+    def decompose_workflow(self, output=None):
         """
         Decomposes all jobs in a given workflow folder.
 
@@ -276,8 +279,10 @@ class WorkflowDecomposer:
                         representation, phase_features = self.decompose_ioi_job(job_id)
 
                         # Save the representation and phase features
-                        self.save_representation(job_id, representation)
-                        self.save_phase_features(job_id, phase_features)
+                        self.save_representation(job_id, representation,
+                                                 output=output)
+                        self.save_phase_features(job_id, phase_features,
+                                                 output=output)
 
                         # Log the representation
                         logger.info(f"{job_id} representation {representation}")

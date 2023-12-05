@@ -1,17 +1,61 @@
 import unittest
 import time
 import numpy as np
-import simpy
+import simpy, os
 import matplotlib.pyplot as plt
 
 from cluster_simulator.cluster import Cluster, Tier, EphemeralTier, bandwidth_share_model, compute_share_model, get_tier, convert_size
-from cluster_simulator.phase import DelayPhase, ComputePhase, IOPhase
+from cluster_simulator.phase import DelayPhase, ComputePhase, IOPhase, MixIOPhase
+from cluster_simulator.phase_features import PhaseFeatures
 from cluster_simulator.application import Application
 from cluster_simulator.analytics import display_run
 from cluster_simulator.analytics import get_execution_signal, get_execution_signal_2, get_execution_signal_3, plot_simple_signal
 
 GRAPHICS = False
 
+CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
+TEST_CONFIG = os.path.join(CURRENT_DIR, "test_data", "workflow_config.yaml")
+
+class TestApplicationBuilder(unittest.TestCase):
+    def setUp(self):
+        self.env = simpy.Environment()
+        self.data = simpy.Store(self.env)
+        self.cluster = Cluster(self.env, config_path=TEST_CONFIG)
+
+
+    def test_application_init_with_phases(self):
+        representation = {  "node_count": 1,
+                            "events": [0, 1, 2],
+                            "read_volumes": [868614, 0, 0],
+                            "read_bw": [434307.0, 0, 0],
+                            "write_volumes": [0, 9034495302, 0],
+                            "write_bw": [0, 821317754.7272727, 0],
+                            "read_pattern": ["Uncl", "Uncl", "Uncl"],
+                            "write_pattern": ["Uncl", "Str", "Uncl"],
+                            "read_operations": [22, 0, 0],
+                            "write_operations": [0, 984, 0]}
+
+        phase_features = [
+            {"job_id": "371902", "nodes": 1, "read_volume": 868614, "write_volume": 0, "read_io_pattern": "uncl", "write_io_pattern": "uncl", "read_io_size": 39482.454545454544, "write_io_size": 0, "ioi_bw": 86861.4},
+            {"job_id": "371902", "nodes": 1, "read_volume": 0, "write_volume": 9034495302, "read_io_pattern": "uncl", "write_io_pattern": "str", "read_io_size": 0, "write_io_size": 9181397.664634146, "ioi_bw": 164263550.94545454},
+            {"job_id": "371902", "nodes": 1, "read_volume": 0, "write_volume": 0, "read_io_pattern": "uncl", "write_io_pattern": "uncl", "read_io_size": 0, "write_io_size": 0, "ioi_bw": 0.0}]
+
+        # phase_features = PhaseFeatures(cores=1,
+        #                                read_io_size=8e6,
+        #                                write_io_size=8e6,
+        #                                read_volume=169e6,
+        #                                write_volume=330e6,
+        #                                read_io_pattern='stride',
+        #                                write_io_pattern='seq')
+        for phase_feature in phase_features:
+            print(phase_feature)
+
+        # app = Application(self.env,
+        #                   compute=compute,
+        #                   read=read,
+        #                   write=write)
+        # self.env.process(app.run(self.cluster, placement=[0, 0]))
+        # self.env.run()
 
 class TestAppInit(unittest.TestCase):
     def setUp(self):
@@ -25,6 +69,20 @@ class TestAppInit(unittest.TestCase):
         self.nvram_tier = Tier(self.env, 'NVRAM', max_bandwidth=nvram_bandwidth, capacity=80e9)
 
     def test_application_init(self):
+        # Simple app: read 1GB -> compute 10s -> write 5GB
+        compute = [0, 10]
+        read = [1e9, 0]
+        write = [0, 5e9]
+        tiers = [0, 1]
+        app = Application(self.env,
+                          compute=compute,
+                          read=read,
+                          write=write)
+        # print(app.store.capacity)
+        # print(app.store.items)
+        self.assertEqual(len(app.store.items), 3)
+
+    def test_application_init_phases(self):
         # Simple app: read 1GB -> compute 10s -> write 5GB
         compute = [0, 10]
         read = [1e9, 0]
@@ -494,6 +552,17 @@ class TestBasicApps(unittest.TestCase):
 
         self.ssd_tier = Tier(self.env, 'SSD', max_bandwidth=ssd_bandwidth, capacity=200e9)
         self.nvram_tier = Tier(self.env, 'NVRAM', max_bandwidth=nvram_bandwidth, capacity=80e9)
+
+    def test_null_app(self):
+        data = simpy.Store(self.env)
+        cluster = Cluster(self.env,  compute_nodes=1, cores_per_node=2,
+                          tiers=[self.ssd_tier, self.nvram_tier])
+        app1 = Application(self.env, compute=[0],
+                           read=[0], write=[0], data=data)
+        self.env.process(app1.run(cluster, placement=[0, 0]))
+        self.env.run()
+        for item in data.items:
+            print(item)
 
     def test_app_simple(self):
         data = simpy.Store(self.env)

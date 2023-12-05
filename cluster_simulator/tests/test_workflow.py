@@ -494,3 +494,31 @@ class TestWorkflowMetrics(unittest.TestCase):
         workflow.run()
         self.assertAlmostEqual(workflow.get_fitness(), 20.83)
         self.assertAlmostEqual(workflow.get_ephemeral_size(), 1e6)
+
+    def test_workflow_placement(self):
+        dependencies = [
+            ('job1', 'job2', {'type': 'sequential'})
+        ]
+        compute, read, write = [0, 10], [1e6, 0], [0, 5e6]
+        jobs = {'job1': Application(self.env, name='job1', compute=compute,
+                                    read=read, write=write, data=self.data),
+                'job2': Application(self.env, name='job2', compute=compute,
+                                    read=read, write=write, data=self.data)}
+        placement = 2
+        bb = False
+        jobs_placements = {
+            'job1': {
+                'placement': [placement],  # For job1, phase 1 data is placed at tier 0, and phase 2 data is placed at tier 1
+                'use_bb': [bb]  # Assuming you also want to specify burst buffer usage for each phase
+            },
+            'job2': {
+                'placement': [placement],  # For job2, phase 1 data is placed at tier 1, and phase 2 data is placed at tier 0
+                'use_bb': [bb]
+            }
+        }
+        workflow = Workflow(self.env, jobs, dependencies, self.cluster)
+        workflow.run(jobs_placements=jobs_placements)
+        #self.assertAlmostEqual(workflow.get_fitness(), 20.83)
+        #self.assertAlmostEqual(workflow.get_ephemeral_size(), 1e6)
+        print(workflow.get_fitness())
+        print(workflow.get_ephemeral_size())
