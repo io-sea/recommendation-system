@@ -364,8 +364,7 @@ class DataModel:
             remainder="passthrough"
         )
 
-        logger.info(f"Preprocessing input {type(data)}/data: {data}")
-        print(data)
+        logger.debug(f"Preprocessing input data: {data}")
 
         # transform X data and extract y data
         X = preprocessor.fit_transform(data)
