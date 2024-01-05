@@ -239,17 +239,18 @@ class Cluster:
             tier = get_tier(self, tier)
 
         if tier.bandwidth_model_path:
+            logger.info(f"Using bandwidth model: {tier.bandwidth_model_path}")
             if phase_features is None:
                 phase_features = PhaseFeatures(cores=cores,
                                                operation=operation,
                                                pattern=pattern)
 
-            logger.trace(f"features: {phase_features.get_attributes()}")
+            logger.debug(f"Phase features: {phase_features.get_dataframe()}")
             predictions = load_and_predict(tier.bandwidth_model_path,
                                            pd.DataFrame(
-                                               phase_features.get_attributes()),
-                                           iops=True)
-            logger.trace(f"predictions: {predictions.values.flatten()[0]}")
+                                               phase_features.get_dataframe()),
+                                           iops=False)
+            logger.debug(f"Bandwidth predictions: {predictions.values.flatten()[0]}")
             return predictions.values.flatten()[0]
 
         if isinstance(tier.max_bandwidth, dict):
@@ -465,6 +466,8 @@ def get_tier(cluster, tier_reference, use_bb=False):
     Returns:
         Tier or EphemeralTier: The storage tier that will be targeted for I/O operations.
     """
+    logger.info(f"tier reference = {tier_reference}")
+
     def find_tier(cluster, tier_reference):
         """ Nested function to retrieve tier by its reference.
         Returns:
@@ -482,8 +485,8 @@ def get_tier(cluster, tier_reference, use_bb=False):
             tier = tier_reference
         if tier is None:
             raise ValueError(f"Tier {tier} not found")
-
         return tier
+
     if not use_bb:
         return find_tier(cluster, tier_reference)
     if use_bb:

@@ -447,7 +447,7 @@ class Workflow:
                 delay = self.graph[predecessor][job_id].get('delay', 0)
                 if delay > 0:
                     logger.debug(f"Delay dependency detected. Waiting for {delay} time units before executing job {job_id}.")
-                    yield self.env.timeout(delay)
+                    yield self.env.timeout(delay/1000)  #delay are in milliseconds
 
 
         # Execute the job
@@ -563,13 +563,14 @@ class Workflow:
         """
         max_duration = 0
         for job_id, app_data in self.applications_data.items():
-            t_min = math.inf
-            t_max = 0
-            for phase in app_data.items:
-                if phase["type"] in ["read", "write", "compute"]:
-                    t_max = max(t_max, phase["t_end"])
-                    t_min = min(t_min, phase["t_start"])
-            max_duration = max(max_duration, t_max - t_min)
+            if app_data is not None and hasattr(app_data, 'items'):  # Check if app_data is not None and has 'items' attribute
+                t_min = math.inf
+                t_max = 0
+                for phase in app_data.items:
+                    if phase["type"] in ["read", "write", "compute"]:
+                        t_max = max(t_max, phase["t_end"])
+                        t_min = min(t_min, phase["t_start"])
+                max_duration = max(max_duration, t_max - t_min)
         return max_duration
 
     def get_ephemeral_size(self):

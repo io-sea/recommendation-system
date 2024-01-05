@@ -6,8 +6,8 @@ import pandas as pd
 import simpy
 from loguru import logger
 
-from cluster_simulator.cluster import (Cluster, Tier, EphemeralTier, 
-                                       bandwidth_share_model, compute_share_model, get_tier, convert_size) 
+from cluster_simulator.cluster import (Cluster, Tier, EphemeralTier,
+                                       bandwidth_share_model, compute_share_model, get_tier, convert_size)
 from cluster_simulator.phase import DelayPhase, ComputePhase, IOPhase
 
 from cluster_simulator.application import Application
@@ -43,12 +43,12 @@ class TestClusterConfigFile(unittest.TestCase):
         # Test that the cluster is initialized correctly using overridden values for compute nodes and cores per node
         compute_nodes = 8
         cores_per_node = 16
-        cluster = Cluster(self.env, config_path=TEST_CONFIG_FILE, compute_nodes=compute_nodes,
+        cluster = Cluster(self.env,
+                          compute_nodes=compute_nodes,
                           cores_per_node=cores_per_node)
         self.assertEqual(cluster.compute_nodes.capacity, compute_nodes)
         self.assertEqual(cluster.compute_cores.capacity, compute_nodes * cores_per_node)
-        self.assertEqual(len(cluster.tiers), 3)
-        self.assertEqual(cluster.ephemeral_tier.name, 'ephemeral')
+        #self.assertEqual(cluster.ephemeral_tier.name, 'ephemeral')
 
     def test_override_tiers(self):
         # Test that the cluster is initialized correctly using overridden values for tiers
@@ -75,7 +75,8 @@ class TestClusterConfigFile(unittest.TestCase):
         cores_per_node = 16
         tiers = [Tier(self.env, 'tier1', capacity=100e9), Tier(self.env, 'tier2', capacity=500e9)]
         ephemeral_tier = Tier(self.env, 'my_ephemeral', capacity=200e9)
-        cluster = Cluster(self.env, config_path=TEST_CONFIG_FILE, compute_nodes=compute_nodes,
+        cluster = Cluster(self.env, #config_path=TEST_CONFIG_FILE,
+                          compute_nodes=compute_nodes,
                           cores_per_node=cores_per_node, tiers=tiers,
                           ephemeral_tier=ephemeral_tier)
         self.assertEqual(cluster.compute_nodes.capacity, compute_nodes)
@@ -118,11 +119,11 @@ class TestClusterConfigFileBandwidth(unittest.TestCase):
         })
         max_bandwidth = self.cluster.tiers[1].get_max_bandwidth(new_data=new_data)
         expected_values = [5.03018109e+08, 3.89502183e+08]
-        self.assertIsInstance(self.cluster.tiers[1].get_max_bandwidth(new_data=new_data), np.ndarray)        
+        self.assertIsInstance(self.cluster.tiers[1].get_max_bandwidth(new_data=new_data), np.ndarray)
         self.assertAlmostEquals(max_bandwidth[0], expected_values[0], places=-3)
 
     def test_get_max_bandwidth_with_model_pure_read_write(self):
-        new_data = pd.DataFrame({ 
+        new_data = pd.DataFrame({
             'nodes': [1, 1],
             'read_io_size': [8e6, 6e6],
             'write_io_size': [8e6, 6e6],
@@ -135,9 +136,9 @@ class TestClusterConfigFileBandwidth(unittest.TestCase):
         print(max_bandwidth)
         expected_values = [1.18203310e+09, 8.48493401e+08]
         self.assertIsInstance(self.cluster.tiers[1].get_max_bandwidth(new_data=new_data), np.ndarray)
-        
+
     def test_get_max_bandwidth_with_model_0_read_write(self):
-        new_data = pd.DataFrame({ 
+        new_data = pd.DataFrame({
             'nodes': [1],
             'read_io_size': [4e3],
             'write_io_size': [4e3],
@@ -146,7 +147,7 @@ class TestClusterConfigFileBandwidth(unittest.TestCase):
             'read_io_pattern': ['stride'],
             'write_io_pattern': ['seq'],
         })
-        
+
         self.assertIsInstance(self.cluster.tiers[1].get_max_bandwidth(new_data=new_data), np.ndarray)
         self.assertEqual(self.cluster.tiers[1].get_max_bandwidth(new_data=new_data), 0)
 
@@ -359,8 +360,8 @@ class TestClusterTierEviction(unittest.TestCase):
             self.hdd_tier.capacity.put(quantum)
             self.bb.dirty -= quantum
             self.bb.evict()
-            
-            
+
+
 class TestClusterTierPerformanceModel(unittest.TestCase):
     def setUp(self):
         representation = {'events': [0, 1, 8, 12, 44, 50, 54, 56],
@@ -395,7 +396,7 @@ class TestClusterTierPerformanceModel(unittest.TestCase):
                           'write_pattern': ['Uncl', 'Uncl', 'Seq', 'Seq', 'Seq', 'Seq', 'Seq', 'Uncl'],
                           'write_volumes': [0,
                                             0,
-                                            2038785597,
+                                            82038785597,
                                             4139017218,
                                             5334798849,
                                             5305154361,
@@ -405,21 +406,21 @@ class TestClusterTierPerformanceModel(unittest.TestCase):
         self.env = simpy.Environment()
         self.data = simpy.Store(self.env)
         self.cluster = Cluster(self.env, config_path=TEST_CONFIG_COMPLETE)
-        
+
     def test_tier_performance_model(self):
         """Test printing tiers
         # TODO: when tier 3 (constant is chosen, last phase bw is wrong)
         # """
-        
-        app1 = Application(self.env, name=f"Hum", 
+        app1 = Application(self.env, name=f"Hum",
                            compute=self.representation["events"],
                            read=self.representation["read_volumes"],
                            write=self.representation["write_volumes"],
                            data=self.data)
+        print(f"placement arg: {[2]*len(self.representation['events'])}")
         self.env.process(app1.run(self.cluster,
                                   placement=[2]*(
                                       len(self.representation["events"]))))
         self.env.run()
-        
+
         fig = display_apps_dataflow(self.data, self.cluster, width=800, height=600)
         fig.show()

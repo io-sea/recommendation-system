@@ -47,7 +47,7 @@ class Application:
 
     def __init__(self, env, name=None, compute=None, read=None,
                  write=None, bw=None, read_bw=None, write_bw=None,
-                 data=None, delay=0, phase_features=None):
+                 data=None, delay=0, phases=None, phase_features=None):
         """Initialize the application and schedule the sequence of phases.
 
         Args:
@@ -95,9 +95,14 @@ class Application:
         self.read_bw = read_bw if read_bw else None
         self.write_bw = write_bw if write_bw else None
         self.status = None
+        self.phases = phases
+        self.phase_features = phase_features
         # schedule all events
         self.cores_request = []
-        self.schedule()
+        if not self.phases:
+            self.schedule()
+        else:
+            self.schedule_phases()
 
     def put_delay(self, duration):
         """Add a Delay phase that waits before starting the application. This phase consumes 0 units of compute resources. It subclasses DeplayPhase and the object is queued to store attribute and cores needed to cores_request list.
@@ -234,6 +239,23 @@ class Application:
                 self.put_compute(duration, cores=1)
                 self.status.append(False)
 
+    def schedule_phases(self):
+        """
+        Schedule provided phase objects for execution.
+
+        This method iterates over the list of phase objects (self.phases) provided to the Application instance.
+        Each phase is added to the application's store, which will be processed sequentially during execution.
+        It also manages the cores_request list, which tracks the number of compute cores required for each phase.
+
+        For a MixIOPhase, it uses the provided PhaseFeatures to instantiate the phase with appropriate parameters.
+        """
+        self.status = []
+        for phase in self.phases:
+            self.store.put(phase)
+            self.cores_request.append(phase.cores)
+            self.status.append(False)
+
+
     def request_cores(self, cluster):
         """Issues a request on compute cores to get a slot as a shared resources. Takes the maximum of requested cores through the application phases as a reference resource amount to lock for the application duration.
 
@@ -242,6 +264,8 @@ class Application:
         Returns:
             an array of requests of each individual compute unit (core).
         """
+        if not self.cores_request:  # Check if the list is empty
+            return []  # Return an empty list or a neutral element
         return [cluster.compute_cores.request() for _ in range(max(self.cores_request))]
 
     def run(self, cluster, placement, use_bb=None):
@@ -283,13 +307,14 @@ class Application:
                 bb = use_bb[item_number] if use_bb else False
                 if phase == 0:
                     yield AllOf(self.env, requesting_cores)
-                    ret = yield self.env.process(item.run(self.env, cluster,
-                                                          placement=data_placement, use_bb=bb))
+                    ret = yield self.env.process(
+                        item.run(self.env, cluster, placement=data_placement, use_bb=bb))
                     self.status[phase] = ret
                     logger.debug(f"the issued status of the IO phase : {self.status[phase]}")
                 elif phase > 0 and self.status[phase-1] == True:
-                    self.status[phase] = yield self.env.process(item.run(self.env, cluster,
-                                                                         placement=data_placement, use_bb=bb))
+                    self.status[phase] = yield self.env.process(
+                        item.run(self.env, cluster, placement=data_placement,
+                                 use_bb=bb))
                 else:
                     self.status[phase] = False
                 phase += 1
@@ -346,4 +371,47 @@ class Application:
             return None
 
 
+class ApplicationBuilder:
+    def __init__(self, env, cluster, representation, phase_features):
+        """
+        Initializes the ApplicationBuilder.
 
+        Args:
+            env (simpy.Environment): The simulation environment.
+            cluster (Cluster): The cluster model with tier information.
+            representation (dict): The JSON-like data representing the application phases.
+            phase_features (list): A list of dictionaries, each containing features of a phase.
+        """
+        self.env = env
+        self.cluster = cluster
+        self.data = simpy.Store(self.env)
+        self.representation = representation
+        self.phase_features = phase_features
+        self.applications = {}
+
+    def build_applications(self):
+        """
+        Constructs Application instances based on the provided data.
+
+        This method processes the representation and phase_features data,
+        calculates necessary bandwidths using cluster's tier models, and
+        creates Application instances. It populates the applications dictionary
+        with job names mapped to their corresponding Application instances.
+        """
+        for phase_feature in self.phase_features:
+            app_name = phase_feature["job_id"]
+            # Calculate bandwidths using cluster's tier model
+            new_data = pd.DataFrame([phase_feature])
+            bw = self.cluster.tiers[2].get_max_bandwidth(new_data=new_data)
+            bw_normed = (bw / 1e6).tolist()  # Normalize bandwidth
+
+
+        # Create Application instance
+        app = Application(self.env, name=f"Job#{app_name}",
+                            compute=self.representation["events"],
+                            read=self.representation["read_volumes"],
+                            write=self.representation["write_volumes"],
+                            data=self.data,
+                            phase_features=phase_features)
+
+        self.applications[jobid] = app

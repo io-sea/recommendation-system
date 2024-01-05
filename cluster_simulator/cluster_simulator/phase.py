@@ -20,6 +20,7 @@ from enum import Enum
 
 from cluster_simulator.utils import convert_size, get_tier, compute_share_model, BandwidthResource
 from cluster_simulator.cluster import Tier, EphemeralTier, get_tier
+from cluster_simulator.phase_features import PhaseFeatures
 import random
 import string
 import time
@@ -163,7 +164,7 @@ class IOPhase:
     current_ios = []
 
     def __init__(self, cores=1, operation='read', volume=1e9, pattern=1,
-                 data=None, appname=None, bw=None):
+                 data=None, appname=None, bw=None, phase_features=None):
         """Inits an instance of I/O phase."""
         self.cores = cores
         self.operation = operation
@@ -175,7 +176,7 @@ class IOPhase:
         self.bandwidth_concurrency = 1
         self.data = data or None
         self.appname = appname or ''
-
+        self.phase_features = phase_features or None
         # Bytes to MB conversion
         # case where bandwidth is given for a reproducing a simulation
         self.bw = bw*1e6 if bw else bw
@@ -406,9 +407,12 @@ class IOPhase:
         if self.bw:
             available_bandwidth = self.bw
         else:
-
-            max_bandwidth = cluster.get_max_bandwidth(tier, operation=self.operation,
-                                                      pattern=self.pattern)
+            logger.trace(f"Phases features: {self.phase_features}")
+            max_bandwidth = cluster.get_max_bandwidth(
+                tier,
+                operation=self.operation,
+                pattern=self.pattern,
+                phase_features=self.phase_features)
             logger.trace(f"max bandwidth: {max_bandwidth}")
             self.bandwidth_concurrency = tier.bandwidth.count
             available_bandwidth = max_bandwidth/self.bandwidth_concurrency
@@ -603,11 +607,63 @@ class IOPhase:
         return ret
 
 
+class RWIOPhase:
+    """Represents a combined read/write I/O phase for an application."""
+
+    def __init__(self, env, cores, volume_read, volume_write, pattern_read, pattern_write,
+                 tier, data=None, appname=None, phase_features=None):
+        """
+        Initialize the RWIOPhase instance.
+
+        Args:
+            env (simpy.Environment): The simulation environment.
+            cores (int): Number of compute cores used.
+            volume_read (float): The volume of data to read.
+            volume_write (float): The volume of data to write.
+            pattern_read (float): The pattern of the read operation.
+            pattern_write (float): The pattern of the write operation.
+            tier (Tier): The storage tier where I/O operations will occur.
+            data (simpy.Store, optional): Data store for application records.
+            appname (str, optional): Name of the application.
+            phase_features (PhaseFeatures, optional): Features of the I/O phase.
+        """
+        self.env = env
+        self.cores = cores
+        self.volume_read = volume_read
+        self.volume_write = volume_write
+        self.pattern_read = pattern_read
+        self.pattern_write = pattern_write
+        self.tier = tier
+        self.data = data
+        self.appname = appname
+        self.phase_features = phase_features
+        self.read_io = IOPhase(cores, 'read', volume_read, pattern_read,
+                               data, appname)
+        self.write_io = IOPhase(cores, 'write', volume_write, pattern_write,
+                                data, appname)
+
+        if self.phase_features is None:
+            self.phase_features = PhaseFeatures(
+                cores=self.cores, operation=self.operation,
+                read_volume=self.read_volume,
+                write_volume=self.write_volume,
+                read_io_pattern=self.read_pattern,
+                write_io_pattern=self.write_pattern,
+                read_io_size=self.read_io_size,
+                write_io_size=self.write_io_size)
+
+
 class MixIOPhase():
     """Class that allows to run a mix of I/O operations. It initializes the read and write phases and registers processing steps in the data store with logging. It also updates tier levels with the algebraic value of volume and following a volume move. Finally, it runs a read-write I/O operation."""
 
-    def __init__(self, cores=1, read_volume=1e9, write_volume=1e9, read_pattern=1, write_pattern=1,
-                 data=None, appname=None, read_bw=None, write_bw=None):
+    # TODO: add read_io_size=4e3 and  write_io_size=4e3 attributes and
+    # TODO: pass phase_features object in cluster.get_max_bandiwdth
+
+    def __init__(self, cores=1, read_volume=1e9, write_volume=1e9,
+                 read_pattern=1, write_pattern=1,
+                 read_io_size=4e3, write_io_size=4e3,
+                 data=None, appname=None, read_bw=None,
+                 write_bw=None):
         """Initialize the MixIO class."""
         self.cores = cores
         self.operation = "readwrite"
@@ -617,14 +673,29 @@ class MixIOPhase():
         self.write_volume = write_volume
         self.read_pattern = read_pattern
         self.write_pattern = write_pattern
+        self.read_io_size = read_io_size
+        self.write_io_size = write_io_size
         self.read_bw = read_bw or None
         self.write_bw = write_bw or None
         self.data = data or None
         self.appname = appname or ''
 
+        # TODO: Build here the PhaseFeatures object
+        self.phase_features = PhaseFeatures(cores=self.cores,
+                                            operation=self.operation,
+                                            read_volume=self.read_volume,
+                                            write_volume=self.write_volume,
+                                            read_io_pattern=self.read_pattern,
+                                            write_io_pattern=self.write_pattern,
+                                            read_io_size=self.read_io_size,
+                                            write_io_size=self.write_io_size)
+
         # initialize the read and write phases
-        self.read_io = IOPhase(cores=cores, operation='read', volume=read_volume, pattern=self.read_pattern, data=self.data, appname=self.appname, bw=read_bw)
-        self.write_io = IOPhase(cores=cores, operation='write', volume=write_volume, pattern=self.write_pattern, data=self.data, appname=self.appname, bw=write_bw)
+        self.read_io = IOPhase(cores=cores, operation='read', volume=read_volume,
+                               pattern=self.read_pattern, data=self.data, appname=self.appname, bw=read_bw, phase_features=self.phase_features)
+        self.write_io = IOPhase(cores=cores, operation='write', volume=write_volume,
+                                pattern=self.write_pattern, data=self.data, appname=self.appname, bw=write_bw, phase_features=self.phase_features)
+
 
     @property
     def volume(self):
@@ -703,16 +774,21 @@ class MixIOPhase():
         if isinstance(tier, EphemeralTier):
             # if self.read_volume > 0:
             # do prefetch for ephemeral tier
-            io_read_prefetch = self.env.process(self.read_io.move_step(self.env, cluster,
-                                                                       tier.persistent_tier,
-                                                                       tier, erase=False))
+            # NOTE: when tier is ephemeral, tier_persistent_tier is string
+            tier_persistent = get_tier(cluster, tier.persistent_tier)
+            io_read_prefetch = self.env.process(
+                self.read_io.move_step(self.env, cluster, tier_persistent,
+                                       tier, erase=False))
             ret1 = yield io_read_prefetch
-            io_read_event = self.env.process(self.read_io.run_step(self.env, cluster, tier))
+            io_read_event = self.env.process(
+                self.read_io.run_step(self.env, cluster, tier))
             # if self.write_volume > 0:
-            io_write_event = self.env.process(self.write_io.run_step(self.env, cluster, tier))
+            io_write_event = self.env.process(
+                self.write_io.run_step(self.env, cluster, tier))
             # destage
-            destage_event = self.env.process(self.write_io.move_step(self.env, cluster, tier,
-                                                                     tier.persistent_tier, erase=False))
+            destage_event = self.env.process(
+                self.write_io.move_step(self.env, cluster, tier,
+                                        tier_persistent, erase=False))
             # TODO: should prefetech starts in the same time as the read?
             # Default is sequential, the write should begin simultaneously with read as well as destaging
             if ret1:
