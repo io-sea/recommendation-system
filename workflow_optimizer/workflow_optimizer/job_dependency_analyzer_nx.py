@@ -224,7 +224,7 @@ class JobDependencyAnalyzerNX:
         with open(file_path, 'w') as f:
             json.dump(edges_data, f, indent=4)
 
-        print(f"Edges data has been dumped to {file_path}")
+        logger.info(f"Edges data has been dumped to {file_path}")
 
     def print_graph(self):
         """
