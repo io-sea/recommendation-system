@@ -280,6 +280,7 @@ class IOPhase:
         if source_tier.capacity.level < volume:
             source_tier.capacity.put(volume - source_tier.capacity.level)
         # target_tier get its volume updated
+        #if volume > 0:
         target_tier.capacity.put(volume)
         # destaging decreases the amount of dirty data as it get a copy in a persistent tier
         if isinstance(source_tier, EphemeralTier) and type(target_tier) == Tier:
