@@ -1,0 +1,27 @@
+defaults:
+  compute_nodes: 10
+  cores_per_node: 4
+
+tiers:
+  - name: afsm_beegfs
+    capacity: 500.e+9
+    max_bandwidth: 500.e+6
+
+
+  - name: gpfs_nfs
+    capacity: 500.e+9
+    max_bandwidth: 200.e+6
+
+#    bandwidth_model_path: "/home_nfs/mimounis/iosea-wp3-recommandation-system/performance_data/performance_data/notebooks/decision_tree_regressor_fs1_bw.joblib"
+
+#   - name: lfs
+#     capacity: 500.e+9
+#     max_bandwidth: 50.e+6
+# #    bandwidth_model_path: "/home_nfs/mimounis/iosea-wp3-recommandation-system/performance_data/performance_data/notebooks/decision_tree_regressor_fs1_bw.joblib"
+
+ephemeral_tier:
+  name: afsm_beegfs_sbb
+  persistent_tier: afsm_beegfs
+#  bandwidth_model_path: "/home_nfs/mimounis/iosea-wp3-recommandation-system/workflow_optimizer/tests/data/cluster/decision_tree_regressor_afsm_beegfs_sbb_bw.joblib"
+  max_bandwidth: 900.e+6
+  capacity: 500.e+9
