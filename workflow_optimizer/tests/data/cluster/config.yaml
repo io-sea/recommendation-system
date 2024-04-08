@@ -5,22 +5,41 @@ defaults:
 tiers:
   - name: afsm_beegfs
     capacity: 500.e+9
-    max_bandwidth: 25.e+6
-#    bandwidth_model_path: "/home_nfs/mimounis/iosea-wp3-recommandation-system/workflow_optimizer/tests/data/cluster/decision_tree_regressor_afsm_beegfs_bw.joblib"
+    #max_bandwidth: 460.e+6
+    max_bandwidth:
+      read:
+        seq: 100
+        rand: 120
+      write:
+        seq: 60
+        rand: 50
 
-  - name: fs1
+  - name: gpfs_nfs
     capacity: 500.e+9
-    max_bandwidth: 40.e+6
+    #max_bandwidth: 400.e+6
+    max_bandwidth:
+      read:
+        seq: 90
+        rand: 80
+      write:
+        seq: 65
+        rand: 60
 #    bandwidth_model_path: "/home_nfs/mimounis/iosea-wp3-recommandation-system/performance_data/performance_data/notebooks/decision_tree_regressor_fs1_bw.joblib"
 
-  - name: lfs
-    capacity: 500.e+9
-    max_bandwidth: 50.e+6
-#    bandwidth_model_path: "/home_nfs/mimounis/iosea-wp3-recommandation-system/performance_data/performance_data/notebooks/decision_tree_regressor_fs1_bw.joblib"
+#   - name: lfs
+#     capacity: 500.e+9
+#     max_bandwidth: 50.e+6
+# #    bandwidth_model_path: "/home_nfs/mimounis/iosea-wp3-recommandation-system/performance_data/performance_data/notebooks/decision_tree_regressor_fs1_bw.joblib"
 
 ephemeral_tier:
   name: afsm_beegfs_sbb
   persistent_tier: afsm_beegfs
 #  bandwidth_model_path: "/home_nfs/mimounis/iosea-wp3-recommandation-system/workflow_optimizer/tests/data/cluster/decision_tree_regressor_afsm_beegfs_sbb_bw.joblib"
-  max_bandwidth: 100.e+6
+  max_bandwidth:
+    read:
+      seq: 600
+      rand: 460
+    write:
+      seq: 210
+      rand: 200
   capacity: 500.e+9
