@@ -86,3 +86,24 @@ The implementation of the Recommendation System has shown significant impact acr
 
 Future research aims at furthering the capabilities of the Recommendation System, focusing on improving integration with existing workflow managers, expanding on the Performability Predictor, and advancing the system's overall performance.
 
+---
+## Repo Summary
+**Date**: 2024-04-09 11:10:50
+
+**Directory**: `/iosea-wp3-recommendation-system`
+
+**Total**: 299 files, 106700 codes, 52 comments, 4120 blanks, all 110872 lines
+
+
+### Languages
+
+| Language         | Files | Code   | Comment | Blank | Total |
+|------------------|-------|--------|---------|-------|-------|
+| CSV              | 173   | 87,443 | 0       | 173   | 87,616|
+| Python           | 91    | 18,608 | 0       | 3,821 | 22,429|
+| YAML             | 20    | 335    | 52      | 82    | 469   |
+| Database         | 1     | 134    | 0       | 0     | 134   |
+| ini              | 8     | 116    | 0       | 40    | 156   |
+| pip requirements | 4     | 52     | 0       | 4     | 56    |
+| jsonc            | 1     | 8      | 0       | 0     | 8     |
+| Jinja            | 1     | 4      | 0       | 0     | 4     |
