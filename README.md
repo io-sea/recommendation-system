@@ -2,10 +2,8 @@
 
 This document presents the Recommendation System, a sophisticated tool designed to optimize data placement in High-Performance Computing (HPC) applications. The system integrates a black box optimization engine, a mathematical model to predict application I/O behavior, a machine learning-based performance model, and a simulation engine. These components work together to explore the parameter space efficiently and simulate application execution within a virtual HPC environment. Our innovative system determines the optimal storage tier for each I/O phase, aiming to reduce the total duration and Burst Buffer usage of workflows. The proof-of-concept implementation has demonstrated promising results, signifying a leap forward for various HPC applications and laying the foundation for further enhancements.
 
-<video controls src="demo/recsys_demo.mp4" title="Title"></video>
-<video width="320" height="240" controls>
-  <source src="demo/recsys_demo.mp4" type="video/mp4">
-</video>
+![alt text](demo/demo_recsys.gif)
+
 ---
 
 ## System Architecture
@@ -14,7 +12,7 @@ This document presents the Recommendation System, a sophisticated tool designed 
 *Figure 1: The general architecture of the recommendation system.*
 
 ![alt text](demo/RECSYS_D3.2_general_diagram_2.png)
-The architecture of the recommendation system is outlined in Figure 12. At the core, the system relies on the Workflow Description File (WDF), which is derived from WP2 and contains intricate details about application steps and storage service requirements. To harness the full potential of the recommendation system, the workflow should have been previously executed with the requisite number of compute nodes, persistent storage services, and with IO Instrumentation activated. The IO Instrumentation database is pivotal for the system as it retains workflow references and job groups, enabling the system to optimize data placement effectively.
+The architecture of the recommendation system is outlined in Figure 1. At the core, the system relies on the Workflow Description File (WDF), which is derived from WP2 and contains intricate details about application steps and storage service requirements. To harness the full potential of the recommendation system, the workflow should have been previously executed with the requisite number of compute nodes, persistent storage services, and with IO Instrumentation activated. The IO Instrumentation database is pivotal for the system as it retains workflow references and job groups, enabling the system to optimize data placement effectively.
 
 ---
 
