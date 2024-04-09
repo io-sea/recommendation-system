@@ -2,7 +2,7 @@
 
 This document presents the Recommendation System, a sophisticated tool designed to optimize data placement in High-Performance Computing (HPC) applications. The system integrates a black box optimization engine, a mathematical model to predict application I/O behavior, a machine learning-based performance model, and a simulation engine. These components work together to explore the parameter space efficiently and simulate application execution within a virtual HPC environment. Our innovative system determines the optimal storage tier for each I/O phase, aiming to reduce the total duration and Burst Buffer usage of workflows. The proof-of-concept implementation has demonstrated promising results, signifying a leap forward for various HPC applications and laying the foundation for further enhancements.
 
-<video src="demo/recsys_demo_compressed.mp4"></video>
+https://github.com/io-sea/recommendation-system/assets/19411357/2845ab8d-d1a2-4897-ad0d-7df1e4af5206
 
 ---
 
@@ -28,7 +28,7 @@ The Recommendation System is composed of several critical components:
 
 - **Optimization Heuristics**: These heuristics optimize placement combinations and their performance impact, taking into account predicted performance and workflow chronology.
 
-| Component               | Release               | Key Features                                                                                                  |
+| Component               | Release               | Key Features                                                                                                  
 |-------------------------|-----------------------|---------------------------------------------------------------------------------------------------------------|
 | Application Decomposer  | 0.2 (Second Release)  | Analyzes each job’s dataflow timeseries, categorizing I/O and compute phases. Connects to IO Instrumentation.  |
 | Performance Model       | 0.1 (First Release)   | Predicts the latency for each I/O phase on each storage tier. Builds a mathematical model of I/O behavior.     |
